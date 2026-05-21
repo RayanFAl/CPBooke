@@ -1,10 +1,15 @@
 <script setup>
+import { computed } from 'vue';
+import { useAdminLocale } from '../../composables/useAdminLocale';
+
 const props = defineProps({
     role: {
         type: Object,
         default: null,
     },
 });
+
+const { t } = useAdminLocale();
 
 const paletteByRole = {
     super_admin: 'bg-rose-100 text-rose-800',
@@ -14,7 +19,7 @@ const paletteByRole = {
 };
 
 const roleKey = props.role?.name ?? 'none';
-const roleLabel = props.role?.label ?? 'No role';
+const roleLabel = computed(() => t(props.role?.label ?? 'No role'));
 </script>
 
 <template>

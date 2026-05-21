@@ -23,15 +23,27 @@ export const navigationItems = [
         permission: 'finance.view',
     },
     {
+        label: 'Governance',
+        route: 'admin.governance.dashboard',
+        startsWith: '/admin/governance',
+        permission: 'governance.view',
+    },
+    {
         label: 'Support',
         route: 'admin.support.index',
         startsWith: '/admin/support',
         permission: 'support.view',
     },
     {
-        label: 'Settings',
-        route: 'admin.settings.index',
-        startsWith: '/admin/settings',
-        role: 'super_admin',
+        label: 'Loyalty',
+        route: 'admin.loyalty.index',
+        startsWith: '/admin/loyalty',
+        permission: 'loyalty.view',
+    },
+    {
+        label: 'Notifications',
+        route: 'admin.notifications.index',
+        startsWith: '/admin/notifications',
+        permission: 'notifications.view',
     },
 ];

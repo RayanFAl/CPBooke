@@ -15,4 +15,12 @@ Route::controller(OrdersController::class)->group(function (): void {
 	Route::put('/orders/{order}/status', 'updateStatus')
 		->middleware('permission:orders.change-status')
 		->name('orders.update-status');
+
+	Route::put('/orders/{order}/payment-status', 'updatePaymentStatus')
+		->middleware('permission:orders.change-status')
+		->name('orders.update-payment-status');
+
+	Route::put('/orders/{order}/notes', 'updateNotes')
+		->middleware('permission:orders.update-notes')
+		->name('orders.update-notes');
 });

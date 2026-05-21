@@ -2,21 +2,18 @@
 import { Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { navigationItems } from '../config/navigation';
+import { useAdminLocale } from '../composables/useAdminLocale';
 
 const page = usePage();
+const { t } = useAdminLocale();
 
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
-const roles = computed(() => page.props.auth.user?.roles ?? []);
 
 const isActive = (item) =>
     page.url === item.startsWith || page.url.startsWith(`${item.startsWith}/`);
 
 const canAccessItem = (item) => {
     if (item.permission && !permissions.value.includes(item.permission)) {
-        return false;
-    }
-
-    if (item.role && !roles.value.includes(item.role)) {
         return false;
     }
 
@@ -30,11 +27,11 @@ const visibleNavigationItems = computed(() => navigationItems.filter(canAccessIt
     <aside class="flex h-full w-full flex-col bg-slate-950 text-slate-100">
         <div class="border-b border-slate-800 px-6 py-5">
             <p class="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-400">
-                Booke
+                {{ t('Booke') }}
             </p>
-            <h1 class="mt-2 text-lg font-semibold">Control Panel</h1>
+            <h1 class="mt-2 text-lg font-semibold">{{ t('Control Panel') }}</h1>
             <p class="mt-1 text-sm text-slate-400">
-                Modular admin foundation.
+                {{ t('Modular admin foundation.') }}
             </p>
         </div>
 
@@ -50,12 +47,12 @@ const visibleNavigationItems = computed(() => navigationItems.filter(canAccessIt
                         : 'text-slate-300 hover:bg-slate-900 hover:text-white'
                 "
             >
-                {{ item.label }}
+                {{ t(item.label) }}
             </Link>
         </nav>
 
         <div class="border-t border-slate-800 px-6 py-4 text-xs text-slate-400">
-            Authenticated admin area
+            {{ t('Authenticated admin area') }}
         </div>
     </aside>
 </template>

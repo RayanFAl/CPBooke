@@ -2,17 +2,24 @@
 
 namespace App\Modules\Admin\Users\Services;
 
+use App\Models\FinancialTransaction;
+use App\Models\Order;
+use App\Models\OrderHistory;
+use App\Models\SupportTicket;
 use App\Models\User;
 use App\Modules\Admin\Access\Services\AccessControlService;
+use App\Modules\Loyalty\Services\LoyaltyService as CustomerLoyaltyService;
 use App\Support\Rbac\RbacRegistry;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class UserService
 {
     public function __construct(
         private readonly AccessControlService $accessControlService,
+        private readonly CustomerLoyaltyService $loyaltyService,
     ) {
     }
 
@@ -78,9 +85,136 @@ class UserService
      *
      * @return array<string, mixed>
      */
-    public function detailPayload(User $user): array
+    public function detailPayload(User $user, ?User $actor = null): array
     {
         $user->loadMissing('roles.permissions');
+
+        $orderSelect = [
+            'id',
+            'booking_reference',
+            'status',
+            'currency',
+            'total_amount',
+            'created_at',
+        ];
+
+        if (Schema::hasColumn('orders', 'service_type')) {
+            $orderSelect[] = 'service_type';
+        }
+
+        if (Schema::hasColumn('orders', 'payment_status')) {
+            $orderSelect[] = 'payment_status';
+        }
+
+        $recentOrders = Order::query()
+            ->select($orderSelect)
+            ->whereBelongsTo($user, 'customer')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get()
+            ->map(fn (Order $order): array => [
+                'id' => $order->id,
+                'booking_reference' => $order->booking_reference,
+                'service_type' => $order->getAttribute('service_type'),
+                'status' => $order->status,
+                'payment_status' => $order->getAttribute('payment_status'),
+                'amount' => number_format((float) $order->total_amount, 2, '.', ''),
+                'currency' => $order->currency,
+                'created_at' => $order->created_at?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+
+        $recentFinancialTransactions = Schema::hasTable('financial_transactions')
+            ? FinancialTransaction::query()
+                ->select([
+                    'id',
+                    'order_id',
+                    'type',
+                    'amount',
+                    'currency',
+                    'source',
+                    'created_at',
+                ])
+                ->whereHas('order', fn ($query) => $query->whereBelongsTo($user, 'customer'))
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->limit(10)
+                ->get()
+                ->map(fn (FinancialTransaction $transaction): array => [
+                    'id' => $transaction->id,
+                    'order_id' => $transaction->order_id,
+                    'type' => $transaction->type,
+                    'amount' => number_format((float) $transaction->amount, 2, '.', ''),
+                    'currency' => $transaction->currency,
+                    'source' => $transaction->source,
+                    'created_at' => $transaction->created_at?->toIso8601String(),
+                ])
+                ->values()
+                ->all()
+            : [];
+
+        $walletBalance = null;
+        $walletCurrency = null;
+
+        if (Schema::hasTable('financial_transactions')) {
+            $transactionRows = FinancialTransaction::query()
+                ->select(['type', 'amount', 'currency'])
+                ->whereHas('order', fn ($query) => $query->whereBelongsTo($user, 'customer'))
+                ->get();
+
+            if ($transactionRows->isNotEmpty()) {
+                $walletBalance = $transactionRows->reduce(function (float $carry, FinancialTransaction $transaction): float {
+                    $amount = (float) $transaction->amount;
+
+                    return $carry + match ($transaction->type) {
+                        FinancialTransaction::TYPE_PAYMENT => $amount,
+                        FinancialTransaction::TYPE_REFUND, FinancialTransaction::TYPE_PAYOUT => -$amount,
+                        default => 0,
+                    };
+                }, 0.0);
+
+                $walletCurrency = $transactionRows->pluck('currency')->filter()->first();
+            }
+        }
+
+        $recentActivities = Schema::hasTable('order_histories')
+            ? OrderHistory::query()
+                ->with(['order:id,booking_reference'])
+                ->select([
+                    'id',
+                    'order_id',
+                    'user_id',
+                    'action',
+                    'field',
+                    'old_value',
+                    'new_value',
+                    'created_at',
+                ])
+                ->where('user_id', $user->id)
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->limit(10)
+                ->get()
+                ->map(fn (OrderHistory $activity): array => [
+                    'id' => $activity->id,
+                    'order_id' => $activity->order_id,
+                    'booking_reference' => $activity->order?->booking_reference,
+                    'action' => $activity->action,
+                    'field' => $activity->field,
+                    'old_value' => $activity->old_value,
+                    'new_value' => $activity->new_value,
+                    'created_at' => $activity->created_at?->toIso8601String(),
+                ])
+                ->values()
+                ->all()
+            : [];
+
+        $support = $actor ? $this->supportPayload($user, $actor) : [
+            'active_ticket_count' => 0,
+            'active_ticket' => null,
+        ];
 
         return [
             'id' => $user->id,
@@ -97,6 +231,16 @@ class UserService
             'email_verified_at' => $user->email_verified_at?->toIso8601String(),
             'created_at' => $user->created_at?->toIso8601String(),
             'updated_at' => $user->updated_at?->toIso8601String(),
+            'recent_orders' => $recentOrders,
+            'financial_summary' => [
+                'wallet_balance' => $walletBalance !== null ? number_format($walletBalance, 2, '.', '') : null,
+                'currency' => $walletCurrency,
+                'has_wallet_data' => Schema::hasTable('financial_transactions'),
+            ],
+            'financial_transactions' => $recentFinancialTransactions,
+            'recent_activities' => $recentActivities,
+            'loyalty' => $this->loyaltyService->profilePayload($user, false),
+            'support' => $support,
         ];
     }
 
@@ -260,6 +404,119 @@ class UserService
             'last_login_at' => $user->last_login_at?->toIso8601String(),
             'created_at' => $user->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Build the support snapshot for the user profile.
+     *
+     * @return array{active_ticket_count:int, active_ticket:array<string, mixed>|null}
+     */
+    private function supportPayload(User $user, User $actor): array
+    {
+        if (! in_array('support.view', $actor->permissionNames(), true)
+            || ! Schema::hasTable('support_tickets')
+            || ! Schema::hasTable('support_messages')) {
+            return [
+                'active_ticket_count' => 0,
+                'active_ticket' => null,
+            ];
+        }
+
+        $activeTickets = SupportTicket::query()
+            ->with([
+                'assignee:id,name,full_name,email',
+                'order:id,booking_reference,external_booking_id,status',
+                'messages' => function ($query): void {
+                    $query
+                        ->select([
+                            'id',
+                            'support_ticket_id',
+                            'user_id',
+                            'message',
+                            'attachment_name',
+                            'attachment_path',
+                            'created_at',
+                        ])
+                        ->with('user:id,name,full_name,email,account_type');
+                },
+            ])
+            ->whereBelongsTo($user)
+            ->whereIn('status', ['open', 'in_progress', 'waiting_customer'])
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->get();
+
+        $activeTicket = $activeTickets->first();
+
+        return [
+            'active_ticket_count' => $activeTickets->count(),
+            'active_ticket' => $activeTicket ? $this->activeSupportTicketPayload($activeTicket) : null,
+        ];
+    }
+
+    /**
+     * Build the CRM support conversation payload for the active user ticket.
+     *
+     * @return array<string, mixed>
+     */
+    private function activeSupportTicketPayload(SupportTicket $ticket): array
+    {
+        $messages = $ticket->messages
+            ->take(-8)
+            ->values();
+
+        $lastMessage = $messages->last();
+        $lastSenderType = $lastMessage?->user?->isAdminAccount() ? 'agent' : ($lastMessage ? 'user' : null);
+
+        return [
+            'id' => $ticket->id,
+            'ticket_number' => $ticket->ticket_number,
+            'subject' => $ticket->subject,
+            'category' => $ticket->category,
+            'priority' => $ticket->priority,
+            'status' => $ticket->status,
+            'conversation_state' => $this->supportConversationState($lastSenderType),
+            'updated_at' => $ticket->updated_at?->toIso8601String(),
+            'assignee' => $ticket->assignee
+                ? [
+                    'id' => $ticket->assignee->id,
+                    'name' => $ticket->assignee->full_name ?: $ticket->assignee->name,
+                    'email' => $ticket->assignee->email,
+                ]
+                : null,
+            'order' => $ticket->order
+                ? [
+                    'id' => $ticket->order->id,
+                    'reference' => $ticket->order->booking_reference ?: $ticket->order->external_booking_id ?: 'Order #'.$ticket->order->id,
+                    'status' => $ticket->order->status,
+                ]
+                : null,
+            'messages' => $messages
+                ->map(fn ($message): array => [
+                    'id' => $message->id,
+                    'message' => $message->message,
+                    'sender_type' => $message->user?->isAdminAccount() ? 'agent' : 'user',
+                    'attachment_name' => $message->attachment_name,
+                    'has_attachment' => $message->attachment_path !== null,
+                    'created_at' => $message->created_at?->toIso8601String(),
+                    'user' => [
+                        'id' => $message->user?->id,
+                        'name' => $message->user?->full_name ?: $message->user?->name,
+                        'email' => $message->user?->email,
+                    ],
+                ])
+                ->values()
+                ->all(),
+        ];
+    }
+
+    private function supportConversationState(?string $lastSenderType): ?string
+    {
+        return match ($lastSenderType) {
+            'user' => 'waiting_for_support',
+            'agent' => 'waiting_for_customer',
+            default => null,
+        };
     }
 
     /**

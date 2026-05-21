@@ -21,6 +21,7 @@ class UserResource extends JsonResource
             'phone' => $this->resource->phone,
             'country' => $this->resource->country,
             'is_active' => (bool) $this->resource->is_active,
+            'loyalty' => $this->resource->getAttribute('loyalty'),
             'last_login_at' => $this->resource->last_login_at?->toIso8601String(),
             'created_at' => $this->resource->created_at?->toIso8601String(),
         ];

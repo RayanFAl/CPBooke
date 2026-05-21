@@ -18,11 +18,16 @@ return new class extends Migration
             $table->string('external_booking_id')->nullable();
             $table->string('booking_reference')->nullable()->index();
             $table->enum('status', [
-                'pending',
+                'draft',
+                'pending_payment',
+                'paid',
+                'processing',
                 'confirmed',
-                'failed',
+                'completed',
                 'cancelled',
-            ])->default('pending')->index();
+                'failed',
+                'refunded',
+            ])->default('draft')->index();
             $table->string('currency', 3);
             $table->decimal('total_amount', 12, 2);
             $table->json('request_payload');

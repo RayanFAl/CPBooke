@@ -2,15 +2,20 @@
 
 namespace App\Modules\Api\DTO;
 
+use App\Models\Order;
+
 final readonly class CreateOrderDTO
 {
     /**
+     * @param  array<string, mixed>  $details
      * @param  array<string, mixed>  $requestPayload
      */
     public function __construct(
         public string $providerName,
         public string $currency,
         public string $totalAmount,
+        public string $serviceType,
+        public array $details,
         public array $requestPayload,
     ) {
     }
@@ -24,9 +29,11 @@ final readonly class CreateOrderDTO
     {
         return new self(
             providerName: $data['provider_name'],
-            currency: strtoupper($data['currency']),
+            currency: Order::DEFAULT_CURRENCY,
             totalAmount: number_format((float) $data['total_amount'], 2, '.', ''),
-            requestPayload: $data['request_payload'] ?? [],
+            serviceType: $data['service_type'],
+            details: $data['details'] ?? [],
+            requestPayload: $data['details'] ?? [],
         );
     }
 }

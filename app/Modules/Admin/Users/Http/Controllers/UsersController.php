@@ -70,11 +70,12 @@ class UsersController
      */
     public function show(User $user): Response
     {
-        $this->accessControlService->assertCanManageUser(request()->user(), $user);
+        $actor = request()->user();
+
+        $this->accessControlService->assertCanManageUser($actor, $user);
 
         return Inertia::render('admin/users/pages/Show', [
-            'user' => $this->userService->detailPayload($user),
-            'placeholders' => $this->userService->profilePlaceholders(),
+            'user' => $this->userService->detailPayload($user, $actor),
         ]);
     }
 

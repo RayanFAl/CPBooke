@@ -7,25 +7,30 @@ return [
     | Stateful Domains
     |--------------------------------------------------------------------------
     |
-    | The mobile and public frontend API for CPBooke is token-based. Keeping
-    | this list empty prevents Sanctum from treating API requests as stateful
-    | SPA requests backed by the web session.
+    | Customer web chat uses the same support API from the first-party web
+    | session, while Flutter and other remote consumers continue using tokens.
+    | These domains enable same-origin and local stateful API requests only.
     |
     */
 
-    'stateful' => [],
+    'stateful' => array_values(array_filter(array_map('trim', explode(',', (string) env(
+        'SANCTUM_STATEFUL_DOMAINS',
+        'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1'
+        .(($appUrlHost = parse_url((string) env('APP_URL', ''), PHP_URL_HOST)) ? ','.$appUrlHost : '')
+        .(($appUrlPort = parse_url((string) env('APP_URL', ''), PHP_URL_PORT)) && $appUrlHost ? ','.$appUrlHost.':'.$appUrlPort : '')
+    ))))),
 
     /*
     |--------------------------------------------------------------------------
     | Sanctum Guards
     |--------------------------------------------------------------------------
     |
-    | An empty guard list disables the web-session fallback and forces API
-    | authentication to rely on personal access tokens only.
+    | The web guard enables first-party browser sessions to consume the chat
+    | API, while token authentication remains available for external clients.
     |
     */
 
-    'guard' => [],
+    'guard' => ['web'],
 
     'expiration' => null,
 

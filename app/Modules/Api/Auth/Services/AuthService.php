@@ -77,11 +77,51 @@ class AuthService
     }
 
     /**
+     * Authenticate an administrative API user and return a token.
+     *
+     * @throws ValidationException
+     */
+    public function loginAdmin(LoginDTO $data): AuthResultDTO
+    {
+        $user = $this->resolveUserForLogin($data->login);
+
+        if (! $user || ! Hash::check($data->password, $user->password)) {
+            throw ValidationException::withMessages([
+                'login' => ['The provided credentials are incorrect.'],
+            ]);
+        }
+
+        if (! $user->is_active) {
+            throw ValidationException::withMessages([
+                'login' => ['This account has been deactivated.'],
+            ]);
+        }
+
+        $this->ensureAdministrativeAccount($user);
+
+        $user->forceFill([
+            'last_login_at' => now(),
+        ])->save();
+
+        return new AuthResultDTO(
+            user: $user->refresh(),
+            token: $user->createToken($data->deviceName)->plainTextToken,
+        );
+    }
+
+    /**
      * Return the authenticated API user.
      */
     public function me(User $user): User
     {
         $this->ensureCustomerAccount($user);
+
+        return $user;
+    }
+
+    public function meAdmin(User $user): User
+    {
+        $this->ensureAdministrativeAccount($user);
 
         return $user;
     }
@@ -94,6 +134,21 @@ class AuthService
         $this->ensureCustomerAccount($user);
 
         $user->currentAccessToken()?->delete();
+    }
+
+    public function logoutAdmin(User $user): void
+    {
+        $this->ensureAdministrativeAccount($user);
+
+        $user->currentAccessToken()?->delete();
+    }
+
+    private function resolveUserForLogin(string $login): ?User
+    {
+        return User::query()
+            ->where('email', $login)
+            ->orWhere('phone', $login)
+            ->first();
     }
 
     /**
@@ -109,6 +164,20 @@ class AuthService
 
         throw ValidationException::withMessages([
             'login' => ['Administrative accounts cannot access the mobile application.'],
+        ]);
+    }
+
+    /**
+     * @throws ValidationException
+     */
+    private function ensureAdministrativeAccount(User $user): void
+    {
+        if ($user->canAccessAdminPanel()) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'login' => ['This account does not have administrative API access.'],
         ]);
     }
 }

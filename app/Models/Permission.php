@@ -9,6 +9,9 @@ class Permission extends Model
 {
     protected $fillable = [
         'name',
+        'module',
+        'action',
+        'scope',
         'label',
         'description',
     ];

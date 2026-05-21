@@ -157,6 +157,12 @@ Global gate registration
 
 - No remaining permission is classified as `PARTIALLY_USED` after cleanup.
 
+## Admin Navigation Alignment Audit
+
+- `Users`, `Orders`, `Finance`, and `Support` sidebar items are aligned to live permissions in `resources/js/modules/admin/config/navigation.js` and filtered from `resources/js/modules/admin/components/AdminSidebar.vue` using the authenticated user's shared `permissions` array.
+- `Dashboard` remains visible in the sidebar without a permission mapping because `routes/admin/dashboard.php` does not enforce a dedicated permission. No frontend role check is used for it.
+- `Settings` was removed from the sidebar because its backend access still depends on `role:super_admin` in `routes/admin/settings.php` and there is no live permission in `App\Support\Rbac\RbacRegistry` that can represent it without reintroducing stale RBAC state.
+
 ## Final Registry State
 
 - The RBAC registry now contains only permissions with live usage in the current codebase.

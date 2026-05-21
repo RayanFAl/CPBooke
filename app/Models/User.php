@@ -4,12 +4,22 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Support\Rbac\RbacRegistry;
+use App\Models\SupportMessage;
+use App\Models\SupportTicket;
+use App\Models\SupportTicketHistory;
+use App\Models\NotificationLog;
+use App\Models\UserNotificationPreference;
+use App\Models\UserNotification;
+use App\Models\UserNotificationDevice;
+use App\Models\UserLoyaltyProfile;
+use App\Models\LoyaltyHistory;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
@@ -72,11 +82,117 @@ class User extends Authenticatable
     }
 
     /**
+     * Resolve the default post-authentication route for the user.
+     */
+    public function homeRouteName(): string
+    {
+        return $this->isAdminAccount()
+            ? 'admin.dashboard'
+            : 'customer.support.chat';
+    }
+
+    /**
      * Get the roles assigned to the user.
      */
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class)->withTimestamps();
+    }
+
+    /**
+     * Get the support tickets opened by the user.
+     */
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(SupportTicket::class);
+    }
+
+    /**
+     * Get the support tickets assigned to the user.
+     */
+    public function assignedSupportTickets(): HasMany
+    {
+        return $this->hasMany(SupportTicket::class, 'assigned_to');
+    }
+
+    /**
+     * Get the support messages authored by the user.
+     */
+    public function supportMessages(): HasMany
+    {
+        return $this->hasMany(SupportMessage::class);
+    }
+
+    /**
+     * Get the support ticket history entries triggered by the user.
+     */
+    public function supportTicketHistories(): HasMany
+    {
+        return $this->hasMany(SupportTicketHistory::class);
+    }
+
+    /**
+     * Get notification delivery logs for the user.
+     */
+    public function notificationLogs(): HasMany
+    {
+        return $this->hasMany(NotificationLog::class)
+            ->latest('id');
+    }
+
+    /**
+     * Get in-app notifications for the user.
+     */
+    public function notificationsCenter(): HasMany
+    {
+        return $this->hasMany(UserNotification::class)
+            ->latest('id');
+    }
+
+    /**
+     * Get registered notification devices for the user.
+     */
+    public function notificationDevices(): HasMany
+    {
+        return $this->hasMany(UserNotificationDevice::class)
+            ->latest('id');
+    }
+
+    /**
+     * Get the notification preferences for the user.
+     */
+    public function notificationPreferences(): HasMany
+    {
+        return $this->hasMany(UserNotificationPreference::class)
+            ->latest('id');
+    }
+
+    /**
+     * Get the loyalty profile for the user.
+     */
+    public function loyaltyProfile(): HasMany
+    {
+        return $this->hasMany(UserLoyaltyProfile::class)
+            ->latest('id');
+    }
+
+    /**
+     * Get the loyalty history entries for the user.
+     */
+    public function loyaltyHistory(): HasMany
+    {
+        return $this->hasMany(LoyaltyHistory::class)
+            ->latest('changed_at')
+            ->latest('id');
+    }
+
+    /**
+     * Get the orders owned by the customer account.
+     */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class, 'customer_id')
+            ->latest('id');
     }
 
     /**

@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    'notifications' => [
+        'fcm_server_key' => env('FCM_SERVER_KEY'),
+        'fcm_sender_id' => env('FCM_SENDER_ID'),
+        'sms_endpoint' => env('SMS_ENDPOINT'),
+        'sms_token' => env('SMS_TOKEN'),
+        'whatsapp_endpoint' => env('WHATSAPP_ENDPOINT'),
+        'whatsapp_token' => env('WHATSAPP_TOKEN'),
+    ],
+
 ];

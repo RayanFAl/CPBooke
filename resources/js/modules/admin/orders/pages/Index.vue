@@ -1,8 +1,10 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import OrderStatusBadge from '../components/OrderStatusBadge.vue';
+import PaymentStatusBadge from '../components/PaymentStatusBadge.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, reactive } from 'vue';
+import { useAdminLocale } from '../../composables/useAdminLocale';
 
 const props = defineProps({
     orders: {
@@ -20,6 +22,7 @@ const props = defineProps({
 });
 
 const page = usePage();
+const { locale, t } = useAdminLocale();
 
 const filterForm = reactive({
     status: props.filters.status ?? '',
@@ -46,31 +49,47 @@ const resetFilters = () => {
     applyFilters();
 };
 
-const formatMoney = (amount, currency) => {
-    if (amount === null || amount === undefined || !currency) {
-        return 'Restricted';
+const formatMoney = (amount, currency = 'LYD') => {
+    if (amount === null || amount === undefined) {
+        return t('Restricted');
     }
 
-    return new Intl.NumberFormat('en', {
+    return new Intl.NumberFormat(locale.value, {
         style: 'currency',
-        currency,
+        currency: currency || 'LYD',
     }).format(Number(amount));
 };
 
 const formatDateTime = (value) => {
     if (!value) {
-        return 'Not available';
+        return t('Not available');
     }
 
-    return new Intl.DateTimeFormat('en', {
+    return new Intl.DateTimeFormat(locale.value, {
         dateStyle: 'medium',
         timeStyle: 'short',
     }).format(new Date(value));
 };
+
+const formatServiceType = (value) => {
+    if (!value) {
+        return t('Legacy');
+    }
+
+    const normalizedValue = value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+    return t(normalizedValue);
+};
+
+const ordersCountLabel = computed(() => `${props.orders.total} ${t(props.orders.total === 1 ? 'total order' : 'total orders')}`);
+
+const openOrderPage = (order) => {
+    router.visit(route('admin.orders.show', order.id));
+};
 </script>
 
 <template>
-    <Head title="Orders" />
+    <Head :title="t('Orders')" />
 
     <AdminLayout
         title="Orders"
@@ -81,29 +100,29 @@ const formatDateTime = (value) => {
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
-                            Booking Operations
+                            {{ t('Booking Operations') }}
                         </p>
-                        <h2 class="mt-2 text-2xl font-semibold text-slate-950">Orders pipeline</h2>
+                        <h2 class="mt-2 text-2xl font-semibold text-slate-950">{{ t('Orders pipeline') }}</h2>
                         <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                            Review customer bookings, isolate operational states, and open each order for provider payloads, support actions, and financial context.
+                            {{ t('Review customer bookings, isolate operational states, and open each order for provider payloads, support actions, and financial context.') }}
                         </p>
                     </div>
 
                     <div class="rounded-2xl bg-slate-950 px-4 py-3 text-sm text-white">
-                        {{ orders.total }} total order{{ orders.total === 1 ? '' : 's' }}
+                        {{ ordersCountLabel }}
                     </div>
                 </div>
 
                 <form class="mt-6 grid gap-4 md:grid-cols-[minmax(0,16rem)_auto_auto] md:items-end" @submit.prevent="applyFilters">
                     <label class="space-y-2 text-sm font-medium text-slate-700">
-                        <span>Status</span>
+                        <span>{{ t('Status') }}</span>
                         <select
                             v-model="filterForm.status"
                             class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
                         >
-                            <option value="">All statuses</option>
+                            <option value="">{{ t('All statuses') }}</option>
                             <option v-for="status in statuses" :key="status.name" :value="status.name">
-                                {{ status.label }}
+                                {{ t(status.label) }}
                             </option>
                         </select>
                     </label>
@@ -112,7 +131,7 @@ const formatDateTime = (value) => {
                         type="submit"
                         class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
                     >
-                        Apply filter
+                        {{ t('Apply filter') }}
                     </button>
 
                     <button
@@ -120,7 +139,7 @@ const formatDateTime = (value) => {
                         class="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                         @click="resetFilters"
                     >
-                        Reset
+                        {{ t('Reset') }}
                     </button>
                 </form>
             </div>
@@ -130,21 +149,31 @@ const formatDateTime = (value) => {
                     <table class="min-w-full divide-y divide-slate-200">
                         <thead class="bg-slate-50">
                             <tr class="text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                                <th class="px-6 py-4">Reference</th>
-                                <th class="px-6 py-4">Customer</th>
-                                <th class="px-6 py-4">Provider</th>
-                                <th class="px-6 py-4">Status</th>
-                                <th v-if="canViewFinancials" class="px-6 py-4">Amount</th>
-                                <th class="px-6 py-4">Created</th>
-                                <th class="px-6 py-4">Action</th>
+                                <th class="px-6 py-4">{{ t('Reference') }}</th>
+                                <th class="px-6 py-4">{{ t('Customer') }}</th>
+                                <th class="px-6 py-4">{{ t('Provider') }}</th>
+                                <th class="px-6 py-4">{{ t('Status') }}</th>
+                                <th class="px-6 py-4">{{ t('Payment') }}</th>
+                                <th v-if="canViewFinancials" class="px-6 py-4">{{ t('Amount') }}</th>
+                                <th class="px-6 py-4">{{ t('Created') }}</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-sm text-slate-700">
-                            <tr v-for="order in orders.data" :key="order.id" class="align-top">
+                            <tr
+                                v-for="order in orders.data"
+                                :key="order.id"
+                                class="group cursor-pointer bg-white align-top transition duration-200 hover:bg-cyan-50/50"
+                                role="link"
+                                :aria-label="`${t('Open order')} ${order.booking_reference || `#${order.id}`}`"
+                                tabindex="0"
+                                @click="openOrderPage(order)"
+                                @keydown.enter.prevent="openOrderPage(order)"
+                                @keydown.space.prevent="openOrderPage(order)"
+                            >
                                 <td class="px-6 py-5">
-                                    <div class="font-semibold text-slate-950">{{ order.booking_reference || `Order #${order.id}` }}</div>
+                                    <div class="font-semibold text-slate-950">{{ order.booking_reference || `${t('Order')} #${order.id}` }}</div>
                                     <div class="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
-                                        {{ order.external_booking_id || 'Awaiting provider ID' }}
+                                        {{ order.external_booking_id || t('Awaiting provider ID') }}
                                     </div>
                                 </td>
                                 <td class="px-6 py-5">
@@ -154,24 +183,22 @@ const formatDateTime = (value) => {
                                 <td class="px-6 py-5">{{ order.provider_name }}</td>
                                 <td class="px-6 py-5">
                                     <OrderStatusBadge :status="order.status" />
+                                    <div class="mt-2 text-xs uppercase tracking-[0.16em] text-slate-500">
+                                        {{ formatServiceType(order.service_type) }}
+                                    </div>
+                                </td>
+                                <td class="px-6 py-5">
+                                    <PaymentStatusBadge :status="order.payment_status" />
                                 </td>
                                 <td v-if="canViewFinancials" class="px-6 py-5 font-medium text-slate-900">
                                     {{ formatMoney(order.total_amount, order.currency) }}
                                 </td>
                                 <td class="px-6 py-5 text-slate-500">{{ formatDateTime(order.created_at) }}</td>
-                                <td class="px-6 py-5">
-                                    <Link
-                                        :href="route('admin.orders.show', order.id)"
-                                        class="inline-flex rounded-xl border border-slate-200 px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-50"
-                                    >
-                                        View order
-                                    </Link>
-                                </td>
                             </tr>
 
                             <tr v-if="orders.data.length === 0">
                                 <td :colspan="canViewFinancials ? 7 : 6" class="px-6 py-12 text-center text-sm text-slate-500">
-                                    No orders matched the selected filters.
+                                    {{ t('No orders matched the selected filters.') }}
                                 </td>
                             </tr>
                         </tbody>
@@ -180,7 +207,7 @@ const formatDateTime = (value) => {
 
                 <div class="flex flex-col gap-4 border-t border-slate-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <p class="text-sm text-slate-500">
-                        Showing {{ orders.from ?? 0 }} to {{ orders.to ?? 0 }} of {{ orders.total }} orders.
+                        {{ t('Showing') }} {{ orders.from ?? 0 }} {{ t('to') }} {{ orders.to ?? 0 }} {{ t('of') }} {{ orders.total }} {{ t('orders.') }}
                     </p>
 
                     <nav class="flex flex-wrap gap-2">

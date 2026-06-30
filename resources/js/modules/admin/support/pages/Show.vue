@@ -1,8 +1,9 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import OrderTicketPanel from '../../orders/components/OrderTicketPanel.vue';
 import ResolutionReportForm from '../components/ResolutionReportForm.vue';
 import ResolutionReportView from '../components/ResolutionReportView.vue';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 import { getEcho } from '../../../../lib/echo';
@@ -40,9 +41,23 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    notification_logs_enabled: {
+        type: Boolean,
+        default: false,
+    },
+    customer_notification_logs: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const { locale, t } = useAdminLocale();
+const page = usePage();
+const permissions = computed(() => page.props.auth.user?.permissions ?? []);
+const canViewUsers = computed(() => permissions.value.includes('users.view'));
+const canViewSupport = computed(() => permissions.value.includes('support.view'));
+const canViewOrders = computed(() => permissions.value.includes('orders.view'));
+const canViewNotificationLogs = computed(() => permissions.value.includes('notifications.view'));
 const echo = getEcho();
 const typingParticipant = ref(null);
 const typingTimeout = ref(null);
@@ -65,6 +80,20 @@ const touchStartX = ref(null);
 const activeDocumentPreview = ref(null);
 const activeOrderAction = ref(null);
 const activeWorkspaceTab = ref('conversation');
+const activityQuery = ref('');
+const activityScope = ref('all');
+const notificationFilter = ref('all');
+const internalNotesExpanded = ref(true);
+const customerDrawerOpen = ref(false);
+const customerContextLoading = ref(false);
+const customerContextLoaded = ref(false);
+const customerContextError = ref('');
+const customerContext = ref({
+    country: null,
+    recentOrdersCount: null,
+    activeTicketCount: null,
+    lastActivity: null,
+});
 
 const orderActionForm = useForm({
     reason: '',
@@ -385,14 +414,173 @@ const hasClosedResolutionReport = computed(() => resolutionReport.value?.status_
 
 const workspaceTabs = computed(() => [
     { id: 'conversation', label: t('Conversation') },
-    { id: 'internal_notes', label: t('Internal Notes') },
-    ...(props.resolution_reports_enabled ? [{ id: 'resolution_report', label: t('Resolution Report') }] : []),
-    { id: 'timeline', label: t('Timeline') },
+    ...(props.resolution_reports_enabled ? [{ id: 'resolution_report', label: t('Resolution') }] : []),
+    { id: 'details', label: t('Details') },
+    { id: 'activity', label: t('Activity') },
 ]);
 
 const workspaceTabClass = (tabId) => (activeWorkspaceTab.value === tabId
-    ? 'bg-slate-950 text-white shadow-sm'
-    : 'bg-white text-slate-600 hover:bg-slate-50');
+    ? 'bg-slate-950 text-white'
+    : 'text-slate-600 hover:bg-slate-100');
+
+const changeTab = (tabId) => {
+    activeWorkspaceTab.value = tabId;
+};
+
+const orderShowLink = computed(() => (props.ticket.order?.id
+    ? route('admin.orders.show', props.ticket.order.id)
+    : null));
+
+const ticketCustomer = computed(() => props.ticket.user ?? null);
+
+const customerProfileLink = computed(() => canViewUsers.value && ticketCustomer.value?.id
+    ? route('admin.users.show', ticketCustomer.value.id)
+    : null);
+
+const customerOrdersLink = computed(() => (customerProfileLink.value
+    ? `${customerProfileLink.value}#orders`
+    : route('admin.orders.index')));
+
+const relatedTicketsLink = computed(() => route('admin.support.index', {
+    user_id: ticketCustomer.value?.id,
+    ...(props.ticket.order?.id ? { order_id: props.ticket.order.id } : {}),
+}));
+
+const supportCreateLink = computed(() => route('admin.support.create', {
+    user_id: ticketCustomer.value?.id,
+    order_id: props.ticket.order?.id ?? undefined,
+    category: props.ticket.category ?? 'general_inquiry',
+    priority: props.ticket.priority ?? 'medium',
+}));
+
+const ticketHealth = computed(() => {
+    if (['closed', 'resolved'].includes(props.ticket.status)) {
+        return {
+            label: t('OK'),
+            tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+            description: t('This ticket is no longer active.'),
+            show: false,
+        };
+    }
+
+    const now = Date.now();
+    const resolutionDue = props.ticket.resolution_due_at ? new Date(props.ticket.resolution_due_at).getTime() : null;
+    const firstResponseDue = props.ticket.first_response_due_at ? new Date(props.ticket.first_response_due_at).getTime() : null;
+
+    if ((resolutionDue && now > resolutionDue) || (firstResponseDue && now > firstResponseDue && !props.ticket.first_response_at)) {
+        return {
+            label: t('Critical'),
+            tone: 'bg-rose-50 text-rose-700 ring-rose-200',
+            description: t('An SLA deadline has been missed for this ticket.'),
+            show: true,
+        };
+    }
+
+    const warningWindow = 2 * 60 * 60 * 1000;
+
+    if (
+        (resolutionDue && resolutionDue - now <= warningWindow)
+        || (firstResponseDue && firstResponseDue - now <= warningWindow && !props.ticket.first_response_at)
+    ) {
+        return {
+            label: t('Warning'),
+            tone: 'bg-amber-50 text-amber-700 ring-amber-200',
+            description: t('An SLA deadline is approaching for this ticket.'),
+            show: true,
+        };
+    }
+
+    return {
+        label: t('OK'),
+        tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+        description: t('No active SLA blockers detected.'),
+        show: false,
+    };
+});
+
+const filteredNotificationLogs = computed(() => {
+    if (notificationFilter.value === 'ticket') {
+        return props.customer_notification_logs.filter((log) => log.is_ticket_related);
+    }
+
+    if (notificationFilter.value === 'order') {
+        return props.customer_notification_logs.filter((log) => log.is_order_related);
+    }
+
+    return props.customer_notification_logs;
+});
+
+const activityItems = computed(() => {
+    const items = [];
+
+    if (activityScope.value === 'all' || activityScope.value === 'events') {
+        for (const entry of timelineEntries.value) {
+            items.push({
+                kind: 'event',
+                id: entry.id,
+                created_at: entry.created_at,
+                entry,
+            });
+        }
+    }
+
+    if (props.notification_logs_enabled && (activityScope.value === 'all' || activityScope.value === 'notifications')) {
+        for (const log of filteredNotificationLogs.value) {
+            items.push({
+                kind: 'notification',
+                id: `notification-${log.id}`,
+                created_at: log.sent_at || log.failed_at || log.created_at,
+                log,
+            });
+        }
+    }
+
+    return items.sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
+});
+
+const filteredActivityItems = computed(() => {
+    const query = activityQuery.value.trim().toLowerCase();
+
+    if (!query) {
+        return activityItems.value;
+    }
+
+    return activityItems.value.filter((item) => {
+        if (item.kind === 'event') {
+            const entry = item.entry;
+
+            return `${entry.event} ${entry.description} ${entry.actor} ${entry.source}`.toLowerCase().includes(query);
+        }
+
+        const log = item.log;
+
+        return `${log.subject} ${log.body} ${log.template_code} ${log.channel} ${log.status} ${log.failure_reason ?? ''}`.toLowerCase().includes(query);
+    });
+});
+
+const showNotificationScopeFilters = computed(() => props.notification_logs_enabled
+    && (activityScope.value === 'all' || activityScope.value === 'notifications'));
+
+const recentNotificationLogs = computed(() => props.customer_notification_logs.slice(0, 5));
+
+const notificationStatusTone = (status) => {
+    if (status === 'sent') {
+        return 'bg-emerald-50 text-emerald-700';
+    }
+
+    if (status === 'failed') {
+        return 'bg-rose-50 text-rose-700';
+    }
+
+    return 'bg-amber-50 text-amber-700';
+};
+
+const openActivityTab = (scope = 'notifications', notifFilter = 'all') => {
+    activeWorkspaceTab.value = 'activity';
+    activityScope.value = scope;
+    notificationFilter.value = notifFilter;
+    customerDrawerOpen.value = false;
+};
 
 const inboxTickets = computed(() => props.inbox?.tickets ?? []);
 
@@ -415,8 +603,8 @@ const inboxTicketOnline = (ticket) => {
 };
 
 const inboxConversationTone = (ticket) => (ticket.id === selectedInboxTicketId.value
-    ? 'border-cyan-200 bg-cyan-50/80 shadow-sm'
-    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50');
+    ? 'border-slate-300 bg-slate-50'
+    : 'border-transparent hover:border-slate-200 hover:bg-slate-50');
 
 const submitInboxFilters = () => {
     router.get(route('admin.support.show', props.ticket.id), {
@@ -695,82 +883,81 @@ const submitAssignment = () => {
         preserveScroll: true,
     });
 };
+
+const openCustomerDrawer = async () => {
+    customerDrawerOpen.value = true;
+
+    if (customerContextLoaded.value || customerContextLoading.value || !canViewUsers.value || !ticketCustomer.value?.id) {
+        return;
+    }
+
+    customerContextLoading.value = true;
+    customerContextError.value = '';
+
+    try {
+        const response = await fetch(route('admin.users.show', ticketCustomer.value.id), {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'X-Inertia': 'true',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(t('Unable to load customer context.'));
+        }
+
+        const payload = await response.json();
+        const user = payload?.props?.user ?? null;
+
+        customerContext.value = {
+            country: user?.country ?? null,
+            recentOrdersCount: Array.isArray(user?.recent_orders) ? user.recent_orders.length : null,
+            activeTicketCount: user?.support?.active_ticket_count ?? null,
+            lastActivity: user?.recent_activities?.[0]?.created_at ?? user?.last_login_at ?? null,
+        };
+        customerContextLoaded.value = true;
+    } catch (error) {
+        customerContextError.value = t('Customer context could not be loaded from the existing profile payload.');
+    } finally {
+        customerContextLoading.value = false;
+    }
+};
+
+const closeCustomerDrawer = () => {
+    customerDrawerOpen.value = false;
+};
 </script>
 
 <template>
     <Head :title="ticket.ticket_number" />
 
     <AdminLayout
-        title="Support Ticket"
-        description="Inspect ticket context, collaborate in a polished support chat workspace, and keep operations moving without leaving the thread."
+        :title="ticket.ticket_number"
+        description=""
     >
-        <section class="space-y-6">
-            <div class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
-                            {{ t('Conversation Workspace') }}
-                        </p>
-                        <h2 class="mt-2 text-3xl font-semibold text-slate-950">
-                            {{ ticket.ticket_number }}
-                        </h2>
-                        <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                            {{ ticket.subject }}
-                        </p>
-                        <div class="mt-4 flex flex-wrap gap-3">
-                            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">
-                                {{ formatLabel(ticket.category) }}
-                            </span>
-                            <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-                                {{ formatLabel(ticket.priority) }}
-                            </span>
-                            <span class="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">
-                                {{ formatLabel(ticket.status) }}
-                            </span>
-                            <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ring-1" :class="conversationStateTone">
-                                {{ conversationStateLabel }}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div class="flex flex-wrap gap-3 lg:justify-end">
-                        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                            <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t('Last activity') }}</p>
-                            <p class="mt-2 font-medium text-slate-950">{{ relativeTime(ticket.last_message_at || ticket.updated_at) }}</p>
-                        </div>
-                        <Link
-                            :href="route('admin.support.index')"
-                            class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                        >
-                            {{ t('Back to support') }}
-                        </Link>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid gap-6 xl:grid-cols-[320px_minmax(0,1.1fr)_minmax(0,0.9fr)]">
-                <aside class="space-y-4 xl:sticky xl:top-6 xl:self-start">
-                    <div class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700">{{ t('Inbox') }}</p>
-                                <h3 class="mt-2 text-lg font-semibold text-slate-950">{{ t('Live conversations') }}</h3>
-                            </div>
-                            <span class="inline-flex rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-rose-700">
-                                {{ inboxUnreadCount }} {{ t('unread') }}
+        <section class="space-y-4">
+            <div class="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
+                <aside class="space-y-3 xl:sticky xl:top-4 xl:self-start">
+                    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div class="flex items-center justify-between gap-3">
+                            <h3 class="text-sm font-semibold text-slate-950">{{ t('Inbox') }}</h3>
+                            <span v-if="inboxUnreadCount" class="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
+                                {{ inboxUnreadCount }}
                             </span>
                         </div>
 
-                        <form class="mt-5 space-y-3" @submit.prevent="submitInboxFilters">
+                        <form class="mt-3 space-y-2" @submit.prevent="submitInboxFilters">
                             <input
                                 v-model="inboxForm.search"
                                 type="text"
-                                class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500"
+                                class="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
                                 :placeholder="t('Search tickets or customer')"
                             >
                             <select
                                 v-model="inboxForm.status"
-                                class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500"
+                                class="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
                             >
                                 <option value="">{{ t('All statuses') }}</option>
                                 <option v-for="status in status_options" :key="status.name" :value="status.name">
@@ -779,135 +966,135 @@ const submitAssignment = () => {
                             </select>
                             <button
                                 type="submit"
-                                class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
+                                class="inline-flex w-full items-center justify-center rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
                             >
-                                {{ t('Filter inbox') }}
+                                {{ t('Filter') }}
                             </button>
                         </form>
                     </div>
 
-                    <div class="max-h-[70rem] overflow-y-auto rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm">
-                        <div class="space-y-3">
+                    <div class="max-h-[calc(100vh-12rem)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+                        <div class="space-y-1">
                             <Link
                                 v-for="inboxTicket in inboxTickets"
                                 :key="inboxTicket.id"
                                 :href="inboxTicketHref(inboxTicket.id)"
-                                class="block rounded-[1.5rem] border px-4 py-4 transition"
+                                class="block rounded-lg border px-3 py-3 transition"
                                 :class="inboxConversationTone(inboxTicket)"
                             >
-                                <div class="flex items-start justify-between gap-3">
+                                <div class="flex items-start justify-between gap-2">
                                     <div class="min-w-0 flex-1">
-                                        <div class="flex items-center gap-2">
-                                            <p class="truncate text-sm font-semibold text-slate-950">{{ inboxTicket.user.name || t('Unknown user') }}</p>
-                                            <span class="inline-flex h-2.5 w-2.5 rounded-full" :class="inboxTicketOnline(inboxTicket) ? 'bg-emerald-500' : 'bg-slate-300'" />
-                                        </div>
-                                        <p class="mt-1 truncate text-xs uppercase tracking-[0.16em] text-slate-500">{{ inboxTicket.ticket_number }}</p>
+                                        <p class="truncate text-sm font-medium text-slate-950">{{ inboxTicket.user.name || t('Unknown user') }}</p>
+                                        <p class="mt-0.5 truncate text-xs text-slate-500">{{ inboxTicket.ticket_number }}</p>
                                     </div>
-                                    <span v-if="inboxTicket.has_unread_for_admin" class="inline-flex min-w-7 items-center justify-center rounded-full bg-rose-500 px-2 py-1 text-[11px] font-semibold text-white">1</span>
+                                    <span v-if="inboxTicket.has_unread_for_admin" class="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-rose-500" />
                                 </div>
-
-                                <div class="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.14em]">
-                                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{{ formatLabel(inboxTicket.status) }}</span>
-                                    <span class="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">{{ formatLabel(inboxTicket.priority) }}</span>
-                                </div>
-
-                                <p class="mt-3 truncate text-sm text-slate-700">{{ inboxTicket.last_message || t('No messages yet') }}</p>
-                                <div class="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
-                                    <span>{{ formatConversationStateLabel(inboxTicket.conversation_state, inboxTicket.status) }}</span>
+                                <p class="mt-2 truncate text-xs text-slate-600">{{ inboxTicket.last_message || t('No messages yet') }}</p>
+                                <div class="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                                    <span>{{ formatLabel(inboxTicket.status) }}</span>
                                     <span>{{ relativeTime(inboxTicket.last_message_at || inboxTicket.updated_at) }}</span>
                                 </div>
                             </Link>
 
-                            <div v-if="inboxTickets.length === 0" class="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                            <div v-if="inboxTickets.length === 0" class="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
                                 {{ t('No tickets matched the current inbox filters.') }}
                             </div>
                         </div>
                     </div>
                 </aside>
 
-                <div class="space-y-6">
-                    <div class="rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm">
-                        <div class="flex flex-wrap gap-2">
-                            <button
-                                v-for="tab in workspaceTabs"
-                                :key="tab.id"
-                                type="button"
-                                class="inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-medium transition"
-                                :class="workspaceTabClass(tab.id)"
-                                @click="activeWorkspaceTab = tab.id"
+                <div class="min-w-0 space-y-4">
+                    <div class="overflow-visible rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div class="border-b border-slate-200 px-4 py-4 sm:px-5">
+                            <Link
+                                :href="route('admin.support.index')"
+                                class="text-sm font-medium text-slate-500 transition hover:text-slate-800"
                             >
-                                {{ tab.label }}
-                            </button>
-                        </div>
-                    </div>
+                                ← {{ t('Back to support') }}
+                            </Link>
 
-                    <div class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Ticket details') }}</h3>
-                        <dl class="mt-5 grid gap-5 sm:grid-cols-2">
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Subject') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ ticket.subject }}</dd>
+                            <div
+                                v-if="ticketHealth.show"
+                                class="mt-4 rounded-lg border px-4 py-3"
+                                :class="ticketHealth.label === t('Critical') ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'"
+                            >
+                                <p class="text-sm font-semibold text-slate-950">{{ ticketHealth.label }}</p>
+                                <p class="mt-1 text-sm text-slate-700">{{ ticketHealth.description }}</p>
                             </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Assigned to') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ ticket.assignee?.name || t('Unassigned') }}</dd>
-                            </div>
-                            <div class="sm:col-span-2">
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Description') }}</dt>
-                                <dd class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-900">{{ ticket.description }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Created at') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatDateTime(ticket.created_at) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Updated at') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatDateTime(ticket.updated_at) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('First response due') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatDateTime(ticket.first_response_due_at) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Resolution due') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatDateTime(ticket.resolution_due_at) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Resolved at') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatDateTime(ticket.resolved_at) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Closed at') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatDateTime(ticket.closed_at) }}</dd>
-                            </div>
-                        </dl>
-                    </div>
 
-                    <div v-if="activeWorkspaceTab === 'conversation'" class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-                        <div class="border-b border-slate-200 bg-slate-50/80 px-6 py-5 backdrop-blur">
-                            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Conversation') }}</h3>
-                                    <p class="mt-1 text-sm text-slate-500">{{ t('A live operational view styled for fast back-and-forth support handling.') }}</p>
+                            <div class="mt-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div class="min-w-0">
+                                    <h2 class="text-xl font-semibold text-slate-950">{{ ticket.subject }}</h2>
+                                    <p class="mt-1 text-sm text-slate-500">
+                                        {{ ticket.ticket_number }} · {{ ticket.user.name || t('Unknown user') }}
+                                    </p>
                                 </div>
                                 <div class="flex flex-wrap gap-2">
-                                    <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ring-1" :class="conversationStateTone">
-                                        {{ conversationStateLabel }}
+                                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                                        {{ formatLabel(ticket.status) }}
                                     </span>
-                                    <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
-                                        {{ ticket.messages.length }} {{ t('messages') }}
+                                    <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                                        {{ formatLabel(ticket.priority) }}
+                                    </span>
+                                    <span class="rounded-full px-2.5 py-1 text-xs font-medium ring-1" :class="conversationStateTone">
+                                        {{ conversationStateLabel }}
                                     </span>
                                 </div>
                             </div>
                         </div>
 
-                        <div v-if="conversationMessages.length === 0" class="px-6 py-8">
-                            <div class="rounded-3xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                            {{ t('No customer-facing conversation messages have been recorded for this ticket yet.') }}
+                        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-3 py-2 sm:px-4">
+                            <nav class="flex gap-1 overflow-x-auto">
+                                <button
+                                    v-for="tab in workspaceTabs"
+                                    :key="tab.id"
+                                    type="button"
+                                    class="shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition"
+                                    :class="workspaceTabClass(tab.id)"
+                                    @click="changeTab(tab.id)"
+                                >
+                                    {{ tab.label }}
+                                </button>
+                            </nav>
+
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                                    @click="openCustomerDrawer"
+                                >
+                                    {{ t('Customer') }}
+                                </button>
+                                <Link
+                                    v-if="orderShowLink"
+                                    :href="orderShowLink"
+                                    class="inline-flex items-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                                >
+                                    {{ t('View order') }}
+                                </Link>
                             </div>
                         </div>
+                    </div>
 
-                        <div ref="messagesViewport" class="max-h-[68rem] overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.08),transparent_24%),linear-gradient(180deg,#f8fafc_0%,#f8fafc_40%,#ffffff_100%)] px-4 py-6 sm:px-6">
+                    <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+                        <div class="min-w-0 space-y-4">
+                            <div v-if="activeWorkspaceTab === 'conversation'" class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                                <div class="border-b border-slate-200 px-4 py-3 sm:px-5">
+                                    <div class="flex flex-wrap items-center justify-between gap-3">
+                                        <h3 class="text-sm font-semibold text-slate-950">{{ t('Conversation') }}</h3>
+                                        <span class="text-xs text-slate-500">
+                                            {{ conversationMessages.length }} {{ t('messages') }} · {{ relativeTime(ticket.last_message_at || ticket.updated_at) }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div v-if="conversationMessages.length === 0" class="px-4 py-6 sm:px-5">
+                                    <div class="rounded-lg bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                                        {{ t('No customer-facing conversation messages have been recorded for this ticket yet.') }}
+                                    </div>
+                                </div>
+
+                                <div ref="messagesViewport" class="max-h-[36rem] overflow-y-auto bg-slate-50 px-4 py-4 sm:px-5">
                             <TransitionGroup name="chat-group" tag="div" class="space-y-6">
                                 <article
                                     v-for="group in groupedMessages"
@@ -1027,12 +1214,12 @@ const submitAssignment = () => {
                             </TransitionGroup>
                         </div>
 
-                        <div class="sticky bottom-0 border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur sm:px-6">
-                            <div v-if="typingParticipant" class="mb-3 rounded-2xl bg-cyan-50 px-4 py-3 text-sm text-cyan-700">
+                        <div class="border-t border-slate-200 bg-white px-4 py-4 sm:px-5">
+                            <div v-if="typingParticipant" class="mb-3 rounded-lg bg-cyan-50 px-3 py-2 text-sm text-cyan-700">
                                 {{ t(':name is typing…', { name: typingParticipant }) }}
                             </div>
 
-                            <form class="rounded-[1.75rem] border border-slate-200 bg-white p-3 shadow-[0_18px_35px_-25px_rgba(15,23,42,0.45)]" @submit.prevent="submitReply">
+                            <form class="rounded-xl border border-slate-200 bg-white p-3" @submit.prevent="submitReply">
                                 <div v-if="replyForm.attachment" class="mb-3 flex items-center gap-3 rounded-2xl bg-slate-50 px-3 py-3">
                                     <div v-if="composerPreviewUrl" class="h-14 w-14 overflow-hidden rounded-2xl bg-slate-200">
                                         <img :src="composerPreviewUrl" :alt="t('Selected attachment preview')" class="h-full w-full object-cover">
@@ -1113,324 +1300,612 @@ const submitAssignment = () => {
                                 <p v-if="replyForm.errors.attachment" class="mt-2 px-1 text-sm text-rose-600">{{ replyForm.errors.attachment }}</p>
                             </form>
                         </div>
-                    </div>
-
-                    <div v-else-if="activeWorkspaceTab === 'internal_notes'" class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-                        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                                <h3 class="text-lg font-semibold text-slate-950">{{ t('Internal Notes') }}</h3>
-                                <p class="mt-1 text-sm text-slate-500">{{ t('Private operational notes recorded inside the support workspace and order-side actions.') }}</p>
                             </div>
-                            <span class="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-                                {{ internalMessages.length }} {{ t('notes') }}
-                            </span>
-                        </div>
 
-                        <div v-if="internalMessages.length === 0" class="mt-5 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                            {{ t('No internal notes have been recorded for this ticket yet.') }}
-                        </div>
-
-                        <div v-else class="mt-6 space-y-4">
-                            <article v-for="message in internalMessages" :key="message.id" class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
-                                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                    <div>
-                                        <p class="text-sm font-semibold text-amber-950">{{ message.user?.name || t('System') }}</p>
-                                        <p class="mt-1 text-xs uppercase tracking-[0.18em] text-amber-700">{{ t('Internal note') }}</p>
+                            <div v-else-if="props.resolution_reports_enabled && activeWorkspaceTab === 'resolution_report'" class="space-y-4">
+                                <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                                    <div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                                        <h3 class="text-sm font-semibold text-slate-950">{{ t('Resolution Report') }}</h3>
+                                        <span class="text-xs font-medium" :class="resolutionReport ? 'text-emerald-700' : 'text-slate-500'">
+                                            {{ resolutionReport ? t('Recorded') : t('Pending') }}
+                                        </span>
                                     </div>
-                                    <p class="text-xs text-amber-700">{{ formatDateTime(message.created_at) }}</p>
+                                    <div class="mt-4">
+                                        <ResolutionReportView :report="resolutionReport" />
+                                    </div>
                                 </div>
-                                <p class="mt-3 whitespace-pre-line text-sm leading-6 text-amber-900">{{ message.message || t('No content') }}</p>
-                            </article>
-                        </div>
-                    </div>
 
-                    <div v-else-if="props.resolution_reports_enabled && activeWorkspaceTab === 'resolution_report'" class="space-y-6">
-                        <div class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-                            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Resolution Report') }}</h3>
-                                    <p class="mt-1 text-sm text-slate-500">{{ t('Capture the final resolution in a structured format that stays analytics-ready and reusable across reopen cycles.') }}</p>
-                                </div>
-                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]" :class="resolutionReport ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'">
-                                    {{ resolutionReport ? t('Recorded') : t('Pending') }}
-                                </span>
+                                <ResolutionReportForm
+                                    :ticket-id="ticket.id"
+                                    :report="resolutionReport"
+                                    :resolution-type-options="resolution_type_options"
+                                    :resolution-status-options="resolution_status_options"
+                                />
                             </div>
 
-                            <div class="mt-6">
-                                <ResolutionReportView :report="resolutionReport" />
-                            </div>
-                        </div>
-
-                        <ResolutionReportForm
-                            :ticket-id="ticket.id"
-                            :report="resolutionReport"
-                            :resolution-type-options="resolution_type_options"
-                            :resolution-status-options="resolution_status_options"
-                        />
-                    </div>
-                </div>
-
-                <div class="space-y-6">
-                    <div class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Workflow controls') }}</h3>
-
-                        <form class="mt-5 space-y-4" @submit.prevent="submitStatus">
-                            <div>
-                                <label for="ticket_status" class="text-sm font-medium text-slate-700">{{ t('Status') }}</label>
-                                <select
-                                    id="ticket_status"
-                                    v-model="statusForm.status"
-                                    class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
-                                >
-                                    <option v-for="status in status_options" :key="status.name" :value="status.name">
-                                        {{ t(status.label) }}
-                                    </option>
-                                </select>
-                                <p v-if="statusForm.errors.status" class="mt-2 text-sm text-rose-600">{{ statusForm.errors.status }}</p>
-                            </div>
-
-                            <button
-                                type="submit"
-                                class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
-                                :disabled="statusForm.processing"
-                            >
-                                {{ t('Update status') }}
-                            </button>
-
-                            <p v-if="props.resolution_reports_enabled && !hasClosedResolutionReport" class="text-xs text-slate-500">
-                                {{ t('Closing a ticket now requires a resolution report saved with a closed outcome.') }}
-                            </p>
-                        </form>
-
-                        <form class="mt-6 space-y-4 border-t border-slate-200 pt-6" @submit.prevent="submitAssignment">
-                            <div>
-                                <label for="assigned_agent_id" class="text-sm font-medium text-slate-700">{{ t('Assigned agent') }}</label>
-                                <select
-                                    id="assigned_agent_id"
-                                    v-model="assignmentForm.assigned_agent_id"
-                                    class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
-                                >
-                                    <option value="">{{ t('Unassigned') }}</option>
-                                    <option v-for="agent in agents" :key="agent.id" :value="agent.id">
-                                        {{ agent.name }}
-                                    </option>
-                                </select>
-                                <p v-if="assignmentForm.errors.assigned_agent_id" class="mt-2 text-sm text-rose-600">{{ assignmentForm.errors.assigned_agent_id }}</p>
-                            </div>
-
-                            <button
-                                type="submit"
-                                class="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-                                :disabled="assignmentForm.processing"
-                            >
-                                {{ t('Save assignment') }}
-                            </button>
-                        </form>
-                    </div>
-
-                    <div class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Customer') }}</h3>
-                        <dl class="mt-5 space-y-4">
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Name') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ ticket.user.name || t('Unknown user') }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Email') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ ticket.user.email || t('No email') }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Phone') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ ticket.user.phone || t('Not available') }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Country') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ ticket.user.country || t('Not available') }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Customer since') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatDateTime(ticket.user.created_at) }}</dd>
-                            </div>
-                        </dl>
-                    </div>
-
-                    <div class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Order Snapshot') }}</h3>
-
-                        <div v-if="!orderSnapshot" class="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                            {{ t('Order snapshot becomes available when the ticket is linked to an order.') }}
-                        </div>
-
-                        <div v-else class="mt-5 space-y-5">
-                            <div class="grid gap-3 sm:grid-cols-2">
-                                <div class="rounded-2xl bg-slate-50 px-4 py-4">
-                                    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Order total') }}</p>
-                                    <p class="mt-2 text-lg font-semibold text-slate-950">{{ formatMoney(orderSnapshot.order_total, orderSnapshot.currency) }}</p>
-                                </div>
-                                <div class="rounded-2xl bg-emerald-50 px-4 py-4">
-                                    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">{{ t('Paid amount') }}</p>
-                                    <p class="mt-2 text-lg font-semibold text-emerald-900">{{ formatMoney(orderSnapshot.paid_amount, orderSnapshot.currency) }}</p>
-                                </div>
-                                <div class="rounded-2xl bg-rose-50 px-4 py-4">
-                                    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-700">{{ t('Refunded amount') }}</p>
-                                    <p class="mt-2 text-lg font-semibold text-rose-900">{{ formatMoney(orderSnapshot.refunded_amount, orderSnapshot.currency) }}</p>
-                                </div>
-                                <div class="rounded-2xl bg-amber-50 px-4 py-4">
-                                    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700">{{ t('Compensation amount') }}</p>
-                                    <p class="mt-2 text-lg font-semibold text-amber-900">{{ formatMoney(orderSnapshot.compensation_amount, orderSnapshot.currency) }}</p>
-                                </div>
-                            </div>
-
-                            <dl class="grid gap-4 sm:grid-cols-2">
-                                <div>
-                                    <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Remaining collectible') }}</dt>
-                                    <dd class="mt-2 text-sm font-medium text-slate-900">{{ formatMoney(orderSnapshot.remaining_collectible, orderSnapshot.currency) }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Provider') }}</dt>
-                                    <dd class="mt-2 text-sm text-slate-900">{{ orderSnapshot.provider_name || t('Not available') }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Payment method') }}</dt>
-                                    <dd class="mt-2 text-sm text-slate-900">{{ orderSnapshot.payment_method || t('Not available') }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Current statuses') }}</dt>
-                                    <dd class="mt-2 text-sm text-slate-900">
-                                        {{ formatLabel(orderSnapshot.status) }} · {{ formatLabel(orderSnapshot.payment_status) }}
-                                    </dd>
-                                </div>
-                            </dl>
-                        </div>
-                    </div>
-
-                    <div class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Order context') }}</h3>
-
-                        <div v-if="!ticket.order" class="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                            {{ t('This ticket is not linked to an order.') }}
-                        </div>
-
-                        <dl v-else class="mt-5 space-y-4">
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Reference') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ ticket.order.reference }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Provider') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ ticket.order.provider_name || t('Not available') }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Order status') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatLabel(ticket.order.status) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Payment status') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatLabel(ticket.order.payment_status) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Total amount') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatMoney(ticket.order.total_amount, ticket.order.currency) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Created at') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatDateTime(ticket.order.created_at) }}</dd>
-                            </div>
-                        </dl>
-
-                        <div v-if="ticket.order" class="mt-6 border-t border-slate-200 pt-6">
-                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                <div>
-                                    <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Order Actions') }}</h4>
-                                    <p class="mt-2 text-sm leading-6 text-slate-600">
-                                        {{ t('Run manual operational actions for the linked order without leaving the support thread.') }}
-                                    </p>
-                                </div>
-                                <span
-                                    v-if="!canManageOrderActions"
-                                    class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600"
-                                >
-                                    {{ t('Restricted') }}
-                                </span>
-                            </div>
-
-                            <div v-if="canManageOrderActions && availableOrderActions.length" class="mt-4 flex flex-wrap gap-3">
-                                <button
-                                    v-for="action in availableOrderActions"
-                                    :key="action.name"
-                                    type="button"
-                                    class="inline-flex items-center justify-center rounded-2xl border px-4 py-3 text-sm font-medium transition"
-                                    :class="actionVariantClass(action.variant)"
-                                    @click="openOrderActionModal(action.name)"
-                                >
-                                    {{ t(action.label) }}
-                                </button>
-                            </div>
-
-                            <div v-else-if="canManageOrderActions" class="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                                {{ t('No manual order actions are available for the current order state.') }}
-                            </div>
-
-                            <div v-else class="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                                {{ t('You do not have permission to run order actions from support.') }}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div v-if="activeWorkspaceTab === 'timeline'" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                                <h3 class="text-lg font-semibold text-slate-950">{{ t('Unified Timeline') }}</h3>
-                                <p class="mt-1 text-sm text-slate-500">{{ t('Support, order, and finance events are merged here in reverse chronological order.') }}</p>
-                            </div>
-                            <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
-                                {{ timelineEntries.length }} {{ t('events') }}
-                            </span>
-                        </div>
-
-                        <div v-if="timelineEntries.length === 0" class="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                            {{ t('No timeline events have been recorded for this ticket yet.') }}
-                        </div>
-
-                        <div v-else class="mt-6 space-y-4">
-                            <article
-                                v-for="entry in timelineEntries"
-                                :key="entry.id"
-                                class="rounded-2xl border border-slate-200 px-4 py-4"
-                            >
-                                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div v-else-if="activeWorkspaceTab === 'activity'" class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                     <div>
-                                        <div class="flex flex-wrap items-center gap-2">
-                                            <h4 class="text-sm font-semibold text-slate-950">{{ t(entry.event) }}</h4>
-                                            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">
-                                                {{ t(formatLabel(entry.source)) }}
+                                        <h3 class="text-sm font-semibold text-slate-950">{{ t('Activity') }}</h3>
+                                        <p class="mt-1 text-sm text-slate-600">
+                                            {{ t('Timeline events and notification delivery logs in one place.') }}
+                                        </p>
+                                    </div>
+                                    <label class="block w-full lg:max-w-sm">
+                                        <span class="sr-only">{{ t('Search activity') }}</span>
+                                        <input
+                                            v-model="activityQuery"
+                                            type="text"
+                                            class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                                            :placeholder="t('Search events, notifications, or actors')"
+                                        >
+                                    </label>
+                                </div>
+
+                                <div class="mt-4 flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
+                                        :class="activityScope === 'all' ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
+                                        @click="activityScope = 'all'"
+                                    >
+                                        {{ t('All') }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
+                                        :class="activityScope === 'events' ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
+                                        @click="activityScope = 'events'"
+                                    >
+                                        {{ t('Events') }}
+                                    </button>
+                                    <button
+                                        v-if="notification_logs_enabled"
+                                        type="button"
+                                        class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
+                                        :class="activityScope === 'notifications' ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
+                                        @click="activityScope = 'notifications'"
+                                    >
+                                        {{ t('Notifications') }}
+                                    </button>
+                                </div>
+
+                                <div v-if="showNotificationScopeFilters" class="mt-3 flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
+                                        :class="notificationFilter === 'all' ? 'bg-cyan-950 text-white' : 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100'"
+                                        @click="notificationFilter = 'all'"
+                                    >
+                                        {{ t('All notifications') }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
+                                        :class="notificationFilter === 'ticket' ? 'bg-cyan-950 text-white' : 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100'"
+                                        @click="notificationFilter = 'ticket'"
+                                    >
+                                        {{ t('This ticket') }}
+                                    </button>
+                                    <button
+                                        v-if="ticket.order"
+                                        type="button"
+                                        class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
+                                        :class="notificationFilter === 'order' ? 'bg-cyan-950 text-white' : 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100'"
+                                        @click="notificationFilter = 'order'"
+                                    >
+                                        {{ t('This order') }}
+                                    </button>
+                                </div>
+
+                                <div v-if="filteredActivityItems.length === 0" class="mt-4 rounded-lg bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                                    {{ t('No activity matched the current filters.') }}
+                                </div>
+
+                                <div v-else class="mt-6 space-y-0">
+                                    <div
+                                        v-for="(item, index) in filteredActivityItems"
+                                        :key="item.id"
+                                        class="relative flex gap-4 pb-6"
+                                    >
+                                        <div class="relative flex w-10 shrink-0 justify-center">
+                                            <span
+                                                class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-[10px] font-semibold uppercase"
+                                                :class="item.kind === 'notification' ? 'bg-cyan-100 text-cyan-800' : 'bg-slate-100 text-slate-700'"
+                                            >
+                                                {{ item.kind === 'notification' ? 'NT' : t(formatLabel(item.entry.source)).slice(0, 2) }}
                                             </span>
+                                            <span v-if="index !== filteredActivityItems.length - 1" class="absolute top-10 h-[calc(100%-0.5rem)] w-px bg-slate-200" />
                                         </div>
-                                        <p class="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">{{ entry.actor || t('System') }}</p>
+
+                                        <article
+                                            v-if="item.kind === 'event'"
+                                            class="min-w-0 flex-1 rounded-lg border border-slate-200 px-4 py-3"
+                                        >
+                                            <div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                                <div>
+                                                    <h4 class="text-sm font-medium text-slate-950">{{ t(item.entry.event) }}</h4>
+                                                    <p class="text-xs text-slate-500">{{ item.entry.actor || t('System') }}</p>
+                                                </div>
+                                                <p class="text-xs text-slate-500">{{ formatDateTime(item.entry.created_at) }}</p>
+                                            </div>
+                                            <p class="mt-2 text-sm leading-6 text-slate-600">{{ item.entry.description }}</p>
+                                            <p v-if="item.entry.amount" class="mt-2 text-xs font-medium text-slate-700">
+                                                {{ formatMoney(item.entry.amount, item.entry.currency) }}
+                                            </p>
+                                        </article>
+
+                                        <article
+                                            v-else
+                                            class="min-w-0 flex-1 rounded-lg border border-slate-200 px-4 py-3"
+                                        >
+                                            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                                <div class="min-w-0">
+                                                    <div class="flex flex-wrap items-center gap-2">
+                                                        <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="notificationStatusTone(item.log.status)">
+                                                            {{ formatLabel(item.log.status) }}
+                                                        </span>
+                                                        <span class="text-xs font-medium text-slate-700">{{ formatLabel(item.log.channel) }}</span>
+                                                        <span v-if="item.log.is_ticket_related" class="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700">
+                                                            {{ t('Ticket') }}
+                                                        </span>
+                                                        <span v-if="item.log.is_order_related" class="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+                                                            {{ t('Order') }}
+                                                        </span>
+                                                    </div>
+                                                    <p class="mt-2 text-sm font-medium text-slate-950">{{ item.log.subject || item.log.template_code || t('Notification') }}</p>
+                                                    <p class="mt-1 text-xs text-slate-500">{{ item.log.template_code }} · {{ formatLabel(item.log.notification_type || item.log.related_type || t('general')) }}</p>
+                                                </div>
+                                                <p class="shrink-0 text-xs text-slate-500">
+                                                    {{ formatDateTime(item.log.sent_at || item.log.failed_at || item.log.created_at) }}
+                                                </p>
+                                            </div>
+                                            <p v-if="item.log.body" class="mt-2 text-sm leading-6 text-slate-600">{{ item.log.body }}</p>
+                                            <p v-if="item.log.failure_reason" class="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                                                {{ t('Failure reason') }}: {{ item.log.failure_reason }}
+                                            </p>
+                                            <p v-if="item.log.retry_count" class="mt-2 text-xs text-slate-500">
+                                                {{ t('Retries') }}: {{ item.log.retry_count }}
+                                            </p>
+                                        </article>
                                     </div>
-                                    <p class="text-xs text-slate-500">{{ formatDateTime(entry.created_at) }}</p>
                                 </div>
 
-                                <dl class="mt-4 grid gap-4 sm:grid-cols-3">
-                                    <div>
-                                        <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Description') }}</dt>
-                                        <dd class="mt-2 break-words text-sm text-slate-700">{{ entry.description }}</dd>
-                                    </div>
-                                    <div>
-                                        <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Amount') }}</dt>
-                                        <dd class="mt-2 break-words text-sm text-slate-700">{{ entry.amount ? formatMoney(entry.amount, entry.currency) : t('Not applicable') }}</dd>
-                                    </div>
-                                    <div>
-                                        <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Source') }}</dt>
-                                        <dd class="mt-2 break-words text-sm text-slate-700">{{ formatLabel(entry.source) }}</dd>
-                                    </div>
-                                </dl>
-                            </article>
+                                <div v-if="canViewNotificationLogs && notification_logs_enabled" class="mt-4 border-t border-slate-100 pt-4">
+                                    <Link
+                                        :href="route('admin.notifications.index')"
+                                        class="text-sm font-medium text-slate-600 transition hover:text-slate-900"
+                                    >
+                                        {{ t('Open full notifications console') }} →
+                                    </Link>
+                                </div>
+                            </div>
+
+                            <div v-else-if="activeWorkspaceTab === 'details'" class="space-y-4">
+                                <OrderTicketPanel
+                                    v-if="ticket.order_ticket"
+                                    :ticket="ticket.order_ticket"
+                                    :currency="ticket.order?.currency"
+                                    :booked-by-clickable="Boolean(ticket.user?.id)"
+                                    :show-booking-actions="false"
+                                    @booked-by-click="openCustomerDrawer"
+                                />
+
+                                <div
+                                    v-else-if="!ticket.order"
+                                    class="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm"
+                                >
+                                    {{ t('This support ticket is not linked to an order, so no booking ticket view is available.') }}
+                                </div>
+
+                                <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                                    <h3 class="text-sm font-semibold text-slate-950">{{ t('Support case') }}</h3>
+                                    <dl class="mt-4 grid gap-4 sm:grid-cols-2">
+                                        <div>
+                                            <dt class="text-xs font-medium text-slate-500">{{ t('Ticket number') }}</dt>
+                                            <dd class="mt-1 text-sm text-slate-900">{{ ticket.ticket_number }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-medium text-slate-500">{{ t('Category') }}</dt>
+                                            <dd class="mt-1 text-sm text-slate-900">{{ formatLabel(ticket.category) }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-medium text-slate-500">{{ t('Assigned to') }}</dt>
+                                            <dd class="mt-1 text-sm text-slate-900">{{ ticket.assignee?.name || t('Unassigned') }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-medium text-slate-500">{{ t('Priority') }}</dt>
+                                            <dd class="mt-1 text-sm text-slate-900">{{ formatLabel(ticket.priority) }}</dd>
+                                        </div>
+                                        <div class="sm:col-span-2">
+                                            <dt class="text-xs font-medium text-slate-500">{{ t('Subject') }}</dt>
+                                            <dd class="mt-1 text-sm text-slate-900">{{ ticket.subject }}</dd>
+                                        </div>
+                                        <div class="sm:col-span-2">
+                                            <dt class="text-xs font-medium text-slate-500">{{ t('Description') }}</dt>
+                                            <dd class="mt-1 whitespace-pre-line text-sm leading-6 text-slate-900">{{ ticket.description }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-medium text-slate-500">{{ t('Created at') }}</dt>
+                                            <dd class="mt-1 text-sm text-slate-900">{{ formatDateTime(ticket.created_at) }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-medium text-slate-500">{{ t('Updated at') }}</dt>
+                                            <dd class="mt-1 text-sm text-slate-900">{{ formatDateTime(ticket.updated_at) }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-medium text-slate-500">{{ t('First response due') }}</dt>
+                                            <dd class="mt-1 text-sm text-slate-900">{{ formatDateTime(ticket.first_response_due_at) }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-medium text-slate-500">{{ t('Resolution due') }}</dt>
+                                            <dd class="mt-1 text-sm text-slate-900">{{ formatDateTime(ticket.resolution_due_at) }}</dd>
+                                        </div>
+                                    </dl>
+                                </div>
+                            </div>
                         </div>
+
+                        <aside class="space-y-3 xl:sticky xl:top-4 xl:self-start">
+                            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                                <h3 class="text-sm font-semibold text-slate-950">{{ t('Workflow') }}</h3>
+
+                                <form class="mt-3 space-y-3" @submit.prevent="submitStatus">
+                                    <label class="block space-y-1">
+                                        <span class="text-xs font-medium text-slate-600">{{ t('Status') }}</span>
+                                        <select
+                                            id="ticket_status"
+                                            v-model="statusForm.status"
+                                            class="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                        >
+                                            <option v-for="status in status_options" :key="status.name" :value="status.name">
+                                                {{ t(status.label) }}
+                                            </option>
+                                        </select>
+                                    </label>
+                                    <button
+                                        type="submit"
+                                        class="inline-flex w-full items-center justify-center rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
+                                        :disabled="statusForm.processing"
+                                    >
+                                        {{ t('Update status') }}
+                                    </button>
+                                    <p v-if="statusForm.errors.status" class="text-sm text-rose-600">{{ statusForm.errors.status }}</p>
+                                    <p v-if="props.resolution_reports_enabled && !hasClosedResolutionReport" class="text-xs text-slate-500">
+                                        {{ t('Closing requires a resolution report with a closed outcome.') }}
+                                    </p>
+                                </form>
+
+                                <form class="mt-4 space-y-3 border-t border-slate-100 pt-4" @submit.prevent="submitAssignment">
+                                    <label class="block space-y-1">
+                                        <span class="text-xs font-medium text-slate-600">{{ t('Assigned agent') }}</span>
+                                        <select
+                                            id="assigned_agent_id"
+                                            v-model="assignmentForm.assigned_agent_id"
+                                            class="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                        >
+                                            <option value="">{{ t('Unassigned') }}</option>
+                                            <option v-for="agent in agents" :key="agent.id" :value="agent.id">
+                                                {{ agent.name }}
+                                            </option>
+                                        </select>
+                                    </label>
+                                    <button
+                                        type="submit"
+                                        class="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                                        :disabled="assignmentForm.processing"
+                                    >
+                                        {{ t('Save assignment') }}
+                                    </button>
+                                    <p v-if="assignmentForm.errors.assigned_agent_id" class="text-sm text-rose-600">{{ assignmentForm.errors.assigned_agent_id }}</p>
+                                </form>
+                            </div>
+
+                            <div class="rounded-xl border border-amber-200 bg-amber-50/60 p-4 shadow-sm">
+                                <button
+                                    type="button"
+                                    class="flex w-full items-center justify-between gap-3 text-left"
+                                    @click="internalNotesExpanded = !internalNotesExpanded"
+                                >
+                                    <div>
+                                        <h3 class="text-sm font-semibold text-amber-950">{{ t('Internal Notes') }}</h3>
+                                        <p class="mt-1 text-xs text-amber-800">{{ t('Visible to agents only') }}</p>
+                                    </div>
+                                    <span class="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                                        {{ internalMessages.length }}
+                                    </span>
+                                </button>
+
+                                <div v-if="internalNotesExpanded" class="mt-3 space-y-2">
+                                    <div v-if="internalMessages.length === 0" class="rounded-lg bg-white/70 px-3 py-3 text-sm text-amber-900">
+                                        {{ t('No internal notes have been recorded for this ticket yet.') }}
+                                    </div>
+
+                                    <div v-else class="max-h-56 space-y-2 overflow-y-auto pr-1">
+                                        <article
+                                            v-for="message in internalMessages"
+                                            :key="message.id"
+                                            class="rounded-lg border border-amber-200 bg-white px-3 py-2.5"
+                                        >
+                                            <div class="flex items-start justify-between gap-2">
+                                                <p class="text-xs font-medium text-amber-950">{{ message.user?.name || t('System') }}</p>
+                                                <p class="text-[11px] text-amber-700">{{ formatDateTime(message.created_at) }}</p>
+                                            </div>
+                                            <p class="mt-1.5 whitespace-pre-line text-sm leading-5 text-amber-900">{{ message.message || t('No content') }}</p>
+                                        </article>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                class="w-full rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                                @click="openCustomerDrawer"
+                            >
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <h3 class="text-sm font-semibold text-slate-950">{{ t('Customer') }}</h3>
+                                        <p class="mt-2 text-sm font-medium text-slate-900">{{ ticket.user.name || t('Unknown user') }}</p>
+                                        <p class="mt-1 truncate text-xs text-slate-500">{{ ticket.user.email || t('No email') }}</p>
+                                        <p v-if="ticket.user.phone" class="mt-1 text-xs text-slate-500" dir="ltr">{{ ticket.user.phone }}</p>
+                                    </div>
+                                    <span class="shrink-0 text-xs font-medium text-slate-500">{{ t('Open') }}</span>
+                                </div>
+                            </button>
+
+                            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                                <h3 class="text-sm font-semibold text-slate-950">{{ t('Order') }}</h3>
+
+                                <div v-if="!ticket.order" class="mt-3 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                                    {{ t('This ticket is not linked to an order.') }}
+                                </div>
+
+                                <template v-else>
+                                    <dl class="mt-3 space-y-3">
+                                        <div>
+                                            <dt class="text-xs font-medium text-slate-500">{{ t('Reference') }}</dt>
+                                            <dd class="mt-0.5 text-sm text-slate-900">{{ ticket.order.reference }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-medium text-slate-500">{{ t('Status') }}</dt>
+                                            <dd class="mt-0.5 text-sm text-slate-900">
+                                                {{ formatLabel(ticket.order.status) }} · {{ formatLabel(ticket.order.payment_status) }}
+                                            </dd>
+                                        </div>
+                                        <div v-if="orderSnapshot">
+                                            <dt class="text-xs font-medium text-slate-500">{{ t('Total') }}</dt>
+                                            <dd class="mt-0.5 text-sm font-medium text-slate-900">
+                                                {{ formatMoney(orderSnapshot.order_total, orderSnapshot.currency) }}
+                                            </dd>
+                                        </div>
+                                    </dl>
+
+                                    <div v-if="canManageOrderActions && availableOrderActions.length" class="mt-4 flex flex-wrap gap-2">
+                                        <button
+                                            v-for="action in availableOrderActions"
+                                            :key="action.name"
+                                            type="button"
+                                            class="inline-flex items-center justify-center rounded-lg border px-3 py-2 text-xs font-medium transition"
+                                            :class="actionVariantClass(action.variant)"
+                                            @click="openOrderActionModal(action.name)"
+                                        >
+                                            {{ t(action.label) }}
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                        </aside>
                     </div>
                 </div>
             </div>
         </section>
+
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition duration-200 ease-out"
+                enter-from-class="opacity-0"
+                enter-to-class="opacity-100"
+                leave-active-class="transition duration-150 ease-in"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+            >
+                <div
+                    v-if="customerDrawerOpen"
+                    class="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm"
+                    @click="closeCustomerDrawer"
+                />
+            </Transition>
+        </Teleport>
+
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition duration-300 ease-out"
+                enter-from-class="translate-x-full"
+                enter-to-class="translate-x-0"
+                leave-active-class="transition duration-200 ease-in"
+                leave-from-class="translate-x-0"
+                leave-to-class="translate-x-full"
+            >
+                <aside
+                    v-if="customerDrawerOpen"
+                    class="fixed inset-y-0 right-0 z-[60] flex w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-[0_20px_80px_-20px_rgba(15,23,42,0.45)]"
+                >
+                    <div class="border-b border-slate-200 bg-slate-50 px-6 py-5">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-700">{{ t('Customer Drawer') }}</p>
+                                <h3 class="mt-2 text-2xl font-semibold text-slate-950">{{ ticket.user.name || t('Unknown user') }}</h3>
+                                <p class="mt-2 text-sm text-slate-600">{{ ticket.user.email || t('No email') }}</p>
+                            </div>
+                            <button
+                                type="button"
+                                class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-white hover:text-slate-900"
+                                @click="closeCustomerDrawer"
+                            >
+                                <span class="sr-only">{{ t('Close drawer') }}</span>
+                                <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                                    <path fill-rule="evenodd" d="M4.22 4.22a.75.75 0 011.06 0L10 8.94l4.72-4.72a.75.75 0 111.06 1.06L11.06 10l4.72 4.72a.75.75 0 11-1.06 1.06L10 11.06l-4.72 4.72a.75.75 0 11-1.06-1.06L8.94 10 4.22 5.28a.75.75 0 010-1.06z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto px-6 py-6">
+                        <div class="space-y-6">
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                                <h4 class="text-lg font-semibold text-slate-950">{{ t('Customer profile') }}</h4>
+                                <dl class="mt-5 grid gap-4">
+                                    <div>
+                                        <dt class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Name') }}</dt>
+                                        <dd class="mt-2 text-sm text-slate-900">{{ ticket.user.name || t('Unknown user') }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Email') }}</dt>
+                                        <dd class="mt-2 text-sm text-slate-900">{{ ticket.user.email || t('No email') }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Phone') }}</dt>
+                                        <dd class="mt-2 text-sm text-slate-900">{{ ticket.user.phone || t('Not provided') }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Country') }}</dt>
+                                        <dd class="mt-2 text-sm text-slate-900">
+                                            {{ customerContext.country || ticket.user.country || (customerContextLoading ? t('Loading...') : t('Not available')) }}
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-200 p-5">
+                                <div class="flex items-center justify-between gap-3">
+                                    <h4 class="text-lg font-semibold text-slate-950">{{ t('Quick stats') }}</h4>
+                                    <span v-if="customerContextLoading" class="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">{{ t('Loading') }}</span>
+                                </div>
+                                <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                                    <div class="rounded-lg bg-slate-50 p-4">
+                                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Recent orders') }}</p>
+                                        <p class="mt-2 text-xl font-semibold text-slate-950">{{ customerContext.recentOrdersCount ?? '-' }}</p>
+                                    </div>
+                                    <div class="rounded-lg bg-slate-50 p-4">
+                                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Active tickets') }}</p>
+                                        <p class="mt-2 text-xl font-semibold text-slate-950">{{ customerContext.activeTicketCount ?? '-' }}</p>
+                                    </div>
+                                    <div class="rounded-lg bg-slate-50 p-4 sm:col-span-2">
+                                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Last activity') }}</p>
+                                        <p class="mt-2 text-sm font-medium text-slate-950">{{ formatDateTime(customerContext.lastActivity || ticket.updated_at) }}</p>
+                                    </div>
+                                </div>
+                                <p v-if="customerContextError" class="mt-4 text-sm text-rose-600">{{ customerContextError }}</p>
+                            </div>
+
+                            <div v-if="notification_logs_enabled" class="rounded-xl border border-slate-200 p-5">
+                                <div class="flex items-center justify-between gap-3">
+                                    <h4 class="text-lg font-semibold text-slate-950">{{ t('Notification deliveries') }}</h4>
+                                    <button
+                                        v-if="customer_notification_logs.length > 5"
+                                        type="button"
+                                        class="text-xs font-medium text-slate-500 transition hover:text-slate-800"
+                                        @click="openActivityTab('notifications')"
+                                    >
+                                        {{ t('View all') }}
+                                    </button>
+                                </div>
+                                <p class="mt-2 text-sm text-slate-600">
+                                    {{ t('Use these logs when the customer says they did not receive an email, SMS, or push notification.') }}
+                                </p>
+
+                                <div v-if="recentNotificationLogs.length === 0" class="mt-4 rounded-lg bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                                    {{ t('No notification delivery logs were found for this customer yet.') }}
+                                </div>
+
+                                <div v-else class="mt-4 space-y-3">
+                                    <article
+                                        v-for="log in recentNotificationLogs"
+                                        :key="`drawer-log-${log.id}`"
+                                        class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"
+                                    >
+                                        <div class="flex items-start justify-between gap-3">
+                                            <div class="min-w-0">
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-medium" :class="notificationStatusTone(log.status)">
+                                                        {{ formatLabel(log.status) }}
+                                                    </span>
+                                                    <span class="text-[11px] font-medium text-slate-600">{{ formatLabel(log.channel) }}</span>
+                                                </div>
+                                                <p class="mt-1 truncate text-sm font-medium text-slate-900">{{ log.subject || log.template_code }}</p>
+                                            </div>
+                                            <span class="shrink-0 text-[11px] text-slate-500">{{ formatDateTime(log.sent_at || log.failed_at || log.created_at) }}</span>
+                                        </div>
+                                        <p v-if="log.failure_reason" class="mt-2 text-xs text-rose-700">{{ log.failure_reason }}</p>
+                                    </article>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    class="mt-4 inline-flex items-center text-sm font-medium text-slate-700 transition hover:text-slate-950"
+                                    @click="openActivityTab('notifications')"
+                                >
+                                    {{ t('Open activity tab') }} →
+                                </button>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-200 p-5">
+                                <h4 class="text-lg font-semibold text-slate-950">{{ t('Actions') }}</h4>
+                                <div class="mt-4 grid gap-3">
+                                    <Link
+                                        v-if="canViewOrders"
+                                        :href="customerOrdersLink"
+                                        class="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3 transition hover:bg-slate-50"
+                                    >
+                                        <span>
+                                            <span class="block text-sm font-semibold text-slate-950">{{ t('View all orders') }}</span>
+                                            <span class="mt-1 block text-xs text-slate-500">{{ t('Jump to the customer workspace and recent order list.') }}</span>
+                                        </span>
+                                        <span class="text-sm font-medium text-slate-600">{{ t('Open') }}</span>
+                                    </Link>
+
+                                    <Link
+                                        v-if="canViewSupport"
+                                        :href="relatedTicketsLink"
+                                        class="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3 transition hover:bg-slate-50"
+                                    >
+                                        <span>
+                                            <span class="block text-sm font-semibold text-slate-950">{{ t('View support tickets') }}</span>
+                                            <span class="mt-1 block text-xs text-slate-500">{{ t('Open support filtered by the customer.') }}</span>
+                                        </span>
+                                        <span class="text-sm font-medium text-slate-600">{{ t('Open') }}</span>
+                                    </Link>
+
+                                    <Link
+                                        v-if="canViewSupport"
+                                        :href="supportCreateLink"
+                                        class="flex items-center justify-between rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3 transition hover:bg-cyan-100"
+                                    >
+                                        <span>
+                                            <span class="block text-sm font-semibold text-cyan-800">{{ t('Create Support Ticket') }}</span>
+                                            <span class="mt-1 block text-xs text-cyan-700">{{ t('Start a new ticket for this customer.') }}</span>
+                                        </span>
+                                        <span class="text-sm font-medium text-cyan-800">{{ t('Open') }}</span>
+                                    </Link>
+
+                                    <Link
+                                        v-if="customerProfileLink"
+                                        :href="customerProfileLink"
+                                        class="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3 transition hover:bg-slate-50"
+                                    >
+                                        <span>
+                                            <span class="block text-sm font-semibold text-slate-950">{{ t('Open customer profile') }}</span>
+                                            <span class="mt-1 block text-xs text-slate-500">{{ t('View the unified customer CRM page.') }}</span>
+                                        </span>
+                                        <span class="text-sm font-medium text-slate-600">{{ t('Open') }}</span>
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+            </Transition>
+        </Teleport>
 
         <Teleport to="body">
             <Transition

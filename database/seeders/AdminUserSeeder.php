@@ -26,6 +26,7 @@ class AdminUserSeeder extends Seeder
                 'email_verified_at' => now(),
             ]
         );
+        
 
         // تأكيد التحديث حتى لو كان موجود مسبقاً
         $user->is_admin = true;

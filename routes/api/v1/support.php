@@ -26,6 +26,7 @@ Route::middleware('auth:sanctum')
         Route::get('/{ticket}', 'show')->whereNumber('ticket')->name('show');
         Route::get('/{ticket}/messages', 'messages')->whereNumber('ticket')->name('messages.index');
         Route::post('/{ticket}/messages', 'storeMessage')->whereNumber('ticket')->name('messages.store');
+        Route::get('/{ticket}/typing', 'showTyping')->whereNumber('ticket')->name('typing.show');
         Route::post('/{ticket}/typing', 'typing')->whereNumber('ticket')->name('typing');
         Route::post('/{ticket}/seen', 'seen')->whereNumber('ticket')->name('seen');
     });

@@ -21,6 +21,8 @@ use Illuminate\Validation\ValidationException;
 
 class OrderService
 {
+    private const ORDER_NUMBER_PREFIX = 'CP';
+
     public function __construct(
         private readonly BookingProviderService $bookingProviderService,
     ) {
@@ -35,7 +37,7 @@ class OrderService
             $order = Order::query()->create([
                 'customer_id' => $customer->id,
                 'provider_name' => $data->providerName,
-                'booking_reference' => $this->generateBookingReference(),
+                'booking_reference' => null,
                 'status' => Order::STATUS_PENDING_PAYMENT,
                 'payment_status' => Order::PAYMENT_STATUS_UNPAID,
                 'service_type' => $data->serviceType,
@@ -54,12 +56,46 @@ class OrderService
                 FinancialTransaction::SOURCE_ORDER_CREATION,
             );
 
+            $order = $this->assignCpbookeOrderNumber($order);
+
             $this->dispatchAfterCommit(fn () => event(new OrderCreatedEvent($order->fresh()->load('customer'))));
 
             return $order;
         });
 
         return $order->refresh()->load('customer');
+    }
+
+    public function assignCpbookeOrderNumber(Order $order): Order
+    {
+        if (! empty($order->booking_reference)) {
+            return $order;
+        }
+
+        $orderNumber = $this->generateCpbookeOrderNumber((int) $order->id);
+
+        while (
+            Order::query()
+                ->where('booking_reference', $orderNumber)
+                ->whereKeyNot($order->id)
+                ->exists()
+        ) {
+            $orderNumber = $this->generateCpbookeOrderNumber((int) $order->id + random_int(1, 999));
+        }
+
+        $order->forceFill([
+            'booking_reference' => $orderNumber,
+        ])->save();
+
+        return $order->refresh();
+    }
+
+    public function generateCpbookeOrderNumber(int $orderId): string
+    {
+        $digits = str_pad((string) ($orderId % 10000), 4, '0', STR_PAD_LEFT);
+        $suffix = chr(65 + ($orderId % 26)).chr(65 + (intdiv($orderId, 26) % 26));
+
+        return self::ORDER_NUMBER_PREFIX.$digits.$suffix;
     }
 
     /**
@@ -91,9 +127,46 @@ class OrderService
         return Order::query()
             ->with('customer')
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
+            ->when($filters['search'] ?? null, fn ($query, $search) => $this->applyAdminSearch($query, $search))
             ->latest('id')
             ->paginate($perPage)
             ->withQueryString();
+    }
+
+    /**
+     * Apply admin order list search filters.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<Order>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<Order>
+     */
+    private function applyAdminSearch($query, ?string $search)
+    {
+        if ($search === null || trim($search) === '') {
+            return $query;
+        }
+
+        $search = trim($search);
+
+        return $query->where(function ($searchQuery) use ($search): void {
+            if (ctype_digit($search)) {
+                $searchQuery->orWhere('id', (int) $search);
+            }
+
+            $searchQuery
+                ->orWhere('booking_reference', 'like', '%'.$search.'%')
+                ->orWhere('external_booking_id', 'like', '%'.$search.'%')
+                ->orWhere('provider_name', 'like', '%'.$search.'%')
+                ->orWhere('details->pnr', 'like', '%'.$search.'%')
+                ->orWhere('details->provider_order_number', 'like', '%'.$search.'%')
+                ->orWhere('request_payload', 'like', '%'.$search.'%')
+                ->orWhere('response_payload', 'like', '%'.$search.'%')
+                ->orWhereHas('customer', function ($customerQuery) use ($search): void {
+                    $customerQuery
+                        ->where('name', 'like', '%'.$search.'%')
+                        ->orWhere('full_name', 'like', '%'.$search.'%')
+                        ->orWhere('email', 'like', '%'.$search.'%');
+                });
+        });
     }
 
     /**
@@ -432,7 +505,7 @@ class OrderService
     /**
      * Record a financial transaction once for the same order event.
      */
-    private function recordFinancialTransactionOnce(Order $order, string $type, string $source, mixed $amountOverride = null): void
+    public function recordFinancialTransactionOnce(Order $order, string $type, string $source, mixed $amountOverride = null): void
     {
         $defaults = [
             'amount' => number_format((float) ($amountOverride ?? $order->total_amount), 2, '.', ''),
@@ -488,14 +561,6 @@ class OrderService
         }
 
         return (string) $value;
-    }
-
-    /**
-     * Generate an internal booking reference.
-     */
-    private function generateBookingReference(): string
-    {
-        return 'BK-'.now()->format('Ymd').'-'.Str::upper(Str::random(8));
     }
 
     private function dispatchFinancialTransactionEvent(Order $order, FinancialTransaction $transaction, string $source): void

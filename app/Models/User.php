@@ -8,6 +8,7 @@ use App\Models\SupportMessage;
 use App\Models\SupportTicket;
 use App\Models\SupportTicketHistory;
 use App\Models\NotificationLog;
+use App\Models\SavedPassenger;
 use App\Models\UserNotificationPreference;
 use App\Models\UserNotification;
 use App\Models\UserNotificationDevice;
@@ -193,6 +194,15 @@ class User extends Authenticatable
     {
         return $this->hasMany(Order::class, 'customer_id')
             ->latest('id');
+    }
+
+    /**
+     * Get the saved passengers owned by the user.
+     */
+    public function savedPassengers(): HasMany
+    {
+        return $this->hasMany(SavedPassenger::class)
+            ->latest('created_at');
     }
 
     /**

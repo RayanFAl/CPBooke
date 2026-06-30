@@ -3,24 +3,29 @@
 namespace App\Modules\Api\Support\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\SupportTicket;
+use App\Models\User;
 use App\Modules\Admin\Support\Events\SupportMessageBroadcasted;
 use App\Modules\Admin\Support\Events\SupportTicketUpdatedBroadcasted;
 use App\Modules\Admin\Support\Events\SupportTypingBroadcasted;
-use App\Modules\Admin\Support\Services\SupportService;
-use App\Modules\Admin\Support\SupportChatPayloadBuilder;
+use App\Modules\Support\Presenters\SupportChatPayloadBuilder;
+use App\Modules\Support\Services\SupportService;
+use App\Modules\Support\Services\SupportBroadcastService;
+use App\Modules\Support\Storage\SupportAttachmentStorage;
 use App\Modules\Api\Support\Http\Requests\StoreSupportChatMessageRequest;
 use App\Modules\Api\Support\Http\Requests\StoreSupportSeenRequest;
 use App\Modules\Api\Support\Http\Requests\StoreSupportTypingRequest;
 use App\Modules\Api\Support\Http\Responses\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 
 class SupportChatApiController extends Controller
 {
     public function __construct(
         private readonly SupportService $supportService,
         private readonly SupportChatPayloadBuilder $payloadBuilder,
+        private readonly SupportBroadcastService $supportBroadcastService,
+        private readonly SupportAttachmentStorage $supportAttachmentStorage,
     ) {
     }
 
@@ -93,7 +98,7 @@ class SupportChatApiController extends Controller
             $supportTicket,
             (string) $request->input('message', ''),
             $request->user()->id,
-            $this->storeAttachment($request->file('attachment')) + [
+            $this->supportAttachmentStorage->store($request->file('attachment')) + [
                 'reply_to_id' => $request->input('reply_to_id'),
                 'metadata' => $request->input('metadata'),
             ],
@@ -103,14 +108,14 @@ class SupportChatApiController extends Controller
         $message = $supportTicket->messages->last();
 
         if ($message !== null) {
-            event(new SupportMessageBroadcasted(
+            $this->supportBroadcastService->dispatch(new SupportMessageBroadcasted(
                 $supportTicket->id,
                 $this->payloadBuilder->ticket($supportTicket),
                 $this->payloadBuilder->message($message),
             ));
         }
 
-        event(new SupportTicketUpdatedBroadcasted(
+        $this->supportBroadcastService->dispatch(new SupportTicketUpdatedBroadcasted(
             $supportTicket->id,
             $this->payloadBuilder->ticket($supportTicket),
         ));
@@ -124,21 +129,46 @@ class SupportChatApiController extends Controller
         );
     }
 
+    public function showTyping(StoreSupportTypingRequest $request, int $ticket): JsonResponse
+    {
+        $supportTicket = $this->supportService->getChatTicketForCustomer($request->user(), $ticket);
+
+        if ($request->hasTypingInput()) {
+            $typingPayload = $this->broadcastCustomerTyping(
+                $supportTicket,
+                $request->user(),
+                $request->resolvedTyping(),
+                $request->input('metadata', []),
+            );
+            $isTyping = (bool) $typingPayload['typing'];
+        } else {
+            $isTyping = $this->supportService->isAgentTyping($supportTicket);
+        }
+
+        return ApiResponse::success(
+            [
+                'is_typing' => $isTyping,
+            ],
+            'Support typing state fetched successfully.',
+        );
+    }
+
     public function typing(StoreSupportTypingRequest $request, int $ticket): JsonResponse
     {
         $supportTicket = $this->supportService->getChatTicketForCustomer($request->user(), $ticket);
 
-        $typingPayload = $this->supportService->storeTypingState(
+        $typingPayload = $this->broadcastCustomerTyping(
             $supportTicket,
             $request->user(),
-            $request->boolean('typing', true),
+            $request->resolvedTyping(),
             $request->input('metadata', []),
         );
 
-        event(new SupportTypingBroadcasted($supportTicket->id, $typingPayload));
+        $supportTicket = $this->supportService->getChatTicketForCustomer($request->user(), $ticket);
 
         return ApiResponse::success(
             [
+                'is_typing' => (bool) $typingPayload['typing'],
                 'ticket' => $this->payloadBuilder->ticket($supportTicket, 'customer'),
                 'typing' => $typingPayload,
             ],
@@ -158,7 +188,7 @@ class SupportChatApiController extends Controller
 
         $supportTicket = $this->supportService->getChatTicketForCustomer($request->user(), $ticket);
 
-        event(new SupportTicketUpdatedBroadcasted(
+        $this->supportBroadcastService->dispatch(new SupportTicketUpdatedBroadcasted(
             $supportTicket->id,
             $this->payloadBuilder->ticket($supportTicket),
         ));
@@ -173,32 +203,24 @@ class SupportChatApiController extends Controller
     }
 
     /**
-     * @return array<string, int|string|null>
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
      */
-    private function storeAttachment(?UploadedFile $attachment): array
-    {
-        if ($attachment === null || ! $this->supportService->supportsMessageAttachments()) {
-            return [];
-        }
+    private function broadcastCustomerTyping(
+        SupportTicket $supportTicket,
+        User $actor,
+        bool $typing,
+        array $metadata = [],
+    ): array {
+        $typingPayload = $this->supportService->storeTypingState(
+            $supportTicket,
+            $actor,
+            $typing,
+            $metadata,
+        );
 
-        return [
-            'attachment_path' => $attachment->store('support/attachments', 'public'),
-            'attachment_name' => $attachment->getClientOriginalName(),
-            'attachment_mime' => $this->resolveAttachmentMime($attachment),
-            'attachment_size' => $attachment->getSize(),
-        ];
-    }
+        $this->supportBroadcastService->dispatch(new SupportTypingBroadcasted($supportTicket->id, $typingPayload));
 
-    private function resolveAttachmentMime(UploadedFile $attachment): ?string
-    {
-        $detectedMime = $attachment->getMimeType();
-
-        if (is_string($detectedMime) && $detectedMime !== '' && $detectedMime !== 'application/octet-stream') {
-            return $detectedMime;
-        }
-
-        $clientMime = $attachment->getClientMimeType();
-
-        return is_string($clientMime) && $clientMime !== '' ? $clientMime : null;
+        return $typingPayload;
     }
 }

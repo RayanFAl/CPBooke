@@ -92,6 +92,7 @@ class LoyaltyAdminService
                 'allow_downgrade' => $rule->allow_downgrade,
                 'is_active' => $rule->is_active,
                 'priority' => $rule->priority,
+                'metadata' => $rule->metadata ?? [],
             ]))->values()->all(),
             'benefits' => $tiers->flatMap(fn (LoyaltyTier $tier) => $tier->benefits->map(fn (LoyaltyBenefit $benefit): array => [
                 'id' => $benefit->id,

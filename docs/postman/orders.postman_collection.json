@@ -1,0 +1,204 @@
+{
+	"info": {
+		"_postman_id": "orders-api",
+		"name": "CPBooke - Orders API",
+		"description": "Customer Orders API (`/api/v1/orders`).\n\n**Important**\n- Requires a **customer** Sanctum token (`account_type = customer`). Admin tokens return `403`.\n- Run **Auth - Login (customer)** first; the token is saved to `{{token}}`.\n- BookNow sync uses `POST /orders/sync-flight` (idempotent by `provider_booking.booking_id`).\n- Legacy manual create uses `POST /orders`.\n- BookNow orders return BookNow-shaped JSON on `GET /orders/{id}`; legacy orders wrap under `data.order`.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://127.0.0.1:8000/api/v1"
+		},
+		{
+			"key": "token",
+			"value": ""
+		},
+		{
+			"key": "order_id",
+			"value": "1"
+		},
+		{
+			"key": "customer_login",
+			"value": "customer@example.com"
+		},
+		{
+			"key": "customer_password",
+			"value": "password"
+		},
+		{
+			"key": "sync_booking_id",
+			"value": "postman-booking-001"
+		}
+	],
+	"item": [
+		{
+			"name": "Auth - Register (customer)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Accept", "value": "application/json" },
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"Postman Customer\",\n  \"email\": \"postman.customer@example.com\",\n  \"phone\": \"+218900000001\",\n  \"password\": \"password\",\n  \"password_confirmation\": \"password\",\n  \"device_name\": \"Postman\"\n}"
+				},
+				"url": "{{base_url}}/auth/register",
+				"description": "Optional: create a customer account if you do not have one yet."
+			},
+			"response": []
+		},
+		{
+			"name": "Auth - Login (customer)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"const json = pm.response.json();",
+							"pm.test('Login succeeded', function () {",
+							"    pm.response.to.have.status(200);",
+							"    pm.expect(json.success).to.eql(true);",
+							"});",
+							"if (json.data && json.data.token) {",
+							"    pm.collectionVariables.set('token', json.data.token);",
+							"}"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Accept", "value": "application/json" },
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"login\": \"{{customer_login}}\",\n  \"password\": \"{{customer_password}}\",\n  \"device_name\": \"Postman\"\n}"
+				},
+				"url": "{{base_url}}/auth/login",
+				"description": "Use email or phone in `login`. Admin accounts cannot call Orders API."
+			},
+			"response": []
+		},
+		{
+			"name": "Auth - Me",
+			"request": {
+				"method": "GET",
+				"header": [
+					{ "key": "Accept", "value": "application/json" },
+					{ "key": "Authorization", "value": "Bearer {{token}}" }
+				],
+				"url": "{{base_url}}/auth/me"
+			},
+			"response": []
+		},
+		{
+			"name": "Orders - List",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"const json = pm.response.json();",
+							"if (json.data && Array.isArray(json.data.orders) && json.data.orders.length > 0) {",
+							"    pm.collectionVariables.set('order_id', String(json.data.orders[0].id));",
+							"}"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{ "key": "Accept", "value": "application/json" },
+					{ "key": "Authorization", "value": "Bearer {{token}}" }
+				],
+				"url": "{{base_url}}/orders",
+				"description": "Returns paginated customer orders in `data.orders`."
+			},
+			"response": []
+		},
+		{
+			"name": "Orders - Show",
+			"request": {
+				"method": "GET",
+				"header": [
+					{ "key": "Accept", "value": "application/json" },
+					{ "key": "Authorization", "value": "Bearer {{token}}" }
+				],
+				"url": "{{base_url}}/orders/{{order_id}}",
+				"description": "Use internal numeric `order_id` (cpbooke_id).\n\nBookNow orders: flat payload with `number`, `provider_order_number`, `details`, `booking_flight_data`.\nLegacy orders: `data.order`."
+			},
+			"response": []
+		},
+		{
+			"name": "Orders - Sync flight (BookNow)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"const json = pm.response.json();",
+							"if (json.data && json.data.cpbooke_id) {",
+							"    pm.collectionVariables.set('order_id', String(json.data.cpbooke_id));",
+							"}"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Accept", "value": "application/json" },
+					{ "key": "Content-Type", "value": "application/json" },
+					{ "key": "Authorization", "value": "Bearer {{token}}" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"source\": \"mobile_app\",\n  \"product_type\": \"flight\",\n  \"status\": \"confirmed\",\n  \"currency\": \"LYD\",\n  \"grand_total\": 590.00,\n  \"provider_booking\": {\n    \"booking_id\": \"{{sync_booking_id}}\",\n    \"order_number\": \"WFQ0001OZ\",\n    \"pnr\": \"AAXKDO\",\n    \"provider_id\": 12,\n    \"provider_name\": \"Buraq Air\",\n    \"search_uuid\": \"search-uuid-postman\"\n  },\n  \"contact\": {\n    \"first_name\": \"RAYAN\",\n    \"last_name\": \"FATHI\",\n    \"email\": \"postman.customer@example.com\",\n    \"phone\": \"+218943215277\"\n  },\n  \"passengers\": [\n    {\n      \"type\": \"adult\",\n      \"title\": \"Mr\",\n      \"first_name\": \"RAYAN\",\n      \"last_name\": \"FATHI\",\n      \"dob\": \"1998-05-10\",\n      \"gender\": \"M\",\n      \"nationality\": \"LY\",\n      \"passport_number\": \"AB1234567\",\n      \"passport_expiry\": \"2030-01-01\",\n      \"passport_issue_country\": \"LY\"\n    }\n  ],\n  \"items\": [\n    {\n      \"type\": \"flight\",\n      \"product_type\": \"ticket\",\n      \"product_subtype\": \"oneway\",\n      \"provider_reference\": \"AAXKDO\",\n      \"total\": 590.00,\n      \"currency\": \"LYD\",\n      \"item_details\": {\n        \"pnr\": \"AAXKDO\",\n        \"airline_code\": \"BM\",\n        \"airline_name\": \"Buraq Air\",\n        \"segments\": [\n          {\n            \"flight_number\": \"BM0400\",\n            \"departure_airport\": \"MJI\",\n            \"arrival_airport\": \"TUN\",\n            \"departure_time\": \"2026-06-20 10:25:00\",\n            \"arrival_time\": \"2026-06-20 10:35:00\",\n            \"duration\": 10,\n            \"cabin_type\": \"Y\",\n            \"class\": \"S\"\n          }\n        ],\n        \"passengers\": []\n      }\n    }\n  ],\n  \"payment\": {\n    \"status\": \"paid\",\n    \"method\": \"wallet\",\n    \"method_code\": 1,\n    \"amount\": 590.00,\n    \"currency\": \"LYD\",\n    \"transaction_id\": \"txn_postman_123\",\n    \"paid_at\": \"2026-06-07T10:22:50Z\"\n  },\n  \"metadata\": {\n    \"app_version\": \"1.0.0\",\n    \"platform\": \"postman\"\n  },\n  \"booking_flight_data\": {\n    \"departure_airport\": \"MJI\",\n    \"arrival_airport\": \"TUN\",\n    \"departure_time\": \"2026-06-20 10:25:00\",\n    \"segments\": [\n      {\n        \"flight_number\": \"BM0400\",\n        \"departure_airport\": \"MJI\",\n        \"arrival_airport\": \"TUN\",\n        \"departure_time\": \"2026-06-20 10:25:00\",\n        \"arrival_time\": \"2026-06-20 10:35:00\",\n        \"duration\": 10,\n        \"cabin_type\": \"Y\",\n        \"class\": \"S\"\n      }\n    ]\n  }\n}"
+				},
+				"url": "{{base_url}}/orders/sync-flight",
+				"description": "Idempotent upsert keyed by `provider_booking.booking_id`.\n\n- First call: `201 Created`, `meta.created = true`\n- Retry same booking_id: `200 OK`, `meta.idempotent = true`\n\nChange `sync_booking_id` collection variable for a new order."
+			},
+			"response": []
+		},
+		{
+			"name": "Orders - Create (legacy flight)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"const json = pm.response.json();",
+							"if (json.data && json.data.order && json.data.order.id) {",
+							"    pm.collectionVariables.set('order_id', String(json.data.order.id));",
+							"}"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Accept", "value": "application/json" },
+					{ "key": "Content-Type", "value": "application/json" },
+					{ "key": "Authorization", "value": "Bearer {{token}}" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"provider_name\": \"Booke Provider\",\n  \"currency\": \"LYD\",\n  \"total_amount\": 199.99,\n  \"service_type\": \"flight\",\n  \"details\": {\n    \"passenger_name\": \"Rakan Alhemmal\",\n    \"airline\": \"Saudia\",\n    \"pnr\": \"PNR12345\"\n  }\n}"
+				},
+				"url": "{{base_url}}/orders",
+				"description": "Legacy manual order creation (non BookNow sync)."
+			},
+			"response": []
+		}
+	]
+}

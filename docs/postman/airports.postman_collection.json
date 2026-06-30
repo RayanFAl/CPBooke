@@ -1,0 +1,132 @@
+{
+	"info": {
+		"_postman_id": "airports-api",
+		"name": "CPBooke - Airports API",
+		"description": "Simplified airports API for mobile.\n\n- GET /airports (no q/search) → featured airports in `data.airports`\n- GET /airports/featured → same featured list in `data.featured`\n- GET /airports?q=... or ?search=... → search with pagination",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000/api/v1"
+		},
+		{
+			"key": "token",
+			"value": ""
+		},
+		{
+			"key": "search_query",
+			"value": "Tripoli"
+		}
+	],
+	"item": [
+		{
+			"name": "Auth - Login (get token)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"const json = pm.response.json();",
+							"if (json.data && json.data.token) {",
+							"    pm.collectionVariables.set('token', json.data.token);",
+							"}"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Accept", "value": "application/json" },
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"login\": \"customer@example.com\",\n  \"password\": \"password\",\n  \"device_name\": \"Postman\"\n}"
+				},
+				"url": "{{base_url}}/auth/login"
+			},
+			"response": []
+		},
+		{
+			"name": "Best Locations (featured)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"const json = pm.response.json();",
+							"pm.test('Featured list returned', function () {",
+							"    pm.response.to.have.status(200);",
+							"    pm.expect(json.data.featured).to.be.an('array');",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{ "key": "Accept", "value": "application/json" },
+					{ "key": "Authorization", "value": "Bearer {{token}}" }
+				],
+				"url": "{{base_url}}/airports/featured",
+				"description": "Use on the mobile home screen.\n\nExample item:\n```json\n{\n  \"code\": \"TIP\",\n  \"order\": 1,\n  \"name\": { \"en\": \"...\", \"ar\": \"...\", \"fr\": \"...\" },\n  \"city\": { \"en\": \"Tripoli\", \"ar\": null, \"fr\": null },\n  \"country\": { \"code\": \"LY\", \"name\": { \"en\": \"Libya\", \"ar\": null, \"fr\": null } }\n}\n```"
+			},
+			"response": []
+		},
+		{
+			"name": "Default Airports (featured, no search)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"const json = pm.response.json();",
+							"pm.test('Featured airports returned in airports key', function () {",
+							"    pm.response.to.have.status(200);",
+							"    pm.expect(json.data.airports).to.be.an('array');",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{ "key": "Accept", "value": "application/json" },
+					{ "key": "Authorization", "value": "Bearer {{token}}" }
+				],
+				"url": "{{base_url}}/airports",
+				"description": "Mobile airport picker default load.\n\nWithout `q`, returns admin featured airports (max 10) in `data.airports`."
+			},
+			"response": []
+		},
+		{
+			"name": "Search Airports",
+			"request": {
+				"method": "GET",
+				"header": [
+					{ "key": "Accept", "value": "application/json" },
+					{ "key": "Authorization", "value": "Bearer {{token}}" }
+				],
+				"url": {
+					"raw": "{{base_url}}/airports?search={{search_query}}&page=1&per_page=20",
+					"host": ["{{base_url}}"],
+					"path": ["airports"],
+					"query": [
+						{ "key": "search", "value": "{{search_query}}", "description": "Mobile uses `search`. `q` is also supported." },
+						{ "key": "page", "value": "1" },
+						{ "key": "per_page", "value": "20" }
+					]
+				},
+				"description": "Use when the user searches for an airport.\n\nAccepts `search` (mobile) or `q` (legacy)."
+			},
+			"response": []
+		}
+	]
+}

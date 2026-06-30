@@ -6,7 +6,7 @@ use App\Models\FinancialTransaction;
 use App\Models\Order;
 use App\Models\SupportTicket;
 use App\Models\User;
-use App\Modules\Admin\Support\Services\SupportService;
+use App\Modules\Support\Services\SupportService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;

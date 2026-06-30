@@ -514,16 +514,10 @@ onBeforeUnmount(() => {
 
                         <div v-else class="flex h-[72vh] flex-col">
                             <div class="border-b border-slate-200 bg-slate-50 px-6 py-5">
-                                <div class="flex items-start justify-between gap-4">
-                                    <div>
-                                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">Active Chat</p>
-                                        <h3 class="mt-2 text-xl font-semibold text-slate-950">{{ selectedTicketRecord?.subject }}</h3>
-                                        <p class="mt-2 text-sm text-slate-500">{{ selectedTicketRecord?.code }} · {{ statusLabel(selectedTicketRecord?.status) }}</p>
-                                    </div>
-                                    <div class="text-right text-xs text-slate-500">
-                                        <p>Assigned agent</p>
-                                        <p class="mt-2 font-semibold text-slate-700">{{ selectedTicketRecord?.assigned_agent?.name || 'Pending assignment' }}</p>
-                                    </div>
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">Active Chat</p>
+                                    <h3 class="mt-2 text-xl font-semibold text-slate-950">{{ selectedTicketRecord?.subject }}</h3>
+                                    <p class="mt-2 text-sm text-slate-500">{{ selectedTicketRecord?.code }} · {{ statusLabel(selectedTicketRecord?.status) }}</p>
                                 </div>
                             </div>
 

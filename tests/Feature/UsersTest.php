@@ -145,6 +145,8 @@ class UsersTest extends TestCase
             'created_at' => Carbon::parse('2026-05-08 09:00:00'),
         ]);
 
+        Carbon::setTestNow('2026-05-15 12:00:00');
+
         app(LoyaltyService::class)->upgradeUserIfEligible($customer);
 
         $this->actingAs($actor)
@@ -164,12 +166,14 @@ class UsersTest extends TestCase
                 ->where('user.recent_activities.0.action', 'activity_12')
                 ->where('user.recent_activities.1.action', 'activity_11')
                 ->where('user.recent_activities.9.action', 'activity_03')
-                ->where('user.loyalty.current_tier.code', 'regular')
+                ->where('user.loyalty.current_tier.code', 'level_1')
                 ->where('user.loyalty.current_level', 1)
-                ->where('user.loyalty.next_tier.code', 'active')
-                ->where('user.loyalty.progress_to_next_level.current_metrics.completed_orders_count', 12)
-                ->where('user.loyalty.benefits_unlocked.0.code', 'discount_5_percent')
+                ->where('user.loyalty.next_tier.code', 'level_2')
+                ->where('user.loyalty.progress_to_next_level.current_metrics.month_spend', '2478.00')
+                ->where('user.loyalty.benefits_unlocked.0.code', 'level_1_discount')
                 ->has('user.loyalty.history', 1)
             );
+
+        Carbon::setTestNow();
     }
 }

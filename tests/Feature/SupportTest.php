@@ -4,13 +4,14 @@ namespace Tests\Feature;
 
 use Carbon\Carbon;
 use App\Models\FinancialTransaction;
+use App\Models\NotificationLog;
 use App\Models\Order;
 use App\Models\SupportMessage;
 use App\Models\SupportTicket;
 use App\Models\SupportTicketEventLog;
 use App\Models\SupportTicketResolutionReport;
 use App\Models\User;
-use App\Modules\Admin\Support\Services\SupportService;
+use App\Modules\Support\Services\SupportService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -1023,6 +1024,8 @@ class SupportTest extends TestCase
                 ->where('ticket.order_snapshot.paid_amount', '220.00')
                 ->where('ticket.order_snapshot.refunded_amount', '0.00')
                 ->where('ticket.order_snapshot.payment_method', 'Card')
+                ->has('ticket.order_ticket')
+                ->where('ticket.order_ticket.service_type', Order::SERVICE_TYPE_FLIGHT)
                 ->has('ticket.timeline')
                 ->where('order_actions.can_manage', true)
                 ->has('order_actions.available', 4)
@@ -1030,6 +1033,66 @@ class SupportTest extends TestCase
                 ->where('order_actions.available.1.name', 'full_refund')
                 ->where('order_actions.available.2.name', 'partial_refund')
                 ->where('order_actions.available.3.name', 'compensation')
+            );
+    }
+
+    public function test_support_show_exposes_customer_notification_delivery_logs(): void
+    {
+        [$actor, $customer] = $this->supportActorAndCustomer();
+        $order = $this->createOrderForCustomer($customer);
+
+        $ticket = SupportTicket::query()->create([
+            'ticket_number' => 'SUP-NOTIF-3001',
+            'user_id' => $customer->id,
+            'order_id' => $order->id,
+            'category' => 'technical_issue',
+            'priority' => 'medium',
+            'status' => 'open',
+            'assigned_to' => $actor->id,
+            'subject' => 'Did not receive confirmation email',
+            'description' => 'Customer says no email arrived.',
+        ]);
+
+        NotificationLog::query()->create([
+            'user_id' => $customer->id,
+            'channel' => 'email',
+            'template_code' => 'ORDER_CONFIRMED',
+            'notification_type' => 'order',
+            'subject' => 'Your booking is confirmed',
+            'body' => 'Booking confirmation body.',
+            'status' => NotificationLog::STATUS_SENT,
+            'related_type' => 'order',
+            'related_id' => $order->id,
+            'sent_at' => now()->subHour(),
+        ]);
+
+        NotificationLog::query()->create([
+            'user_id' => $customer->id,
+            'channel' => 'sms',
+            'template_code' => 'SUPPORT_REPLY',
+            'notification_type' => 'support',
+            'subject' => 'Support reply',
+            'body' => 'We replied to your ticket.',
+            'status' => NotificationLog::STATUS_FAILED,
+            'related_type' => 'support_ticket',
+            'related_id' => $ticket->id,
+            'response_payload' => ['error' => 'Carrier rejected the message'],
+            'failed_at' => now()->subMinutes(10),
+        ]);
+
+        $this->actingAs($actor)
+            ->get(route('admin.support.show', $ticket, absolute: false))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/support/pages/Show', false)
+                ->where('notification_logs_enabled', true)
+                ->has('customer_notification_logs', 2)
+                ->where('customer_notification_logs.0.channel', 'sms')
+                ->where('customer_notification_logs.0.status', NotificationLog::STATUS_FAILED)
+                ->where('customer_notification_logs.0.is_ticket_related', true)
+                ->where('customer_notification_logs.0.failure_reason', 'Carrier rejected the message')
+                ->where('customer_notification_logs.1.channel', 'email')
+                ->where('customer_notification_logs.1.is_order_related', true)
             );
     }
 
@@ -1352,7 +1415,7 @@ class SupportTest extends TestCase
         $order = Order::query()->create([
             'customer_id' => $customer->id,
             'provider_name' => 'Support Test Provider',
-            'external_booking_id' => 'EXT-SUPPORT-1',
+            'external_booking_id' => 'EXT-'.$bookingReference,
             'booking_reference' => $bookingReference,
             'status' => Order::STATUS_CONFIRMED,
             'payment_status' => Order::PAYMENT_STATUS_PAID,

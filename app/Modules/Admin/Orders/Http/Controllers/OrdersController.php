@@ -8,6 +8,7 @@ use App\Models\OrderHistory;
 use App\Modules\Admin\Orders\Http\Requests\UpdateOrderNotesRequest;
 use App\Modules\Admin\Orders\Http\Requests\UpdateOrderPaymentStatusRequest;
 use App\Modules\Admin\Orders\Http\Requests\UpdateOrderStatusRequest;
+use App\Modules\Admin\Orders\Services\OrderTicketPayloadBuilder;
 use App\Modules\Api\Orders\Services\OrderService;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
@@ -21,6 +22,7 @@ class OrdersController
 {
     public function __construct(
         private readonly OrderService $orderService,
+        private readonly OrderTicketPayloadBuilder $orderTicketPayloadBuilder,
     ) {
     }
 
@@ -33,6 +35,7 @@ class OrdersController
 
         $filters = $request->validate([
             'status' => ['nullable', 'string', 'max:30', Rule::in(Order::statuses())],
+            'search' => ['nullable', 'string', 'max:255'],
         ]);
 
         $actor = $request->user();
@@ -153,8 +156,9 @@ class OrdersController
         return [
             'id' => $order->id,
             'booking_reference' => $order->booking_reference,
-            'external_booking_id' => $order->external_booking_id,
+            'ticket_number' => $this->orderTicketPayloadBuilder->resolveTicketNumber($order),
             'provider_name' => $order->provider_name,
+            'flight' => $this->listingFlightSummary($order),
             'status' => $order->status,
             'payment_status' => $order->payment_status,
             'service_type' => $order->service_type,
@@ -179,14 +183,17 @@ class OrdersController
         return [
             'id' => $order->id,
             'booking_reference' => $order->booking_reference,
-            'external_booking_id' => $order->external_booking_id,
+            'ticket_number' => $this->orderTicketPayloadBuilder->resolveTicketNumber($order),
             'provider_name' => $order->provider_name,
             'status' => $order->status,
             'payment_status' => $order->payment_status,
             'service_type' => $order->service_type,
             'details' => $order->details ?? [],
+            'ticket' => $this->orderTicketPayloadBuilder->build($order, $canViewFinancials),
             'currency' => $canViewFinancials ? $order->currency : null,
             'total_amount' => $canViewFinancials ? $order->total_amount : null,
+            'base_amount' => $canViewFinancials ? $order->base_amount : null,
+            'tax_amount' => $canViewFinancials ? $order->tax_amount : null,
             'internal_notes' => $order->internal_notes,
             'error_message' => $order->error_message,
             'request_payload' => $canChangeStatus ? ($order->request_payload ?? []) : [],
@@ -230,6 +237,54 @@ class OrdersController
             ],
             'created_at' => $order->created_at?->toIso8601String(),
             'updated_at' => $order->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Build a compact flight snapshot for the admin orders table.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function listingFlightSummary(Order $order): ?array
+    {
+        $ticket = $this->orderTicketPayloadBuilder->build($order, false);
+        $segments = is_array($ticket['segments'] ?? null) ? $ticket['segments'] : [];
+
+        $origin = $ticket['origin'] ?? null;
+        $destination = $ticket['destination'] ?? null;
+        $departureTime = $ticket['departure_time'] ?? null;
+
+        if ($segments !== []) {
+            $firstSegment = is_array($segments[0] ?? null) ? $segments[0] : [];
+            $lastSegment = is_array($segments[array_key_last($segments)] ?? null)
+                ? $segments[array_key_last($segments)]
+                : $firstSegment;
+
+            $origin = $firstSegment['departure_airport'] ?? $origin;
+            $destination = $lastSegment['arrival_airport'] ?? $destination;
+            $departureTime = $firstSegment['departure_time'] ?? $departureTime;
+        }
+
+        $hasFlightData = ($ticket['pnr'] ?? null)
+            || $origin
+            || $destination
+            || ($ticket['airline_code'] ?? null)
+            || ($ticket['airline'] ?? null);
+
+        if (! $hasFlightData) {
+            return $order->provider_name
+                ? ['provider_name' => $order->provider_name]
+                : null;
+        }
+
+        return [
+            'pnr' => $ticket['pnr'] ?? null,
+            'origin' => $origin,
+            'destination' => $destination,
+            'departure_time' => $departureTime,
+            'airline_code' => $ticket['airline_code'] ?? null,
+            'airline' => $ticket['airline'] ?? null,
+            'provider_name' => $order->provider_name,
         ];
     }
 

@@ -9,6 +9,7 @@ use App\Modules\Admin\Support\Events\SupportTicketReplied;
 use App\Modules\Admin\Support\Events\SupportTicketStatusChanged;
 use App\Modules\Loyalty\Events\LoyaltyTierChanged;
 use App\Modules\Admin\Support\Listeners\SupportEventLoggerListener;
+use App\Modules\Loyalty\Listeners\InitializeUserLoyaltyOnRegistrationListener;
 use App\Modules\Loyalty\Listeners\RecalculateUserLoyaltyListener;
 use App\Modules\Notifications\Listeners\DispatchSystemNotificationListener;
 use App\Modules\Orders\Events\OrderCompleted;
@@ -16,6 +17,7 @@ use App\Modules\Orders\Events\OrderConfirmed;
 use App\Modules\Orders\Events\OrderCreated;
 use App\Modules\Orders\Events\PaymentSucceeded;
 use App\Modules\Orders\Events\RefundIssued;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 
 class EventServiceProvider extends ServiceProvider
@@ -26,6 +28,9 @@ class EventServiceProvider extends ServiceProvider
      * @var array<class-string, array<int, class-string>>
      */
     protected $listen = [
+        Registered::class => [
+            InitializeUserLoyaltyOnRegistrationListener::class,
+        ],
         SupportTicketCreated::class => [
             SupportEventLoggerListener::class,
             DispatchSystemNotificationListener::class,

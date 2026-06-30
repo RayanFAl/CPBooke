@@ -459,4 +459,215 @@ class AdminOrdersTest extends TestCase
                 ->where('order.transactions.1.source', FinancialTransaction::SOURCE_ORDER_CREATION)
             );
     }
+
+    public function test_admin_order_show_includes_structured_ticket_payload(): void
+    {
+        $operationsManager = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $operationsManager->refresh()->syncRolesByName(['operations_manager']);
+
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'provider_name' => 'Buraq Air',
+            'external_booking_id' => '01ktgspkyr6ma0fjqjc7vexyry',
+            'booking_reference' => 'CP0001BA',
+            'status' => Order::STATUS_TICKETED,
+            'payment_status' => Order::PAYMENT_STATUS_PAID,
+            'service_type' => Order::SERVICE_TYPE_FLIGHT,
+            'details' => [
+                'pnr' => 'AAXKDO',
+                'airline' => 'Buraq Air',
+                'origin' => 'MJI',
+                'destination' => 'TUN',
+                'departure_time' => '2026-06-20 10:25:00',
+                'provider_order_number' => 'WFQ0001OZ',
+                'segments' => [
+                    [
+                        'flight_number' => 'BM0400',
+                        'departure_airport' => 'MJI',
+                        'arrival_airport' => 'TUN',
+                        'departure_time' => '2026-06-20 10:25:00',
+                        'arrival_time' => '2026-06-20 10:35:00',
+                        'action_code' => 'HK',
+                        'cabin_type' => 'Y',
+                        'class' => 'Y',
+                        'etkt' => '532 2300824806/01',
+                    ],
+                ],
+            ],
+            'currency' => 'LYD',
+            'total_amount' => 590.00,
+            'request_payload' => [
+                'passengers' => [
+                    [
+                        'type' => 'adult',
+                        'first_name' => 'RAYAN',
+                        'last_name' => 'FATHI',
+                        'passport_number' => 'AB1234567',
+                    ],
+                ],
+                'contact' => [
+                    'first_name' => 'RAYAN',
+                    'last_name' => 'FATHI',
+                    'email' => 'a.rayan@median.ly',
+                    'phone' => '+218943215277',
+                ],
+            ],
+            'response_payload' => [
+                'provider_order_number' => 'WFQ0001OZ',
+                'status' => 'ticketed',
+                'passengers' => [
+                    [
+                        'type' => 'adult',
+                        'first_name' => 'RAYAN',
+                        'last_name' => 'FATHI',
+                        'passport_number' => 'AB1234567',
+                    ],
+                ],
+                'contact' => [
+                    'first_name' => 'RAYAN',
+                    'last_name' => 'FATHI',
+                    'email' => 'a.rayan@median.ly',
+                    'phone' => '+218943215277',
+                ],
+            ],
+        ]);
+
+        $this->actingAs($operationsManager)
+            ->get("/admin/orders/{$order->id}")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/orders/pages/Show', false)
+                ->where('order.ticket.pnr', 'AAXKDO')
+                ->where('order.ticket.origin', null)
+                ->where('order.ticket.destination', null)
+                ->where('order.ticket.provider_order_number', 'WFQ0001OZ')
+                ->has('order.ticket.passengers', 1)
+                ->has('order.ticket.segments', 1)
+                ->where('order.ticket.contact.email', 'a.rayan@median.ly')
+                ->where('order.ticket.contact.first_name', 'RAYAN')
+                ->where('order.ticket.contact.last_name', 'FATHI')
+                ->has('order.ticket.segment_coupons', 1)
+                ->where('order.ticket.segment_coupons.0.flight_number', 'BM0400')
+                ->where('order.ticket.segment_coupons.0.passenger_name', 'RAYAN FATHI')
+                ->where('order.ticket.segment_coupons.0.etkt', '532 2300824806/01')
+                ->where('order.ticket.segment_coupons.0.status_code', 'HK')
+                ->where('order.ticket.segment_coupons.0.cabin_type', 'Y')
+                ->where('order.ticket.segment_coupons.0.booking_class', 'Y')
+                ->where('order.ticket.items', [])
+                ->missing('order.ticket.order_context.external_booking_id')
+                ->missing('order.ticket.order_context.id')
+            );
+    }
+
+    public function test_operations_manager_can_search_orders_by_reference_customer_or_provider(): void
+    {
+        $actor = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $matchingCustomer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+            'name' => 'Searchable Customer',
+            'email' => 'searchable@example.com',
+        ]);
+
+        $otherCustomer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+            'name' => 'Other Customer',
+            'email' => 'other@example.com',
+        ]);
+
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $actor->refresh()->syncRolesByName(['operations_manager']);
+
+        $matchingOrder = Order::query()->create([
+            'customer_id' => $matchingCustomer->id,
+            'provider_name' => 'Unique Provider',
+            'booking_reference' => 'CP-SEARCH-001',
+            'external_booking_id' => 'EXT-SEARCH-001',
+            'status' => Order::STATUS_CONFIRMED,
+            'payment_status' => Order::PAYMENT_STATUS_PAID,
+            'service_type' => Order::SERVICE_TYPE_FLIGHT,
+            'currency' => 'LYD',
+            'total_amount' => 100.00,
+            'request_payload' => [],
+            'details' => [
+                'pnr' => 'AD2DWM',
+                'airline' => 'Buraq Air',
+                'airline_code' => 'BM',
+                'provider_order_number' => 'WFQ0001OZ',
+                'segments' => [
+                    [
+                        'departure_airport' => 'MJI',
+                        'arrival_airport' => 'TUN',
+                        'departure_time' => '2026-10-05 00:00:00',
+                    ],
+                ],
+            ],
+        ]);
+
+        Order::query()->create([
+            'customer_id' => $otherCustomer->id,
+            'provider_name' => 'Another Provider',
+            'booking_reference' => 'CP-OTHER-999',
+            'status' => Order::STATUS_CONFIRMED,
+            'payment_status' => Order::PAYMENT_STATUS_PAID,
+            'service_type' => Order::SERVICE_TYPE_FLIGHT,
+            'currency' => 'LYD',
+            'total_amount' => 50.00,
+            'request_payload' => [],
+        ]);
+
+        $this->actingAs($actor)
+            ->get('/admin/orders?search=CP-SEARCH-001')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/orders/pages/Index', false)
+                ->where('filters.search', 'CP-SEARCH-001')
+                ->has('orders.data', 1)
+                ->where('orders.data.0.id', $matchingOrder->id)
+                ->where('orders.data.0.flight.pnr', 'AD2DWM')
+                ->where('orders.data.0.flight.origin', 'MJI')
+                ->where('orders.data.0.flight.destination', 'TUN')
+                ->where('orders.data.0.flight.airline_code', 'BM')
+                ->where('orders.data.0.ticket_number', 'WFQ0001OZ')
+            );
+
+        $this->actingAs($actor)
+            ->get('/admin/orders?search=AD2DWM')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('orders.data', 1)
+                ->where('orders.data.0.id', $matchingOrder->id)
+            );
+
+        $this->actingAs($actor)
+            ->get('/admin/orders?search=searchable@example.com')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('orders.data', 1)
+                ->where('orders.data.0.id', $matchingOrder->id)
+            );
+
+        $this->actingAs($actor)
+            ->get('/admin/orders?search=Unique Provider')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('orders.data', 1)
+                ->where('orders.data.0.id', $matchingOrder->id)
+            );
+    }
 }

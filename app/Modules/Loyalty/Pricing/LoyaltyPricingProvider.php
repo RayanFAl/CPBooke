@@ -4,6 +4,7 @@ namespace App\Modules\Loyalty\Pricing;
 
 use App\Models\LoyaltyBenefit;
 use App\Models\LoyaltyTier;
+use App\Modules\Loyalty\Pricing\LoyaltyDiscountableFareResolver;
 use App\Modules\Loyalty\Services\LoyaltySettingsService;
 use App\Modules\Pricing\Contracts\PricingAdjustmentProvider;
 use App\Modules\Pricing\DTO\PricingAdjustmentData;
@@ -129,7 +130,7 @@ class LoyaltyPricingProvider implements PricingAdjustmentProvider
             return false;
         }
 
-        return $this->resolveAppliedAmount($benefit, $context->baseAmount) > 0;
+        return $this->resolveAppliedAmount($benefit, $this->resolveDiscountableFare($context)) > 0;
     }
 
     private function matchesServiceType(LoyaltyBenefit $benefit, string $serviceType): bool
@@ -171,7 +172,7 @@ class LoyaltyPricingProvider implements PricingAdjustmentProvider
 
     private function buildAdjustment(LoyaltyBenefit $benefit, LoyaltyTier $tier, PricingContext $context): ?PricingAdjustmentData
     {
-        $appliedAmount = $this->resolveAppliedAmount($benefit, $context->baseAmount);
+        $appliedAmount = $this->resolveAppliedAmount($benefit, $this->resolveDiscountableFare($context));
 
         if ($appliedAmount <= 0) {
             return null;
@@ -185,7 +186,7 @@ class LoyaltyPricingProvider implements PricingAdjustmentProvider
             sourceType: 'loyalty',
             sourceId: $benefit->id,
             code: $benefit->code ?: (string) $benefit->id,
-            label: $benefit->name ?: $benefit->code ?: 'Loyalty benefit',
+            label: $this->checkoutLabel($benefit, $tier),
             adjustmentType: 'discount',
             valueType: $benefit->value_type,
             configuredValue: $benefit->value !== null ? $this->formatAmount((float) $benefit->value) : null,
@@ -203,9 +204,27 @@ class LoyaltyPricingProvider implements PricingAdjustmentProvider
         );
     }
 
-    private function resolveAppliedAmount(LoyaltyBenefit $benefit, string $baseAmount): float
+    private function resolveDiscountableFare(PricingContext $context): string
     {
-        $baseValue = max(0, round((float) $baseAmount, 2));
+        $fareAmount = $context->attributes['fare_amount'] ?? null;
+
+        if (is_numeric($fareAmount) && (float) $fareAmount > 0) {
+            return $this->formatAmount((float) $fareAmount);
+        }
+
+        $taxAmount = $context->attributes['tax_amount'] ?? null;
+        $tax = is_numeric($taxAmount) && (float) $taxAmount > 0 ? (float) $taxAmount : null;
+
+        return $this->formatAmount(LoyaltyDiscountableFareResolver::resolve(
+            (float) $context->baseAmount,
+            $tax,
+            null,
+        ));
+    }
+
+    private function resolveAppliedAmount(LoyaltyBenefit $benefit, string $fareAmount): float
+    {
+        $baseValue = max(0, round((float) $fareAmount, 2));
 
         if ($baseValue <= 0) {
             return 0.0;
@@ -232,5 +251,16 @@ class LoyaltyPricingProvider implements PricingAdjustmentProvider
     private function formatAmount(float $amount): string
     {
         return number_format(max(0, round($amount, 2)), 2, '.', '');
+    }
+
+    private function checkoutLabel(LoyaltyBenefit $benefit, LoyaltyTier $tier): string
+    {
+        if ($benefit->value_type === LoyaltyBenefit::VALUE_TYPE_PERCENTAGE && $benefit->value !== null) {
+            $percentage = rtrim(rtrim(number_format((float) $benefit->value, 2, '.', ''), '0'), '.');
+
+            return sprintf('%s discount (%s%%)', $tier->name, $percentage);
+        }
+
+        return $benefit->name ?: $benefit->code ?: 'Loyalty benefit';
     }
 }

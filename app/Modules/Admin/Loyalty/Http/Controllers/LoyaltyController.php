@@ -30,15 +30,14 @@ class LoyaltyController
     {
         Gate::authorize('loyalty.view');
 
-        $canManageSettings = Gate::allows('loyalty.settings.manage');
+        $settings = $this->loyaltySettingsAdminService->getSettings();
 
         return Inertia::render('admin/loyalty/pages/Index', [
             'dashboard' => $this->loyaltyAdminService->dashboard(),
-            'settings' => $canManageSettings
-                ? $this->settingsPayload($this->loyaltySettingsAdminService->getSettings())
-                : null,
-            'canManageSettings' => $canManageSettings,
-            'settingsUpdateUrl' => $canManageSettings ? route('admin.loyalty.settings.update') : null,
+            'program' => [
+                'loyalty_enabled' => (bool) $settings->loyalty_enabled,
+                'default_currency' => (string) $settings->default_currency,
+            ],
         ]);
     }
 

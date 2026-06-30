@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'customer_id',
     'provider_name',
+    'source',
     'external_booking_id',
     'booking_reference',
     'status',
@@ -20,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'currency',
     'total_amount',
     'base_amount',
+    'tax_amount',
     'discount_total',
     'final_amount',
     'pricing_version',
@@ -42,6 +44,8 @@ class Order extends Model
     public const STATUS_PROCESSING = 'processing';
 
     public const STATUS_CONFIRMED = 'confirmed';
+
+    public const STATUS_TICKETED = 'ticketed';
 
     public const STATUS_COMPLETED = 'completed';
 
@@ -78,6 +82,7 @@ class Order extends Model
             'response_payload' => 'array',
             'total_amount' => 'decimal:2',
             'base_amount' => 'decimal:2',
+            'tax_amount' => 'decimal:2',
             'discount_total' => 'decimal:2',
             'final_amount' => 'decimal:2',
             'pricing_snapshot_json' => 'array',
@@ -133,6 +138,7 @@ class Order extends Model
             self::STATUS_PAID,
             self::STATUS_PROCESSING,
             self::STATUS_CONFIRMED,
+            self::STATUS_TICKETED,
             self::STATUS_COMPLETED,
             self::STATUS_CANCELLED,
             self::STATUS_FAILED,
@@ -181,7 +187,8 @@ class Order extends Model
             self::STATUS_PENDING_PAYMENT => [self::STATUS_PAID],
             self::STATUS_PAID => [self::STATUS_PROCESSING],
             self::STATUS_PROCESSING => [self::STATUS_CONFIRMED, self::STATUS_FAILED],
-            self::STATUS_CONFIRMED => [self::STATUS_COMPLETED, self::STATUS_CANCELLED, self::STATUS_REFUNDED],
+            self::STATUS_CONFIRMED => [self::STATUS_TICKETED, self::STATUS_COMPLETED, self::STATUS_CANCELLED, self::STATUS_REFUNDED],
+            self::STATUS_TICKETED => [self::STATUS_COMPLETED, self::STATUS_CANCELLED, self::STATUS_REFUNDED],
             default => [],
         };
     }

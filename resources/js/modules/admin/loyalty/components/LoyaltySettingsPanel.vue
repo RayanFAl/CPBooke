@@ -132,7 +132,7 @@ const submit = async () => {
 </script>
 
 <template>
-    <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
                 <h2 class="text-lg font-semibold text-slate-950">{{ t('Loyalty program settings') }}</h2>
@@ -141,18 +141,18 @@ const submit = async () => {
                 </p>
             </div>
 
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
                 <p class="font-medium text-slate-900">{{ t('Version') }} {{ form.settings_version }}</p>
                 <p class="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500">{{ t('Updated at') }} · {{ updatedAtLabel }}</p>
             </div>
         </div>
 
-        <div v-if="!hasSettings" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div v-if="!hasSettings" class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {{ t('Loyalty settings are not available yet.') }}
         </div>
 
         <div v-else>
-            <div v-if="!canManage" class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <div v-if="!canManage" class="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
                 {{ t('You can review these settings, but only Super Admin can change them.') }}
             </div>
 
@@ -166,7 +166,7 @@ const submit = async () => {
                             type="text"
                             maxlength="3"
                             :disabled="!canManage || isSubmitting"
-                            class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 uppercase disabled:bg-slate-100"
+                            class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 uppercase disabled:bg-slate-100"
                         />
                     </label>
 
@@ -180,7 +180,7 @@ const submit = async () => {
                             min="0"
                             step="0.01"
                             :disabled="!canManage || isSubmitting"
-                            class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 disabled:bg-slate-100"
+                            class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 disabled:bg-slate-100"
                         />
                     </label>
 
@@ -194,43 +194,43 @@ const submit = async () => {
                             min="0"
                             step="0.01"
                             :disabled="!canManage || isSubmitting"
-                            class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 disabled:bg-slate-100"
+                            class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 disabled:bg-slate-100"
                         />
                     </label>
                 </div>
 
                 <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    <label class="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                    <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-700">
                         <input v-model="form.loyalty_enabled" data-testid="loyalty-enabled" type="checkbox" :disabled="!canManage || isSubmitting" class="rounded border-slate-300 text-slate-950 focus:ring-slate-400" />
                         <span>{{ t('Loyalty enabled') }}</span>
                     </label>
 
-                    <label class="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                    <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-700">
                         <input v-model="form.auto_upgrade_enabled" data-testid="auto-upgrade-enabled" type="checkbox" :disabled="!canManage || isSubmitting" class="rounded border-slate-300 text-slate-950 focus:ring-slate-400" />
                         <span>{{ t('Auto upgrade enabled') }}</span>
                     </label>
 
-                    <label class="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                    <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-700">
                         <input v-model="form.auto_downgrade_enabled" data-testid="auto-downgrade-enabled" type="checkbox" :disabled="!canManage || isSubmitting" class="rounded border-slate-300 text-slate-950 focus:ring-slate-400" />
                         <span>{{ t('Auto downgrade enabled') }}</span>
                     </label>
 
-                    <label class="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                    <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-700">
                         <input v-model="form.visible_in_mobile_app" data-testid="visible-in-mobile-app" type="checkbox" :disabled="!canManage || isSubmitting" class="rounded border-slate-300 text-slate-950 focus:ring-slate-400" />
                         <span>{{ t('Visible in mobile app') }}</span>
                     </label>
 
-                    <label class="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 md:col-span-2 xl:col-span-1">
+                    <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-700 md:col-span-2 xl:col-span-1">
                         <input v-model="form.allow_discount_stacking" data-testid="allow-discount-stacking" type="checkbox" :disabled="!canManage || isSubmitting" class="rounded border-slate-300 text-slate-950 focus:ring-slate-400" />
                         <span>{{ t('Allow discount stacking') }}</span>
                     </label>
                 </div>
 
                 <div v-if="successMessage || errorMessage" class="space-y-3">
-                    <div v-if="successMessage" data-testid="success-message" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+                    <div v-if="successMessage" data-testid="success-message" class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
                         {{ successMessage }}
                     </div>
-                    <div v-if="errorMessage" data-testid="error-message" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
+                    <div v-if="errorMessage" data-testid="error-message" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
                         {{ errorMessage }}
                     </div>
                 </div>
@@ -240,7 +240,7 @@ const submit = async () => {
                         data-testid="save-settings"
                         type="submit"
                         :disabled="isSubmitting"
-                        class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                        class="inline-flex items-center justify-center rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
                     >
                         {{ isSubmitting ? t('Saving...') : t('Save settings') }}
                     </button>

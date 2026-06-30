@@ -8,6 +8,7 @@ Route::middleware('auth:sanctum')
     ->as('orders.')
     ->controller(OrderController::class)
     ->group(function (): void {
+        Route::post('/sync-flight', 'syncFlight')->name('sync-flight');
         Route::post('/', 'store')->name('store');
         Route::get('/', 'index')->name('index');
         Route::get('/{order}', 'show')->name('show');

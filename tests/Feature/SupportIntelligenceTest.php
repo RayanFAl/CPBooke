@@ -5,8 +5,8 @@ namespace Tests\Feature;
 use App\Models\SupportMessage;
 use App\Models\SupportTicket;
 use App\Models\User;
-use App\Modules\Admin\Support\Services\SupportAgentScoringService;
-use App\Modules\Admin\Support\Services\SupportSLARiskService;
+use App\Modules\Support\Services\SupportAgentScoringService;
+use App\Modules\Support\Services\SupportSLARiskService;
 use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -169,7 +169,7 @@ class SupportIntelligenceTest extends TestCase
 
         app('auth')->login($overloadedAgent);
 
-        app(\App\Modules\Admin\Support\Services\SupportService::class)
+        app(\App\Modules\Support\Services\SupportService::class)
             ->updateTicketStatus($ticket, 'in_progress', $overloadedAgent->id);
 
         $ticket->refresh();

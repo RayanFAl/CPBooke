@@ -1,9 +1,8 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
-import OrderStatusBadge from '../components/OrderStatusBadge.vue';
-import PaymentStatusBadge from '../components/PaymentStatusBadge.vue';
+import OrderTicketPanel from '../components/OrderTicketPanel.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 
 const props = defineProps({
@@ -34,8 +33,12 @@ const canViewFinancials = computed(() => (
 const canViewSupport = computed(() => permissions.value.includes('support.view'));
 const canViewUsers = computed(() => permissions.value.includes('users.view'));
 
-const activeTab = ref('overview');
+const activeTab = ref('ticket');
 const timelineQuery = ref('');
+const notesPanelOpen = ref(false);
+const statusPanelOpen = ref(false);
+const paymentPanelOpen = ref(false);
+const actionsMenuOpen = ref(false);
 const customerDrawerOpen = ref(false);
 const customerContextLoading = ref(false);
 const customerContextLoaded = ref(false);
@@ -59,20 +62,30 @@ const notesForm = useForm({
     internal_notes: props.order.internal_notes ?? '',
 });
 
+const showProviderDebug = computed(() => Boolean(props.order.error_message));
+
 const tabs = computed(() => {
     const items = [
-        { id: 'overview', label: t('Overview') },
-        { id: 'timeline', label: t('Timeline') },
+        { id: 'ticket', label: t('Order') },
     ];
 
     if (canViewFinancials.value) {
         items.push({ id: 'financials', label: t('Financials') });
     }
 
-    items.push({ id: 'debug', label: t('Provider Debug') });
-    items.push({ id: 'control', label: t('Internal Control') });
+    if (showProviderDebug.value) {
+        items.push({ id: 'debug', label: t('Provider Debug') });
+    }
+
+    items.push({ id: 'timeline', label: t('Timeline') });
 
     return items;
+});
+
+watch(showProviderDebug, (visible) => {
+    if (!visible && activeTab.value === 'debug') {
+        activeTab.value = 'ticket';
+    }
 });
 
 const orderHealth = computed(() => {
@@ -124,51 +137,7 @@ const customerProfileLink = computed(() => canViewUsers.value && props.order.cus
 
 const customerOrdersLink = computed(() => customerProfileLink.value ? `${customerProfileLink.value}#orders` : route('admin.orders.index'));
 
-const smartActions = computed(() => {
-    const actions = [];
-
-    if (['failed', 'unpaid', 'pending_payment'].includes(props.order.payment_status) && canUpdateStatus.value) {
-        actions.push({
-            label: t('Retry Payment'),
-            helper: t('Jump to payment controls'),
-            kind: 'tab',
-            target: 'control',
-            tone: 'bg-amber-50 text-amber-800 ring-1 ring-amber-200',
-        });
-    }
-
-    if (props.order.error_message) {
-        actions.push({
-            label: t('Reprocess Order'),
-            helper: t('Inspect provider debug payloads'),
-            kind: 'tab',
-            target: 'debug',
-            tone: 'bg-rose-50 text-rose-700 ring-1 ring-rose-200',
-        });
-    }
-
-    if (canViewSupport.value && ['processing', 'pending_payment'].includes(props.order.status)) {
-        actions.push({
-            label: t('Create Support Ticket'),
-            helper: t('Escalate from this order context'),
-            kind: 'link',
-            target: supportCreateLink.value,
-            tone: 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200',
-        });
-    }
-
-    if (['completed', 'confirmed'].includes(props.order.status)) {
-        actions.push({
-            label: t('Export Snapshot'),
-            helper: t('Download current order payload'),
-            kind: 'export',
-            target: null,
-            tone: 'bg-slate-100 text-slate-800 ring-1 ring-slate-200',
-        });
-    }
-
-    return actions;
-});
+const showHealthAlert = computed(() => orderHealth.value.label !== t('OK'));
 
 const timelineEvents = computed(() => {
     const events = [
@@ -181,16 +150,6 @@ const timelineEvents = computed(() => {
             actor: t('System'),
             icon: 'OR',
             tone: 'bg-slate-100 text-slate-700',
-        },
-        {
-            id: `payment-status-${props.order.id}`,
-            type: 'payment',
-            label: t('Payment state snapshot'),
-            description: `${t('Current payment state is')} ${formatLabel(props.order.payment_status)}.`,
-            timestamp: props.order.updated_at,
-            actor: t('Finance'),
-            icon: 'PY',
-            tone: 'bg-emerald-50 text-emerald-700',
         },
         {
             id: `provider-request-${props.order.id}`,
@@ -241,14 +200,23 @@ const timelineEvents = computed(() => {
     });
 
     props.order.histories.forEach((entry) => {
+        const actorName = historyActor(entry);
+        const isNotes = entry.field === 'internal_notes';
+        const oldValue = isNotes
+            ? (entry.old_value || t('None'))
+            : formatLabel(entry.old_value || t('None'));
+        const newValue = isNotes
+            ? (entry.new_value || t('None'))
+            : formatLabel(entry.new_value || t('None'));
+
         events.push({
             id: `history-${entry.id}`,
             type: 'history',
-            label: `${formatLabel(entry.field)} ${t('updated')}`,
-            description: `${entry.old_value || t('None')} -> ${entry.new_value || t('None')}`,
+            label: isNotes ? t('Internal notes updated') : `${formatLabel(entry.field)} ${t('updated')}`,
+            description: `${oldValue} → ${newValue}`,
             timestamp: entry.created_at,
-            actor: historyActor(entry),
-            icon: 'AU',
+            actor: actorName,
+            icon: isNotes ? 'NT' : 'AU',
             tone: 'bg-violet-50 text-violet-700',
         });
     });
@@ -274,18 +242,27 @@ const filteredTimelineEvents = computed(() => {
 const submit = () => {
     form.put(route('admin.orders.update-status', props.order.id), {
         preserveScroll: true,
+        onSuccess: () => {
+            statusPanelOpen.value = false;
+        },
     });
 };
 
 const submitNotes = () => {
     notesForm.put(route('admin.orders.update-notes', props.order.id), {
         preserveScroll: true,
+        onSuccess: () => {
+            notesPanelOpen.value = false;
+        },
     });
 };
 
 const submitPaymentStatus = () => {
     paymentForm.put(route('admin.orders.update-payment-status', props.order.id), {
         preserveScroll: true,
+        onSuccess: () => {
+            paymentPanelOpen.value = false;
+        },
     });
 };
 
@@ -327,17 +304,39 @@ const historyActor = (entry) => entry.user?.name || entry.user?.email || t('Syst
 
 const changeTab = (tabId) => {
     activeTab.value = tabId;
+    actionsMenuOpen.value = false;
 };
 
-const runSmartAction = (action) => {
-    if (action.kind === 'tab') {
-        activeTab.value = action.target;
-        return;
-    }
+const closeActionPanels = () => {
+    statusPanelOpen.value = false;
+    paymentPanelOpen.value = false;
+    notesPanelOpen.value = false;
+};
 
-    if (action.kind === 'export') {
-        exportSnapshot();
-    }
+const openStatusPanel = () => {
+    activeTab.value = 'ticket';
+    closeActionPanels();
+    statusPanelOpen.value = true;
+    actionsMenuOpen.value = false;
+};
+
+const openPaymentPanel = () => {
+    activeTab.value = 'ticket';
+    closeActionPanels();
+    paymentPanelOpen.value = true;
+    actionsMenuOpen.value = false;
+};
+
+const openNotesPanel = () => {
+    activeTab.value = 'ticket';
+    closeActionPanels();
+    notesPanelOpen.value = true;
+    actionsMenuOpen.value = false;
+};
+
+const openCustomerFromMenu = () => {
+    actionsMenuOpen.value = false;
+    openCustomerDrawer();
 };
 
 const exportSnapshot = () => {
@@ -396,271 +395,267 @@ const openCustomerDrawer = async () => {
 const closeCustomerDrawer = () => {
     customerDrawerOpen.value = false;
 };
+
+const handleTicketAction = ({ action, ticket }) => {
+    // Handle ticket actions like cancel or reschedule.
+    // This would typically open a modal or make an API call.
+    console.log('Ticket action:', action, ticket);
+    alert(`${t(action === 'reschedule' ? 'Reschedule' : 'Cancel')} action triggered for ticket`);
+};
 </script>
 
 <template>
     <Head :title="order.booking_reference || `${t('Order')} ${order.id}`" />
 
     <AdminLayout
-        title="Order Control Center"
-        description="Unify customer context, finance, provider debug, and operational control for a single booking order."
+        :title="order.booking_reference || `${t('Order')} #${order.id}`"
+        description=""
     >
-        <section class="space-y-6">
-            <div class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-                <div class="border-b border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(6,182,212,0.12),_transparent_38%),linear-gradient(180deg,_#ffffff,_#f8fafc)] px-6 py-6">
-                    <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                        <div class="min-w-0">
-                            <p class="text-xs font-semibold uppercase tracking-[0.26em] text-cyan-700">{{ t('Order Intelligence Bar') }}</p>
-                            <div class="mt-3 flex flex-wrap items-center gap-3">
-                                <h2 class="text-3xl font-semibold tracking-tight text-slate-950">
-                                    {{ order.booking_reference || `${t('Order')} #${order.id}` }}
-                                </h2>
-                                <OrderStatusBadge :status="order.status" />
-                                <PaymentStatusBadge :status="order.payment_status" />
-                                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">
-                                    {{ order.provider_name }}
-                                </span>
-                                <span class="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">
-                                    {{ formatLabel(order.service_type) }}
-                                </span>
-                            </div>
-                            <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                                {{ t('Move between customer context, timeline intelligence, finance, and internal control from one CRM-centered order workspace.') }}
-                            </p>
-                        </div>
+        <section class="space-y-4">
+            <div class="overflow-visible rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div class="border-b border-slate-200 px-4 py-4 sm:px-5">
+                    <Link
+                        :href="route('admin.orders.index')"
+                        class="text-sm font-medium text-slate-500 transition hover:text-slate-800"
+                    >
+                        ← {{ t('Back to orders') }}
+                    </Link>
 
-                        <div class="grid gap-3 sm:grid-cols-2 xl:min-w-[25rem]">
-                            <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Order Health') }}</p>
-                                <div class="mt-3 flex items-center gap-3">
-                                    <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ring-1" :class="orderHealth.tone">
-                                        {{ orderHealth.label }}
-                                    </span>
-                                </div>
-                                <p class="mt-3 text-sm leading-6 text-slate-600">{{ orderHealth.description }}</p>
-                            </div>
-
-                            <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Smart Actions') }}</p>
-                                <div class="mt-3 flex flex-wrap gap-2">
-                                    <template v-for="action in smartActions" :key="action.label">
-                                        <Link
-                                            v-if="action.kind === 'link'"
-                                            :href="action.target"
-                                            class="inline-flex rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em]"
-                                            :class="action.tone"
-                                        >
-                                            {{ action.label }}
-                                        </Link>
-                                        <button
-                                            v-else
-                                            type="button"
-                                            class="inline-flex rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em]"
-                                            :class="action.tone"
-                                            @click="runSmartAction(action)"
-                                        >
-                                            {{ action.label }}
-                                        </button>
-                                    </template>
-                                </div>
-                            </div>
-                        </div>
+                    <div
+                        v-if="showHealthAlert"
+                        class="mt-4 rounded-lg border px-4 py-3"
+                        :class="orderHealth.label === t('Critical') ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'"
+                    >
+                        <p class="text-sm font-semibold text-slate-950">{{ orderHealth.label }}</p>
+                        <p class="mt-1 text-sm text-slate-700">{{ orderHealth.description }}</p>
                     </div>
 
-                    <div class="mt-5 flex flex-wrap gap-3">
-                        <Link
-                            :href="route('admin.orders.index')"
-                            class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                        >
-                            {{ t('Back to orders') }}
-                        </Link>
-                        <button
-                            type="button"
-                            class="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-700 transition hover:bg-cyan-100"
-                            @click="openCustomerDrawer"
-                        >
-                            {{ t('View Customer') }}
-                        </button>
-                        <Link
-                            v-if="canViewSupport"
-                            :href="supportCreateLink"
-                            class="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
-                        >
-                            {{ t('Create Support Ticket') }}
-                        </Link>
-                        <Link
-                            v-if="canViewSupport"
-                            :href="relatedTicketsLink"
-                            class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                        >
-                            {{ t('View Related Tickets') }}
-                        </Link>
+                    <div v-if="order.error_message" class="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-rose-700">{{ t('Error message') }}</p>
+                        <p class="mt-1 text-sm text-rose-800">{{ order.error_message }}</p>
                     </div>
                 </div>
 
-                <div class="px-3 py-3">
-                    <nav class="flex gap-2 overflow-x-auto">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-3 py-2 sm:px-4">
+                    <nav class="flex gap-1 overflow-x-auto">
                         <button
                             v-for="tab in tabs"
                             :key="tab.id"
                             type="button"
-                            class="shrink-0 rounded-2xl px-4 py-3 text-sm font-medium transition"
-                            :class="activeTab === tab.id ? 'bg-slate-950 text-white shadow-sm' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'"
+                            class="shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition"
+                            :class="activeTab === tab.id ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-100'"
                             @click="changeTab(tab.id)"
                         >
                             {{ tab.label }}
                         </button>
                     </nav>
-                </div>
-            </div>
 
-            <div v-if="activeTab === 'overview'" class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-                <div class="space-y-6">
-                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Overview') }}</h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-600">
-                            {{ t('One place for the customer snapshot, provider context, and timestamps that define the order state.') }}
-                        </p>
-                        <dl class="mt-6 grid gap-5 sm:grid-cols-2">
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Booking reference') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ order.booking_reference || `${t('Order')} #${order.id}` }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('External booking ID') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ order.external_booking_id || t('Not assigned yet') }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Provider') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ order.provider_name }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Service type') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatLabel(order.service_type) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Status') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatLabel(order.status) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Payment status') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatLabel(order.payment_status) }}</dd>
-                            </div>
-                            <div v-if="canViewFinancials">
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Total amount') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatMoney(order.total_amount, order.currency) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Created at') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatDateTime(order.created_at) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Updated at') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ formatDateTime(order.updated_at) }}</dd>
-                            </div>
-                            <div v-if="order.error_message" class="sm:col-span-2">
-                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-rose-600">{{ t('Error message') }}</dt>
-                                <dd class="mt-2 text-sm leading-6 text-rose-700">{{ order.error_message }}</dd>
-                            </div>
-                        </dl>
-                    </div>
-
-                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <h3 class="text-lg font-semibold text-slate-950">{{ t('Customer context') }}</h3>
-                                <p class="mt-2 text-sm leading-6 text-slate-600">
-                                    {{ t('Link the booking to the customer record and move to the customer workspace when more context is needed.') }}
-                                </p>
-                            </div>
+                    <div class="relative z-30 flex flex-wrap items-center gap-2">
+                        <Link
+                            v-if="canViewSupport"
+                            :href="supportCreateLink"
+                            class="inline-flex items-center rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                        >
+                            {{ t('New ticket') }}
+                        </Link>
+                        <button
+                            type="button"
+                            class="inline-flex items-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                            @click="exportSnapshot"
+                        >
+                            {{ t('Export') }}
+                        </button>
+                        <div class="relative">
                             <button
                                 type="button"
-                                class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                                @click="openCustomerDrawer"
+                                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                                :aria-expanded="actionsMenuOpen"
+                                :aria-label="t('More')"
+                                @click="actionsMenuOpen = !actionsMenuOpen"
                             >
-                                {{ t('Open drawer') }}
+                                <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5" aria-hidden="true">
+                                    <path d="M3 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM8.5 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM14 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0z" />
+                                </svg>
                             </button>
-                        </div>
-
-                        <div class="mt-6 grid gap-5 sm:grid-cols-2">
-                            <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Customer name') }}</p>
-                                <button
-                                    type="button"
-                                    class="mt-2 text-left text-sm font-semibold text-slate-950 underline-offset-4 hover:underline"
-                                    @click="openCustomerDrawer"
-                                >
-                                    {{ order.customer.name }}
-                                </button>
-                            </div>
-                            <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Customer email') }}</p>
-                                <p class="mt-2 text-sm text-slate-900">{{ order.customer.email }}</p>
-                            </div>
-                            <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Customer phone') }}</p>
-                                <p class="mt-2 text-sm text-slate-900">{{ order.customer.phone || t('Not provided') }}</p>
-                            </div>
-                            <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Customer workspace') }}</p>
-                                <p class="mt-2 text-sm text-slate-900">
-                                    {{ customerProfileLink ? t('Available from the customer drawer.') : t('Customer profile link is not available for this role.') }}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="space-y-6">
-                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Control summary') }}</h3>
-                        <div class="mt-5 space-y-4">
-                            <div class="rounded-2xl bg-slate-50 p-4">
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Provider debugging') }}</p>
-                                <p class="mt-2 text-sm text-slate-900">{{ t('Request, response, service payload, and errors are grouped in one dedicated tab.') }}</p>
-                            </div>
-                            <div class="rounded-2xl bg-slate-50 p-4">
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Support integration') }}</p>
-                                <p class="mt-2 text-sm text-slate-900">{{ t('Create or inspect related tickets from the current order and customer context.') }}</p>
-                            </div>
-                            <div class="rounded-2xl bg-slate-50 p-4">
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Timeline driven review') }}</p>
-                                <p class="mt-2 text-sm text-slate-900">{{ t('Status changes, finance events, provider exchanges, and future support signals converge in one timeline.') }}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Quick links') }}</h3>
-                        <div class="mt-5 grid gap-3">
+                            <div
+                                v-if="actionsMenuOpen"
+                                class="absolute right-0 bottom-full z-50 mb-1 min-w-[11rem] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                            >
+                            <button
+                                type="button"
+                                class="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                                @click="openCustomerFromMenu"
+                            >
+                                {{ t('Customer') }}
+                            </button>
+                            <button
+                                v-if="canUpdateStatus"
+                                type="button"
+                                class="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                                @click="openStatusPanel"
+                            >
+                                {{ t('Update status') }}
+                            </button>
+                            <button
+                                v-if="canUpdateStatus"
+                                type="button"
+                                class="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                                @click="openPaymentPanel"
+                            >
+                                {{ t('Update payment') }}
+                            </button>
                             <Link
                                 v-if="canViewSupport"
                                 :href="relatedTicketsLink"
-                                class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50"
+                                class="block px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
+                                @click="actionsMenuOpen = false"
                             >
-                                <span>{{ t('View Related Tickets') }}</span>
-                                <span class="font-medium text-slate-950">{{ t('Open') }}</span>
-                            </Link>
-                            <Link
-                                v-if="canViewSupport"
-                                :href="supportCreateLink"
-                                class="flex items-center justify-between rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-700 transition hover:bg-cyan-100"
-                            >
-                                <span>{{ t('Create Support Ticket') }}</span>
-                                <span class="font-medium">{{ t('Open') }}</span>
+                                {{ t('Tickets') }}
                             </Link>
                             <button
+                                v-if="canUpdateNotes"
                                 type="button"
-                                class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50"
-                                @click="changeTab('control')"
+                                class="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                                @click="openNotesPanel"
                             >
-                                <span>{{ t('Open internal control') }}</span>
-                                <span class="font-medium text-slate-950">{{ t('Manage') }}</span>
+                                {{ t('Notes') }}
                             </button>
+                            <button
+                                v-if="showProviderDebug"
+                                type="button"
+                                class="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                                @click="changeTab('debug')"
+                            >
+                                {{ t('Debug') }}
+                            </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <template v-if="activeTab === 'ticket'">
+                <div class="space-y-3">
+                    <div
+                        v-if="statusPanelOpen && canUpdateStatus"
+                        class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                    >
+                        <div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                            <h3 class="text-sm font-semibold text-slate-950">{{ t('Operational status') }}</h3>
+                            <button
+                                type="button"
+                                class="text-xs font-medium text-slate-500 transition hover:text-slate-800"
+                                @click="statusPanelOpen = false"
+                            >
+                                {{ t('Close') }}
+                            </button>
+                        </div>
+
+                        <form class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" @submit.prevent="submit">
+                            <label class="flex-1 space-y-1 text-xs font-medium text-slate-600">
+                                <span>{{ t('Operational status') }}</span>
+                                <select
+                                    v-model="form.status"
+                                    class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                    :disabled="statuses.length === 0"
+                                >
+                                    <option v-for="status in statuses" :key="status.name" :value="status.name">
+                                        {{ t(status.label) }}
+                                    </option>
+                                </select>
+                            </label>
+                            <button
+                                type="submit"
+                                class="inline-flex items-center justify-center rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
+                                :disabled="form.processing || statuses.length === 0"
+                            >
+                                {{ t('Update status') }}
+                            </button>
+                        </form>
+                    </div>
+
+                    <div
+                        v-if="paymentPanelOpen && canUpdateStatus"
+                        class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                    >
+                        <div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                            <h3 class="text-sm font-semibold text-slate-950">{{ t('Payment status') }}</h3>
+                            <button
+                                type="button"
+                                class="text-xs font-medium text-slate-500 transition hover:text-slate-800"
+                                @click="paymentPanelOpen = false"
+                            >
+                                {{ t('Close') }}
+                            </button>
+                        </div>
+
+                        <form class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" @submit.prevent="submitPaymentStatus">
+                            <label class="flex-1 space-y-1 text-xs font-medium text-slate-600">
+                                <span>{{ t('Payment status') }}</span>
+                                <select
+                                    v-model="paymentForm.payment_status"
+                                    class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
+                                >
+                                    <option v-for="status in payment_statuses" :key="status.name" :value="status.name">
+                                        {{ t(status.label) }}
+                                    </option>
+                                </select>
+                            </label>
+                            <button
+                                type="submit"
+                                class="inline-flex items-center justify-center rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
+                                :disabled="paymentForm.processing"
+                            >
+                                {{ t('Update payment') }}
+                            </button>
+                        </form>
+                    </div>
+
+                <OrderTicketPanel
+                    :ticket="order.ticket"
+                    :currency="order.currency"
+                    :booked-by-clickable="Boolean(order.customer?.id)"
+                    @booked-by-click="openCustomerDrawer"
+                    @action-click="handleTicketAction"
+                />
+
+                <div
+                    v-if="notesPanelOpen"
+                    class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                >
+                    <div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                        <h3 class="text-sm font-semibold text-slate-950">{{ t('Internal notes') }}</h3>
+                        <button
+                            type="button"
+                            class="text-xs font-medium text-slate-500 transition hover:text-slate-800"
+                            @click="notesPanelOpen = false"
+                        >
+                            {{ t('Close') }}
+                        </button>
+                    </div>
+
+                    <form v-if="canUpdateNotes" class="mt-4 space-y-3" @submit.prevent="submitNotes">
+                        <textarea
+                            v-model="notesForm.internal_notes"
+                            rows="5"
+                            class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                            :placeholder="t('Add an internal operational note')"
+                        />
+                        <button
+                            type="submit"
+                            class="inline-flex items-center justify-center rounded-lg bg-slate-950 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
+                            :disabled="notesForm.processing"
+                        >
+                            {{ t('Save notes') }}
+                        </button>
+                    </form>
+
+                    <p v-else class="mt-4 text-sm leading-6 text-slate-700">
+                        {{ order.internal_notes || t('No internal notes have been recorded yet.') }}
+                    </p>
+                </div>
+                </div>
+            </template>
 
             <div v-else-if="activeTab === 'timeline'" class="space-y-6">
                 <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -796,142 +791,6 @@ const closeCustomerDrawer = () => {
                             <p class="mt-2 text-sm leading-6" :class="order.error_message ? 'text-rose-700' : 'text-slate-600'">
                                 {{ order.error_message || t('No provider or processing error is recorded for this order.') }}
                             </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div v-else class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
-                <div class="space-y-6">
-                    <div v-if="canUpdateStatus" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Operational status') }}</h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-600">
-                            {{ t('Change the lifecycle state when provider follow-up or manual admin control is required.') }}
-                        </p>
-
-                        <form class="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end" @submit.prevent="submit">
-                            <label class="space-y-2 text-sm font-medium text-slate-700 sm:min-w-72">
-                                <span>{{ t('Status') }}</span>
-                                <select
-                                    v-model="form.status"
-                                    class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
-                                    :disabled="statuses.length === 0"
-                                >
-                                    <option v-for="status in statuses" :key="status.name" :value="status.name">
-                                        {{ t(status.label) }}
-                                    </option>
-                                </select>
-                            </label>
-
-                            <button
-                                type="submit"
-                                class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
-                                :disabled="form.processing || statuses.length === 0"
-                            >
-                                {{ t('Update status') }}
-                            </button>
-                        </form>
-                    </div>
-
-                    <div v-if="canUpdateStatus" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Payment status') }}</h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-600">
-                            {{ t('Payment flow stays independently controllable from the operational lifecycle.') }}
-                        </p>
-
-                        <form class="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end" @submit.prevent="submitPaymentStatus">
-                            <label class="space-y-2 text-sm font-medium text-slate-700 sm:min-w-72">
-                                <span>{{ t('Payment status') }}</span>
-                                <select
-                                    v-model="paymentForm.payment_status"
-                                    class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
-                                >
-                                    <option v-for="status in payment_statuses" :key="status.name" :value="status.name">
-                                        {{ t(status.label) }}
-                                    </option>
-                                </select>
-                            </label>
-
-                            <button
-                                type="submit"
-                                class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
-                                :disabled="paymentForm.processing"
-                            >
-                                {{ t('Update payment') }}
-                            </button>
-                        </form>
-                    </div>
-
-                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Internal notes') }}</h3>
-                        <form v-if="canUpdateNotes" class="mt-6 space-y-4" @submit.prevent="submitNotes">
-                            <label class="block space-y-2 text-sm font-medium text-slate-700">
-                                <span>{{ t('Notes') }}</span>
-                                <textarea
-                                    v-model="notesForm.internal_notes"
-                                    rows="6"
-                                    class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
-                                    :placeholder="t('Add an internal operational note')"
-                                />
-                            </label>
-
-                            <button
-                                type="submit"
-                                class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
-                                :disabled="notesForm.processing"
-                            >
-                                {{ t('Save notes') }}
-                            </button>
-                        </form>
-
-                        <div v-else class="mt-6 rounded-2xl bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-700">
-                            {{ order.internal_notes || t('No internal notes have been recorded yet.') }}
-                        </div>
-                    </div>
-                </div>
-
-                <div class="space-y-6">
-                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Audit Log') }}</h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-600">
-                            {{ t('View status, payment, and note changes from a compact audit stream.') }}
-                        </p>
-
-                        <div v-if="!canViewHistory" class="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                            {{ t('Audit logs require the order history permission and available history tables.') }}
-                        </div>
-
-                        <div v-else-if="order.histories.length === 0" class="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                            {{ t('No tracked history entries are available for this order yet.') }}
-                        </div>
-
-                        <div v-else class="mt-4 space-y-4">
-                            <article
-                                v-for="entry in order.histories"
-                                :key="entry.id"
-                                class="rounded-2xl border border-slate-200 px-4 py-4"
-                            >
-                                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                    <div>
-                                        <h4 class="text-sm font-semibold text-slate-950">{{ formatLabel(entry.field) }}</h4>
-                                        <p class="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
-                                            {{ formatLabel(entry.action) }} {{ t('by') }} {{ historyActor(entry) }}
-                                        </p>
-                                    </div>
-                                    <p class="text-xs text-slate-500">{{ formatDateTime(entry.created_at) }}</p>
-                                </div>
-
-                                <dl class="mt-4 grid gap-4 sm:grid-cols-2">
-                                    <div>
-                                        <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Old value') }}</dt>
-                                        <dd class="mt-2 text-sm text-slate-700">{{ entry.old_value || t('None') }}</dd>
-                                    </div>
-                                    <div>
-                                        <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('New value') }}</dt>
-                                        <dd class="mt-2 text-sm text-slate-900">{{ entry.new_value || t('None') }}</dd>
-                                    </div>
-                                </dl>
-                            </article>
                         </div>
                     </div>
                 </div>

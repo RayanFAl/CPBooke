@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\LoyaltyBenefit;
 use App\Models\LoyaltySetting;
 use App\Models\LoyaltyTier;
 use App\Models\User;
@@ -36,21 +35,42 @@ class PricingPreviewApiTest extends TestCase
             ->assertExactJson([
                 'data' => [
                     'base_amount' => 1200.0,
-                    'discount_total' => 84.0,
-                    'final_amount' => 1116.0,
+                    'fare_amount' => 1200.0,
+                    'tax_amount' => 0.0,
+                    'discount_total' => 180.0,
+                    'final_amount' => 1020.0,
                     'currency' => 'LYD',
                     'pricing_version' => 'pricing:v1|loyalty:7',
                     'adjustments' => [
                         [
                             'source_type' => 'loyalty',
-                            'code' => 'gold_discount',
-                            'label' => 'Gold Tier Discount',
+                            'code' => 'vip_discount',
+                            'label' => 'VIP discount (15%)',
                             'adjustment_type' => 'percentage',
-                            'applied_amount' => 84.0,
+                            'applied_amount' => 180.0,
                         ],
                     ],
                 ],
             ]);
+    }
+
+    public function test_preview_applies_loyalty_discount_on_fare_only_when_tax_is_present(): void
+    {
+        $customer = $this->createCustomerWithDiscountBenefit();
+
+        $this->actingAsCustomer($customer)
+            ->postJson(route('api.v1.pricing.preview'), [
+                'service_type' => 'flight',
+                'currency' => 'LYD',
+                'base_amount' => 740,
+                'tax_amount' => 127,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.base_amount', 740)
+            ->assertJsonPath('data.fare_amount', 613)
+            ->assertJsonPath('data.tax_amount', 127)
+            ->assertJsonPath('data.discount_total', 91.95)
+            ->assertJsonPath('data.final_amount', 648.05);
     }
 
     public function test_preview_uses_authenticated_customer_when_user_id_missing(): void
@@ -64,8 +84,8 @@ class PricingPreviewApiTest extends TestCase
                 'base_amount' => 1200,
             ])
             ->assertOk()
-            ->assertJsonPath('data.discount_total', 84)
-            ->assertJsonPath('data.final_amount', 1116);
+            ->assertJsonPath('data.discount_total', 180)
+            ->assertJsonPath('data.final_amount', 1020);
     }
 
     public function test_preview_does_not_create_orders_or_side_effect_records(): void
@@ -136,11 +156,11 @@ class PricingPreviewApiTest extends TestCase
                 'currency' => 'LYD',
             ]))
             ->assertOk()
-            ->assertJsonPath('data.discount_total', 35)
-            ->assertJsonPath('data.final_amount', 465);
+            ->assertJsonPath('data.discount_total', 75)
+            ->assertJsonPath('data.final_amount', 425);
     }
 
-    public function test_preview_respects_service_type_filters_for_multiple_services(): void
+    public function test_preview_applies_loyalty_discount_to_all_service_types_at_launch(): void
     {
         $customer = $this->createCustomerWithDiscountBenefit();
 
@@ -151,9 +171,9 @@ class PricingPreviewApiTest extends TestCase
                 'base_amount' => 1200,
             ])
             ->assertOk()
-            ->assertJsonPath('data.discount_total', 0)
-            ->assertJsonPath('data.final_amount', 1200)
-            ->assertJsonCount(0, 'data.adjustments');
+            ->assertJsonPath('data.discount_total', 180)
+            ->assertJsonPath('data.final_amount', 1020)
+            ->assertJsonCount(1, 'data.adjustments');
     }
 
     public function test_preview_forbids_requesting_another_user_pricing(): void
@@ -213,30 +233,7 @@ class PricingPreviewApiTest extends TestCase
             'is_admin' => false,
         ]);
 
-        $tier = LoyaltyTier::query()->create([
-            'level' => 9,
-            'code' => 'gold',
-            'name' => 'Gold',
-            'sort_order' => 9,
-            'is_active' => true,
-            'is_default' => false,
-        ]);
-
-        LoyaltyBenefit::query()->create([
-            'tier_id' => $tier->id,
-            'code' => 'gold_discount',
-            'name' => 'Gold Tier Discount',
-            'benefit_type' => LoyaltyBenefit::TYPE_DISCOUNT,
-            'value_type' => LoyaltyBenefit::VALUE_TYPE_PERCENTAGE,
-            'value' => 7,
-            'applies_to_services' => ['hotel', 'flight'],
-            'minimum_order_amount' => 100,
-            'priority' => 100,
-            'stackable' => true,
-            'finance_sensitive' => false,
-            'display_order' => 1,
-            'is_active' => true,
-        ]);
+        $tier = LoyaltyTier::query()->where('code', 'vip')->firstOrFail();
 
         UserLoyaltyProfile::query()->create([
             'user_id' => $customer->id,
@@ -245,6 +242,20 @@ class PricingPreviewApiTest extends TestCase
             'lifetime_spend' => 5000,
             'period_spend' => 1200,
             'progress_percentage' => 100,
+            'metadata' => [
+                'entitlements' => [
+                    (string) $tier->id => [
+                        'tier_id' => $tier->id,
+                        'tier_code' => 'vip',
+                        'tier_level' => 4,
+                        'qualified_at' => now()->toIso8601String(),
+                        'expires_at' => now()->addMonths(12)->toIso8601String(),
+                        'qualification_spend' => 25000,
+                        'threshold' => 25000,
+                        'duration_months' => 12,
+                    ],
+                ],
+            ],
         ]);
 
         return $customer;

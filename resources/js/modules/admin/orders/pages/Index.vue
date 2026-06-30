@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import OrderStatusBadge from '../components/OrderStatusBadge.vue';
+import OrderProviderCell from '../components/OrderProviderCell.vue';
 import PaymentStatusBadge from '../components/PaymentStatusBadge.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, reactive } from 'vue';
@@ -25,6 +26,7 @@ const page = usePage();
 const { locale, t } = useAdminLocale();
 
 const filterForm = reactive({
+    search: props.filters.search ?? '',
     status: props.filters.status ?? '',
 });
 
@@ -36,6 +38,7 @@ const canViewFinancials = computed(() => {
 
 const applyFilters = () => {
     router.get(route('admin.orders.index'), {
+        ...(filterForm.search.trim() ? { search: filterForm.search.trim() } : {}),
         ...(filterForm.status ? { status: filterForm.status } : {}),
     }, {
         preserveScroll: true,
@@ -45,6 +48,7 @@ const applyFilters = () => {
 };
 
 const resetFilters = () => {
+    filterForm.search = '';
     filterForm.status = '';
     applyFilters();
 };
@@ -113,7 +117,17 @@ const openOrderPage = (order) => {
                     </div>
                 </div>
 
-                <form class="mt-6 grid gap-4 md:grid-cols-[minmax(0,16rem)_auto_auto] md:items-end" @submit.prevent="applyFilters">
+                <form class="mt-6 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,16rem)_auto_auto] md:items-end" @submit.prevent="applyFilters">
+                    <label class="space-y-2 text-sm font-medium text-slate-700">
+                        <span>{{ t('Search') }}</span>
+                        <input
+                            v-model="filterForm.search"
+                            type="search"
+                            class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-cyan-600"
+                            :placeholder="t('Reference, customer, provider, PNR, or ID')"
+                        >
+                    </label>
+
                     <label class="space-y-2 text-sm font-medium text-slate-700">
                         <span>{{ t('Status') }}</span>
                         <select
@@ -173,14 +187,19 @@ const openOrderPage = (order) => {
                                 <td class="px-6 py-5">
                                     <div class="font-semibold text-slate-950">{{ order.booking_reference || `${t('Order')} #${order.id}` }}</div>
                                     <div class="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
-                                        {{ order.external_booking_id || t('Awaiting provider ID') }}
+                                        {{ order.ticket_number || t('Awaiting ticket number') }}
                                     </div>
                                 </td>
                                 <td class="px-6 py-5">
                                     <div class="font-medium text-slate-900">{{ order.customer.name }}</div>
                                     <div class="mt-1 text-slate-500">{{ order.customer.email }}</div>
                                 </td>
-                                <td class="px-6 py-5">{{ order.provider_name }}</td>
+                                <td class="px-6 py-5">
+                                    <OrderProviderCell
+                                        :flight="order.flight"
+                                        :provider-name="order.provider_name"
+                                    />
+                                </td>
                                 <td class="px-6 py-5">
                                     <OrderStatusBadge :status="order.status" />
                                     <div class="mt-2 text-xs uppercase tracking-[0.16em] text-slate-500">

@@ -21,7 +21,31 @@ class StoreSupportTypingRequest extends ApiFormRequest
     {
         return [
             'typing' => ['nullable', 'boolean'],
+            'agent_typing' => ['nullable', 'boolean'],
             'metadata' => ['nullable', 'array'],
         ];
+    }
+
+    public function hasTypingInput(): bool
+    {
+        return $this->exists('typing') || $this->exists('agent_typing');
+    }
+
+    public function resolveTypingInput(): ?bool
+    {
+        if ($this->exists('typing')) {
+            return $this->boolean('typing');
+        }
+
+        if ($this->exists('agent_typing')) {
+            return $this->boolean('agent_typing');
+        }
+
+        return null;
+    }
+
+    public function resolvedTyping(bool $default = true): bool
+    {
+        return $this->resolveTypingInput() ?? $default;
     }
 }

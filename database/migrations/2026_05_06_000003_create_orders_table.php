@@ -23,6 +23,7 @@ return new class extends Migration
                 'paid',
                 'processing',
                 'confirmed',
+                'ticketed',
                 'completed',
                 'cancelled',
                 'failed',

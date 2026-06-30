@@ -5,7 +5,7 @@ namespace App\Modules\Admin\Support\Http\Controllers;
 use App\Models\SupportTicket;
 use App\Modules\Admin\Support\Http\Requests\StoreSupportResolutionReportRequest;
 use App\Modules\Admin\Support\Services\SupportResolutionReportService;
-use App\Modules\Admin\Support\Services\SupportService;
+use App\Modules\Support\Services\SupportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 

@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\FinancialTransaction;
 use App\Models\LoyaltyHistory;
 use App\Models\Order;
+use App\Models\SavedPassenger;
 use App\Models\User;
 use App\Modules\Loyalty\Pricing\LoyaltyPricingProvider;
 use App\Modules\Pricing\Services\OrderPricingService;
@@ -15,6 +16,7 @@ use App\Modules\Pricing\Services\PricingVersionService;
 use App\Observers\FinancialTransactionObserver;
 use App\Observers\LoyaltyHistoryObserver;
 use App\Policies\OrderPolicy;
+use App\Policies\SavedPassengerPolicy;
 use App\Support\Rbac\RbacRegistry;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
@@ -65,6 +67,7 @@ class AppServiceProvider extends ServiceProvider
         Vite::prefetch(concurrency: 3);
 
         Gate::policy(Order::class, OrderPolicy::class);
+        Gate::policy(SavedPassenger::class, SavedPassengerPolicy::class);
         FinancialTransaction::observe(FinancialTransactionObserver::class);
         LoyaltyHistory::observe(LoyaltyHistoryObserver::class);
 

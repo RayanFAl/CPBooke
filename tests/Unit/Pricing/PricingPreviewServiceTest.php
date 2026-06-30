@@ -54,6 +54,8 @@ class PricingPreviewServiceTest extends TestCase
 
         $this->assertSame([
             'base_amount' => 1200.0,
+            'fare_amount' => 1200.0,
+            'tax_amount' => 0.0,
             'discount_total' => 84.0,
             'final_amount' => 1116.0,
             'currency' => 'LYD',
@@ -101,6 +103,8 @@ class PricingPreviewServiceTest extends TestCase
         ], $actor);
 
         $this->assertSame(200.0, $result['base_amount']);
+        $this->assertSame(200.0, $result['fare_amount']);
+        $this->assertSame(0.0, $result['tax_amount']);
         $this->assertSame(0.0, $result['discount_total']);
         $this->assertSame(200.0, $result['final_amount']);
     }

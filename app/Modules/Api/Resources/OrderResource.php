@@ -25,6 +25,8 @@ class OrderResource extends JsonResource
             'details' => $this->resource->details ?? [],
             'currency' => $this->resource->currency,
             'total_amount' => $this->resource->total_amount,
+            'base_amount' => $this->resource->base_amount,
+            'tax_amount' => $this->resource->tax_amount,
             'request_payload' => $this->resource->request_payload ?? [],
             'response_payload' => $this->resource->response_payload ?? [],
             'error_message' => $this->resource->error_message,

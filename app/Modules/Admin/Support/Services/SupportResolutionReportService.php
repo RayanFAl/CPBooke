@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Support\Services;
 
 use App\Models\SupportTicket;
 use App\Models\SupportTicketResolutionReport;
+use App\Modules\Support\Services\SupportService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 

@@ -29,6 +29,8 @@ class PricingPreviewRequest extends ApiFormRequest
             'service_type' => ['required', 'string', Rule::in(Order::serviceTypes())],
             'currency' => ['nullable', 'string', 'size:3'],
             'base_amount' => ['required', 'numeric', 'min:0.01'],
+            'fare_amount' => ['nullable', 'numeric', 'min:0'],
+            'tax_amount' => ['nullable', 'numeric', 'min:0'],
             'provider_name' => ['nullable', 'string', 'max:120'],
             'attributes' => ['nullable', 'array'],
         ];

@@ -4,6 +4,7 @@ namespace App\Modules\Pricing\Services;
 
 use App\Models\LoyaltySetting;
 use App\Models\User;
+use App\Modules\Loyalty\Pricing\LoyaltyDiscountableFareResolver;
 use App\Modules\Pricing\DTO\PricingAdjustmentData;
 use App\Modules\Pricing\DTO\PricingContext;
 use Illuminate\Support\Arr;
@@ -24,26 +25,42 @@ class PricingPreviewService
     {
         $user = $this->resolveUser(Arr::get($payload, 'user_id'), $actor);
         $currency = $this->resolveCurrency(Arr::get($payload, 'currency'));
+        $totalAmount = $this->formatAmount((float) Arr::get($payload, 'base_amount'));
+        $taxAmount = $this->formatAmount(max(0, (float) Arr::get($payload, 'tax_amount', 0)));
+        $fareAmount = $this->formatAmount(LoyaltyDiscountableFareResolver::resolve(
+            (float) $totalAmount,
+            (float) $taxAmount > 0 ? (float) $taxAmount : null,
+            is_numeric(Arr::get($payload, 'fare_amount')) ? (float) Arr::get($payload, 'fare_amount') : null,
+        ));
 
         $context = new PricingContext(
             user: $user,
             serviceType: (string) Arr::get($payload, 'service_type'),
             currency: $currency,
-            baseAmount: $this->formatAmount((float) Arr::get($payload, 'base_amount')),
+            baseAmount: $totalAmount,
             source: 'preview',
             attributes: array_merge(
                 Arr::get($payload, 'attributes', []),
-                ['provider_name' => Arr::get($payload, 'provider_name', 'default')],
+                [
+                    'provider_name' => Arr::get($payload, 'provider_name', 'default'),
+                    'tax_amount' => $taxAmount,
+                    'fare_amount' => $fareAmount,
+                ],
             ),
         );
 
         $result = $this->pricingEngine->price($context);
         $discountTotal = $this->sumAdjustments($result->appliedAdjustments);
-        $baseAmount = $this->formatAmount((float) $result->baseAmount);
-        $finalAmount = $this->formatAmount(max(0, round((float) $baseAmount - (float) $discountTotal, 2)));
+        $finalAmount = $this->formatAmount(LoyaltyDiscountableFareResolver::finalTotal(
+            (float) $fareAmount,
+            (float) $discountTotal,
+            (float) $taxAmount > 0 ? (float) $taxAmount : null,
+        ));
 
         return [
-            'base_amount' => (float) $baseAmount,
+            'base_amount' => (float) $totalAmount,
+            'fare_amount' => (float) $fareAmount,
+            'tax_amount' => (float) $taxAmount,
             'discount_total' => (float) $discountTotal,
             'final_amount' => (float) $finalAmount,
             'currency' => $result->currency,

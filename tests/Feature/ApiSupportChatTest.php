@@ -69,7 +69,7 @@ class ApiSupportChatTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.ticket.id', $ticket->id)
             ->assertJsonPath('data.ticket.code', 'SUP-CHAT-1001')
-            ->assertJsonPath('data.ticket.assigned_agent.id', $agent->id)
+            ->assertJsonMissingPath('data.ticket.assigned_agent')
             ->assertJsonPath('data.message.sender_type', 'customer')
             ->assertJsonPath('data.message.message_type', 'text')
             ->assertJsonPath('data.message.text', 'I still need help with this booking.');
@@ -234,12 +234,125 @@ class ApiSupportChatTest extends TestCase
             'metadata' => ['source' => 'flutter'],
         ])
             ->assertOk()
+            ->assertJsonPath('data.is_typing', true)
             ->assertJsonPath('data.typing.sender_type', 'customer')
             ->assertJsonPath('data.typing.metadata.source', 'flutter')
             ->assertJsonPath('data.ticket.status', 'waiting_customer');
 
         Event::assertDispatched(SupportTypingBroadcasted::class);
         $this->assertSame('waiting_customer', $ticket->fresh()->status);
+    }
+
+    public function test_typing_endpoint_accepts_agent_typing_alias_on_post(): void
+    {
+        Event::fake([SupportTypingBroadcasted::class]);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $ticket = SupportTicket::query()->create([
+            'ticket_number' => 'SUP-CHAT-1003B',
+            'user_id' => $customer->id,
+            'order_id' => null,
+            'category' => 'document_request',
+            'priority' => 'low',
+            'status' => 'waiting_customer',
+            'assigned_to' => null,
+            'subject' => 'Typing alias',
+            'description' => 'agent_typing should behave like typing.',
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->postJson("/api/v1/support/chat/tickets/{$ticket->id}/typing", [
+            'agent_typing' => true,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.is_typing', true)
+            ->assertJsonPath('data.typing.typing', true);
+
+        Event::assertDispatched(SupportTypingBroadcasted::class);
+    }
+
+    public function test_get_typing_endpoint_returns_agent_typing_state(): void
+    {
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $agent = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $ticket = SupportTicket::query()->create([
+            'ticket_number' => 'SUP-CHAT-1003C',
+            'user_id' => $customer->id,
+            'order_id' => null,
+            'category' => 'document_request',
+            'priority' => 'low',
+            'status' => 'in_progress',
+            'assigned_to' => $agent->id,
+            'subject' => 'Agent typing poll',
+            'description' => 'Customer polls agent typing state.',
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->getJson("/api/v1/support/chat/tickets/{$ticket->id}/typing")
+            ->assertOk()
+            ->assertJsonPath('data.is_typing', false);
+
+        $this->app->make(\App\Modules\Support\Services\SupportService::class)->storeTypingState(
+            $ticket,
+            $agent,
+            true,
+        );
+
+        $this->getJson("/api/v1/support/chat/tickets/{$ticket->id}/typing")
+            ->assertOk()
+            ->assertJsonPath('data.is_typing', true);
+    }
+
+    public function test_get_typing_endpoint_accepts_typing_and_agent_typing_query_aliases(): void
+    {
+        Event::fake([SupportTypingBroadcasted::class]);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $ticket = SupportTicket::query()->create([
+            'ticket_number' => 'SUP-CHAT-1003D',
+            'user_id' => $customer->id,
+            'order_id' => null,
+            'category' => 'document_request',
+            'priority' => 'low',
+            'status' => 'waiting_customer',
+            'assigned_to' => null,
+            'subject' => 'Typing query aliases',
+            'description' => 'GET typing query params.',
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->getJson("/api/v1/support/chat/tickets/{$ticket->id}/typing?typing=1")
+            ->assertOk()
+            ->assertJsonPath('data.is_typing', true);
+
+        Event::assertDispatched(SupportTypingBroadcasted::class);
+
+        Event::fake([SupportTypingBroadcasted::class]);
+
+        $this->getJson("/api/v1/support/chat/tickets/{$ticket->id}/typing?agent_typing=0")
+            ->assertOk()
+            ->assertJsonPath('data.is_typing', false);
+
+        Event::assertDispatched(SupportTypingBroadcasted::class);
     }
 
     public function test_chat_message_endpoint_does_not_reopen_closed_ticket_incorrectly(): void

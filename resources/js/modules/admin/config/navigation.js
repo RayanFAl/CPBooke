@@ -1,0 +1,63 @@
+export const navigationItems = [
+    {
+        label: 'Dashboard',
+        route: 'admin.dashboard',
+        startsWith: '/admin/dashboard',
+        icon: 'dashboard',
+    },
+    {
+        label: 'Users',
+        route: 'admin.users.index',
+        startsWith: '/admin/users',
+        permission: 'users.view',
+        icon: 'users',
+    },
+    {
+        label: 'Orders',
+        route: 'admin.orders.index',
+        startsWith: '/admin/orders',
+        permission: 'orders.view',
+        icon: 'orders',
+    },
+    {
+        label: 'Finance',
+        route: 'admin.finance.index',
+        startsWith: '/admin/finance',
+        permission: 'finance.view',
+        icon: 'finance',
+    },
+    {
+        label: 'Governance',
+        route: 'admin.governance.dashboard',
+        startsWith: '/admin/governance',
+        permission: 'governance.view',
+        icon: 'governance',
+    },
+    {
+        label: 'Support',
+        route: 'admin.support.index',
+        startsWith: '/admin/support',
+        permission: 'support.view',
+        icon: 'support',
+    },
+    {
+        label: 'Airports',
+        route: 'admin.airports.index',
+        startsWith: '/admin/airports',
+        icon: 'airports',
+    },
+    {
+        label: 'Loyalty',
+        route: 'admin.loyalty.index',
+        startsWith: '/admin/loyalty',
+        permission: 'loyalty.view',
+        icon: 'loyalty',
+    },
+    {
+        label: 'Notifications',
+        route: 'admin.notifications.index',
+        startsWith: '/admin/notifications',
+        permission: 'notifications.view',
+        icon: 'notifications',
+    },
+];

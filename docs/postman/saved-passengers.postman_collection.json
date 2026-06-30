@@ -1,0 +1,254 @@
+{
+	"info": {
+		"_postman_id": "saved-passengers-api",
+		"name": "CPBooke - Saved Passengers API",
+		"description": "REST API collection for managing saved passengers in the flight booking mobile app.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000/api/v1"
+		},
+		{
+			"key": "token",
+			"value": ""
+		},
+		{
+			"key": "passenger_id",
+			"value": ""
+		}
+	],
+	"item": [
+		{
+			"name": "Auth - Login (get token)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"customer@example.com\",\n  \"password\": \"password\",\n  \"device_name\": \"Postman\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/auth/login",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"auth",
+						"login"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "List Saved Passengers",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/saved-passengers?page=1&per_page=20",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"saved-passengers"
+					],
+					"query": [
+						{
+							"key": "page",
+							"value": "1"
+						},
+						{
+							"key": "per_page",
+							"value": "20"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Search Saved Passengers",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/saved-passengers?q=sara&page=1&per_page=20",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"saved-passengers"
+					],
+					"query": [
+						{
+							"key": "q",
+							"value": "sara"
+						},
+						{
+							"key": "page",
+							"value": "1"
+						},
+						{
+							"key": "per_page",
+							"value": "20"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Create Saved Passenger",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"type\": \"ADT\",\n  \"title\": \"Mr\",\n  \"first_name\": \"RITAJ\",\n  \"last_name\": \"HEMMAL\",\n  \"date_of_birth\": \"1995-03-15\",\n  \"gender\": \"F\",\n  \"nationality\": \"SAU\",\n  \"country_of_residence\": \"SAU\",\n  \"document_type\": \"passport\",\n  \"passport_number\": \"P12345678\",\n  \"passport_issue_country\": \"SAU\",\n  \"passport_issue_date\": \"2020-01-01\",\n  \"passport_expiry\": \"2030-01-01\",\n  \"email\": \"ritaj@example.com\",\n  \"phone\": \"+966501234567\",\n  \"seat_preference\": \"window\",\n  \"meal_preference\": \"halal\",\n  \"is_default\": true\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/saved-passengers",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"saved-passengers"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Saved Passenger Details",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/saved-passengers/{{passenger_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"saved-passengers",
+						"{{passenger_id}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Update Saved Passenger",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"type\": \"ADT\",\n  \"title\": \"Mr\",\n  \"first_name\": \"RITAJ\",\n  \"last_name\": \"HEMMAL\",\n  \"date_of_birth\": \"1995-03-15\",\n  \"gender\": \"F\",\n  \"nationality\": \"SAU\",\n  \"country_of_residence\": \"SAU\",\n  \"document_type\": \"passport\",\n  \"passport_number\": \"P12345678\",\n  \"passport_issue_country\": \"SAU\",\n  \"passport_issue_date\": \"2020-01-01\",\n  \"passport_expiry\": \"2030-01-01\",\n  \"email\": \"ritaj.updated@example.com\",\n  \"phone\": \"+966501234567\",\n  \"seat_preference\": \"aisle\",\n  \"meal_preference\": \"vegetarian\",\n  \"is_default\": false\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/saved-passengers/{{passenger_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"saved-passengers",
+						"{{passenger_id}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Delete Saved Passenger",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/saved-passengers/{{passenger_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"saved-passengers",
+						"{{passenger_id}}"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

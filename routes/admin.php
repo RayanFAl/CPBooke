@@ -12,6 +12,14 @@ Route::prefix('admin')
         require base_path('routes/admin/users.php');
         require base_path('routes/admin/orders.php');
         require base_path('routes/admin/finance.php');
+        require base_path('routes/admin/provider-wallets.php');
+        require base_path('routes/admin/suppliers.php');
+        require base_path('routes/admin/approvals.php');
+        require base_path('routes/admin/settlements.php');
+        require base_path('routes/admin/provider-health.php');
+        require base_path('routes/admin/monitoring.php');
+        require base_path('routes/admin/audit.php');
+        require base_path('routes/admin/search.php');
         require base_path('routes/admin/governance.php');
         require base_path('routes/admin/loyalty.php');
         require base_path('routes/admin/notifications.php');

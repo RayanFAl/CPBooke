@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import OrderTicketPanel from '../components/OrderTicketPanel.vue';
+import SystemTimeline from '../../components/SystemTimeline.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
@@ -17,6 +18,10 @@ const props = defineProps({
     payment_statuses: {
         type: Array,
         required: true,
+    },
+    system_timeline: {
+        type: Array,
+        default: () => [],
     },
 });
 
@@ -658,56 +663,11 @@ const handleTicketAction = ({ action, ticket }) => {
             </template>
 
             <div v-else-if="activeTab === 'timeline'" class="space-y-6">
-                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                        <div>
-                            <h3 class="text-lg font-semibold text-slate-950">{{ t('Unified Timeline') }}</h3>
-                            <p class="mt-2 text-sm leading-6 text-slate-600">
-                                {{ t('Search across the order lifecycle, finance events, provider exchanges, and audit updates from one vertical timeline.') }}
-                            </p>
-                        </div>
-
-                        <label class="block w-full lg:max-w-sm">
-                            <span class="sr-only">{{ t('Search timeline') }}</span>
-                            <input
-                                v-model="timelineQuery"
-                                type="text"
-                                class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
-                                :placeholder="t('Search timeline, actor, event, or description')"
-                            >
-                        </label>
-                    </div>
-
-                    <div v-if="filteredTimelineEvents.length === 0" class="mt-6 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                        {{ t('No timeline events matched the current search.') }}
-                    </div>
-
-                    <div v-else class="mt-8 space-y-0">
-                        <div
-                            v-for="(event, index) in filteredTimelineEvents"
-                            :key="event.id"
-                            class="relative flex gap-4 pb-8"
-                        >
-                            <div class="relative flex w-12 shrink-0 justify-center">
-                                <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl text-xs font-semibold uppercase tracking-[0.16em]" :class="event.tone">
-                                    {{ event.icon }}
-                                </span>
-                                <span v-if="index !== filteredTimelineEvents.length - 1" class="absolute top-12 h-[calc(100%-1rem)] w-px bg-slate-200" />
-                            </div>
-
-                            <div class="min-w-0 flex-1 rounded-3xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                    <div>
-                                        <h4 class="text-sm font-semibold text-slate-950">{{ event.label }}</h4>
-                                        <p class="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">{{ event.actor }}</p>
-                                    </div>
-                                    <p class="text-xs text-slate-500">{{ formatDateTime(event.timestamp) }}</p>
-                                </div>
-                                <p class="mt-3 text-sm leading-6 text-slate-600">{{ event.description }}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <SystemTimeline
+                    :events="system_timeline"
+                    title="Unified Timeline"
+                    empty-text="No timeline events recorded for this order yet."
+                />
             </div>
 
             <div v-else-if="activeTab === 'financials'" class="space-y-6">
@@ -723,8 +683,24 @@ const handleTicketAction = ({ action, ticket }) => {
 
                         <dl class="mt-5 grid gap-4 sm:grid-cols-2">
                             <div>
-                                <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Transactions') }}</dt>
-                                <dd class="mt-2 text-sm text-slate-900">{{ order.transactions.length }}</dd>
+                                <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Selling price') }}</dt>
+                                <dd class="mt-2 text-sm text-slate-900">{{ formatMoney(order.selling_price ?? order.total_amount, order.currency) }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Supplier cost') }}</dt>
+                                <dd class="mt-2 text-sm text-slate-900">{{ formatMoney(order.supplier_cost, order.currency) }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Commission') }}</dt>
+                                <dd class="mt-2 text-sm text-slate-900">{{ formatMoney(order.commission_amount, order.currency) }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Profit') }}</dt>
+                                <dd class="mt-2 text-sm font-semibold text-emerald-700">{{ formatMoney(order.profit_amount, order.currency) }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Margin') }}</dt>
+                                <dd class="mt-2 text-sm text-slate-900">{{ order.margin_percent != null ? `${order.margin_percent}%` : '—' }}</dd>
                             </div>
                             <div>
                                 <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Payment status') }}</dt>

@@ -18,6 +18,7 @@ class OrderTicketPayloadBuilder
         $requestPayload = is_array($order->request_payload) ? $order->request_payload : [];
 
         $passengers = $responsePayload['passengers'] ?? $requestPayload['passengers'] ?? [];
+        $guests = $responsePayload['guests'] ?? $requestPayload['guests'] ?? $details['guests'] ?? [];
         $items = $responsePayload['items'] ?? $requestPayload['items'] ?? [];
         $contact = $responsePayload['contact'] ?? $requestPayload['contact'] ?? $details['contact'] ?? [];
         $payment = $responsePayload['payment'] ?? $requestPayload['payment'] ?? $details['payment'] ?? [];
@@ -26,6 +27,12 @@ class OrderTicketPayloadBuilder
             ?? $requestPayload['booking_flight_data']
             ?? $details['booking_flight_data']
             ?? null;
+        $firstType = is_array($items[0] ?? null)
+            ? strtolower((string) (($items[0]['type'] ?? $items[0]['product_type'] ?? '')))
+            : '';
+        $isHotel = $order->service_type === Order::SERVICE_TYPE_HOTEL
+            || strtolower((string) ($details['product_type'] ?? '')) === 'hotel'
+            || $firstType === 'hotel';
 
         $firstItem = $items[0] ?? [];
         $itemDetails = is_array($firstItem['item_details'] ?? null) ? $firstItem['item_details'] : [];
@@ -49,9 +56,12 @@ class OrderTicketPayloadBuilder
         $hasSegments = $segments !== [];
         $passengers = $this->mergePassengerRecords(
             is_array($passengers) ? $passengers : [],
+            is_array($guests) ? $guests : [],
+            is_array($itemDetails['guests'] ?? null) ? $itemDetails['guests'] : [],
             is_array($itemDetails['passengers'] ?? null) ? $itemDetails['passengers'] : [],
         );
         $pnr = $details['pnr'] ?? ($itemDetails['pnr'] ?? ($firstItem['provider_reference'] ?? null));
+        $hotel = $isHotel ? $this->buildHotelSummary($details, $firstItem, $itemDetails, $requestPayload, $responsePayload) : null;
 
         if (count($items) === 1) {
             $onlyItem = $items[0];
@@ -64,6 +74,10 @@ class OrderTicketPayloadBuilder
             }
         }
 
+        if ($isHotel) {
+            $items = [];
+        }
+
         $coveredDetailKeys = [
             'provider_status',
             'pnr',
@@ -74,6 +88,32 @@ class OrderTicketPayloadBuilder
             'destination',
             'departure_time',
             'product_subtype',
+            'product_type',
+            'title',
+            'quantity',
+            'hotel_id',
+            'hotel_name',
+            'city_id',
+            'city_name',
+            'country',
+            'source',
+            'offer_id',
+            'room_name',
+            'room_type',
+            'board',
+            'check_in',
+            'check_out',
+            'nights',
+            'rooms',
+            'adults',
+            'children',
+            'guests_count',
+            'stars',
+            'address',
+            'image_url',
+            'guests',
+            'items',
+            'booking_reference',
             'contact',
             'payment',
             'metadata',
@@ -94,35 +134,38 @@ class OrderTicketPayloadBuilder
 
         $providerOrderNumber = $details['provider_order_number']
             ?? ($responsePayload['provider_order_number'] ?? null)
-            ?? ($requestPayload['provider_booking']['order_number'] ?? null);
+            ?? ($requestPayload['provider_booking']['order_number'] ?? null)
+            ?? ($requestPayload['provider_booking']['booking_reference'] ?? null);
 
         return [
             'service_type' => $order->service_type,
-            'pnr' => $pnr,
+            'pnr' => $isHotel ? null : $pnr,
             'provider_order_number' => $providerOrderNumber,
             'ticket_number' => $providerOrderNumber,
             'provider_status' => $details['provider_status'] ?? ($responsePayload['status'] ?? null),
-            'airline' => $details['airline'] ?? ($itemDetails['airline_name'] ?? null),
-            'airline_code' => $details['airline_code'] ?? ($itemDetails['airline_code'] ?? null),
-            'origin' => $hasSegments ? null : (
+            'airline' => $isHotel ? null : ($details['airline'] ?? ($itemDetails['airline_name'] ?? null)),
+            'airline_code' => $isHotel ? null : ($details['airline_code'] ?? ($itemDetails['airline_code'] ?? null)),
+            'origin' => $isHotel || $hasSegments ? null : (
                 $details['origin']
                 ?? ($firstSegment['departure_airport'] ?? null)
                 ?? (is_array($bookingFlightData) ? ($bookingFlightData['departure_airport'] ?? null) : null)
             ),
-            'destination' => $hasSegments ? null : (
+            'destination' => $isHotel || $hasSegments ? null : (
                 $details['destination']
                 ?? ($firstSegment['arrival_airport'] ?? null)
                 ?? (is_array($bookingFlightData) ? ($bookingFlightData['arrival_airport'] ?? null) : null)
             ),
-            'departure_time' => $hasSegments ? null : (
+            'departure_time' => $isHotel || $hasSegments ? null : (
                 $details['departure_time']
                 ?? ($firstSegment['departure_time'] ?? null)
                 ?? (is_array($bookingFlightData) ? ($bookingFlightData['departure_time'] ?? null) : null)
             ),
             'product_subtype' => $details['product_subtype'] ?? ($firstItem['product_subtype'] ?? null),
+            'hotel' => $hotel,
+            'guests' => $isHotel ? $passengers : [],
             'passengers' => $passengers,
-            'segments' => $segments,
-            'segment_coupons' => $this->buildSegmentCouponRows(
+            'segments' => $isHotel ? [] : $segments,
+            'segment_coupons' => $isHotel ? [] : $this->buildSegmentCouponRows(
                 is_array($segments) ? $segments : [],
                 $passengers,
                 is_array($items) ? $items : [],
@@ -144,6 +187,61 @@ class OrderTicketPayloadBuilder
                 'customer_phone' => $order->customer?->phone,
                 'payment_status' => $order->payment_status,
             ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $details
+     * @param  array<string, mixed>  $firstItem
+     * @param  array<string, mixed>  $itemDetails
+     * @param  array<string, mixed>  $requestPayload
+     * @param  array<string, mixed>  $responsePayload
+     * @return array<string, mixed>
+     */
+    private function buildHotelSummary(
+        array $details,
+        array $firstItem,
+        array $itemDetails,
+        array $requestPayload,
+        array $responsePayload,
+    ): array {
+        $providerBooking = is_array($responsePayload['provider_booking'] ?? null)
+            ? $responsePayload['provider_booking']
+            : (is_array($requestPayload['provider_booking'] ?? null) ? $requestPayload['provider_booking'] : []);
+
+        return [
+            'hotel_id' => isset($details['hotel_id'])
+                ? (string) $details['hotel_id']
+                : (isset($itemDetails['hotel_id']) ? (string) $itemDetails['hotel_id'] : null),
+            'hotel_name' => $details['hotel_name']
+                ?? ($itemDetails['hotel_name'] ?? null)
+                ?? ($firstItem['title'] ?? null)
+                ?? ($details['title'] ?? null),
+            'city_id' => isset($details['city_id'])
+                ? (string) $details['city_id']
+                : (isset($itemDetails['city_id']) ? (string) $itemDetails['city_id'] : null),
+            'city_name' => $details['city_name'] ?? ($itemDetails['city_name'] ?? null),
+            'country' => $details['country'] ?? ($itemDetails['country'] ?? null),
+            'room_name' => $details['room_name'] ?? ($itemDetails['room_name'] ?? null),
+            'room_type' => $details['room_type'] ?? ($itemDetails['room_type'] ?? null),
+            'board' => $details['board'] ?? ($itemDetails['board'] ?? null),
+            'check_in' => $details['check_in'] ?? ($itemDetails['check_in'] ?? null),
+            'check_out' => $details['check_out'] ?? ($itemDetails['check_out'] ?? null),
+            'nights' => $details['nights'] ?? ($itemDetails['nights'] ?? null),
+            'rooms' => $details['rooms'] ?? ($itemDetails['rooms'] ?? null),
+            'adults' => $details['adults'] ?? ($itemDetails['adults'] ?? null),
+            'children' => $details['children'] ?? ($itemDetails['children'] ?? null),
+            'guests_count' => $details['guests_count'] ?? ($itemDetails['guests_count'] ?? null),
+            'stars' => $details['stars'] ?? ($itemDetails['stars'] ?? null),
+            'address' => $details['address'] ?? ($itemDetails['address'] ?? null),
+            'image_url' => $details['image_url'] ?? ($itemDetails['image_url'] ?? null),
+            'offer_id' => isset($details['offer_id'])
+                ? (string) $details['offer_id']
+                : (isset($itemDetails['offer_id']) ? (string) $itemDetails['offer_id'] : null),
+            'booking_reference' => $details['booking_reference']
+                ?? ($providerBooking['booking_reference'] ?? null)
+                ?? ($providerBooking['order_number'] ?? null),
+            'booking_id' => $providerBooking['booking_id'] ?? null,
         ];
     }
 

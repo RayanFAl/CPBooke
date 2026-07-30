@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'customer_id',
+    'provider_id',
     'provider_name',
     'source',
     'external_booking_id',
@@ -22,6 +23,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'total_amount',
     'base_amount',
     'tax_amount',
+    'selling_price',
+    'supplier_cost',
+    'commission_amount',
+    'markup_amount',
+    'profit_amount',
+    'margin_percent',
     'discount_total',
     'final_amount',
     'pricing_version',
@@ -69,6 +76,8 @@ class Order extends Model
 
     public const SERVICE_TYPE_INSURANCE = 'insurance';
 
+    public const SERVICE_TYPE_ESIM = 'esim';
+
     /**
      * Get the attribute casts.
      *
@@ -83,6 +92,12 @@ class Order extends Model
             'total_amount' => 'decimal:2',
             'base_amount' => 'decimal:2',
             'tax_amount' => 'decimal:2',
+            'selling_price' => 'decimal:2',
+            'supplier_cost' => 'decimal:2',
+            'commission_amount' => 'decimal:2',
+            'markup_amount' => 'decimal:2',
+            'profit_amount' => 'decimal:2',
+            'margin_percent' => 'decimal:2',
             'discount_total' => 'decimal:2',
             'final_amount' => 'decimal:2',
             'pricing_snapshot_json' => 'array',
@@ -95,6 +110,14 @@ class Order extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'customer_id');
+    }
+
+    /**
+     * Linked supplier/provider record when known.
+     */
+    public function provider(): BelongsTo
+    {
+        return $this->belongsTo(Provider::class);
     }
 
     /**
@@ -172,6 +195,7 @@ class Order extends Model
             self::SERVICE_TYPE_FLIGHT,
             self::SERVICE_TYPE_HOTEL,
             self::SERVICE_TYPE_INSURANCE,
+            self::SERVICE_TYPE_ESIM,
         ];
     }
 

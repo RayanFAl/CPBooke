@@ -2,15 +2,18 @@
 
 namespace App\Modules\Api\Notifications\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\Modules\Api\Support\Http\Requests\ApiFormRequest;
 
-class MarkNotificationsReadRequest extends FormRequest
+class MarkNotificationsReadRequest extends ApiFormRequest
 {
     public function authorize(): bool
     {
         return true;
     }
 
+    /**
+     * @return array<string, array<int, mixed>|string>
+     */
     public function rules(): array
     {
         return [

@@ -8,6 +8,7 @@ final readonly class LoginDTO
         public string $login,
         public string $password,
         public string $deviceName,
+        public bool $rememberMe = false,
     ) {
     }
 
@@ -22,6 +23,7 @@ final readonly class LoginDTO
             login: $data['login'],
             password: $data['password'],
             deviceName: $data['device_name'] ?? 'mobile-app',
+            rememberMe: (bool) ($data['remember_me'] ?? false),
         );
     }
 }

@@ -194,13 +194,19 @@ class NotificationSystemTest extends TestCase
         $this->getJson('/api/v1/notifications')
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonCount(2, 'data.notifications');
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('meta.unread_count', 1);
+
+        $this->getJson('/api/v1/notifications/unread-count')
+            ->assertOk()
+            ->assertJsonPath('data.unread_count', 1);
 
         $this->getJson('/api/v1/notifications/unread')
             ->assertOk()
             ->assertJsonPath('data.count', 1)
             ->assertJsonCount(1, 'data.notifications')
-            ->assertJsonPath('data.notifications.0.id', $unread->id)
+            ->assertJsonPath('data.notifications.0.id', (string) $unread->id)
             ->assertJsonPath('data.notifications.0.is_read', false);
 
         $this->postJson('/api/v1/notifications/mark-as-read', [

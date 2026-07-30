@@ -197,6 +197,7 @@ const openOrderPage = (order) => {
                                 <td class="px-6 py-5">
                                     <OrderProviderCell
                                         :flight="order.flight"
+                                        :hotel="order.hotel"
                                         :provider-name="order.provider_name"
                                     />
                                 </td>

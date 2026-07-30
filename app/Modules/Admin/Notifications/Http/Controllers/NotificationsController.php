@@ -4,7 +4,9 @@ namespace App\Modules\Admin\Notifications\Http\Controllers;
 
 use App\Models\NotificationLog;
 use App\Models\NotificationTemplate;
+use App\Models\User;
 use App\Models\UserNotification;
+use App\Modules\Admin\Notifications\Http\Requests\SendTestPushRequest;
 use App\Modules\Admin\Notifications\Http\Requests\UpdateNotificationTemplateRequest;
 use App\Modules\Notifications\Services\NotificationChannelManager;
 use App\Modules\Notifications\Services\NotificationService;
@@ -43,6 +45,7 @@ class NotificationsController
                     'logs' => [],
                     'failed_logs' => [],
                     'templates' => [],
+                    'push_targets' => $this->pushTargets(),
                 ],
             ]);
         }
@@ -89,8 +92,52 @@ class NotificationsController
                     'version' => $template->version,
                     'is_active' => $template->is_active,
                 ])->values()->all(),
+                'push_targets' => $this->pushTargets(),
             ],
         ]);
+    }
+
+    public function sendTestPush(SendTestPushRequest $request): RedirectResponse
+    {
+        Gate::authorize('notifications.view');
+
+        $user = User::query()->findOrFail((int) $request->validated('user_id'));
+
+        $result = $this->notificationService->sendTestPush(
+            $user,
+            $request->validated('title'),
+            $request->validated('body'),
+        );
+
+        $push = is_array($result['push'] ?? null) ? $result['push'] : [];
+        $delivered = ($push['delivered'] ?? false) === true;
+        $provider = (string) ($push['provider'] ?? 'unknown');
+        $success = (int) ($push['success'] ?? ($delivered ? 1 : 0));
+        $failure = (int) ($push['failure'] ?? ($delivered ? 0 : 1));
+
+        $this->rbacAuditLogger->log(
+            'notifications.push_test.sent',
+            'notifications.view',
+            auth()->user(),
+            'user',
+            $user->id,
+            [
+                'provider' => $provider,
+                'delivered' => $delivered,
+                'success' => $success,
+                'failure' => $failure,
+            ],
+        );
+
+        $message = $delivered
+            ? "Push sent to {$user->email} via {$provider} (ok: {$success}, failed: {$failure})."
+            : "Push failed for {$user->email} via {$provider}"
+                .(isset($push['reason']) ? ' — '.$push['reason'] : '')
+                .'.';
+
+        return redirect()
+            ->route('admin.notifications.index')
+            ->with($delivered ? 'success' : 'error', $message);
     }
 
     public function retry(NotificationLog $notificationLog): RedirectResponse
@@ -127,6 +174,39 @@ class NotificationsController
         return redirect()
             ->route('admin.notifications.index')
             ->with('success', 'Notification template updated successfully.');
+    }
+
+    /**
+     * Users with at least one active push device (for temporary admin tester).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function pushTargets(): array
+    {
+        if (! Schema::hasTable('user_notification_devices')) {
+            return [];
+        }
+
+        return User::query()
+            ->whereHas('notificationDevices', function ($query): void {
+                $query->where('is_active', true);
+            })
+            ->withCount([
+                'notificationDevices as active_devices_count' => function ($query): void {
+                    $query->where('is_active', true);
+                },
+            ])
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get(['id', 'name', 'full_name', 'email'])
+            ->map(fn (User $user): array => [
+                'id' => $user->id,
+                'name' => $user->full_name ?: $user->name,
+                'email' => $user->email,
+                'devices' => (int) $user->active_devices_count,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

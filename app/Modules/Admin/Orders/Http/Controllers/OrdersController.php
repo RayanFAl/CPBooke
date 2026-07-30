@@ -10,6 +10,7 @@ use App\Modules\Admin\Orders\Http\Requests\UpdateOrderPaymentStatusRequest;
 use App\Modules\Admin\Orders\Http\Requests\UpdateOrderStatusRequest;
 use App\Modules\Admin\Orders\Services\OrderTicketPayloadBuilder;
 use App\Modules\Api\Orders\Services\OrderService;
+use App\Modules\Audit\Services\EntityTimelineService;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class OrdersController
     public function __construct(
         private readonly OrderService $orderService,
         private readonly OrderTicketPayloadBuilder $orderTicketPayloadBuilder,
+        private readonly EntityTimelineService $entityTimelineService,
     ) {
     }
 
@@ -80,6 +82,8 @@ class OrdersController
             ]);
         }
 
+        $order->loadMissing('provider:id,name,key');
+
         return Inertia::render('admin/orders/pages/Show', [
             'order' => $this->detailPayload(
                 $order,
@@ -87,6 +91,7 @@ class OrdersController
                 $canChangeStatus,
                 $canViewHistory && $hasOrderHistoryTable,
             ),
+            'system_timeline' => $this->entityTimelineService->forOrder($order),
             'statuses' => $canChangeStatus ? $this->orderService->adminStatusOptions($order) : [],
             'payment_statuses' => $canChangeStatus ? $this->orderService->paymentStatusOptions() : [],
         ]);
@@ -159,6 +164,7 @@ class OrdersController
             'ticket_number' => $this->orderTicketPayloadBuilder->resolveTicketNumber($order),
             'provider_name' => $order->provider_name,
             'flight' => $this->listingFlightSummary($order),
+            'hotel' => $this->listingHotelSummary($order),
             'status' => $order->status,
             'payment_status' => $order->payment_status,
             'service_type' => $order->service_type,
@@ -194,6 +200,17 @@ class OrdersController
             'total_amount' => $canViewFinancials ? $order->total_amount : null,
             'base_amount' => $canViewFinancials ? $order->base_amount : null,
             'tax_amount' => $canViewFinancials ? $order->tax_amount : null,
+            'selling_price' => $canViewFinancials ? $order->selling_price : null,
+            'supplier_cost' => $canViewFinancials ? $order->supplier_cost : null,
+            'commission_amount' => $canViewFinancials ? $order->commission_amount : null,
+            'markup_amount' => $canViewFinancials ? $order->markup_amount : null,
+            'profit_amount' => $canViewFinancials ? $order->profit_amount : null,
+            'margin_percent' => $canViewFinancials ? $order->margin_percent : null,
+            'provider' => $order->provider_id ? [
+                'id' => $order->provider_id,
+                'name' => $order->provider?->name ?? $order->provider_name,
+                'key' => $order->provider?->key,
+            ] : null,
             'internal_notes' => $order->internal_notes,
             'error_message' => $order->error_message,
             'request_payload' => $canChangeStatus ? ($order->request_payload ?? []) : [],
@@ -247,6 +264,10 @@ class OrdersController
      */
     private function listingFlightSummary(Order $order): ?array
     {
+        if ($order->service_type === Order::SERVICE_TYPE_HOTEL) {
+            return null;
+        }
+
         $ticket = $this->orderTicketPayloadBuilder->build($order, false);
         $segments = is_array($ticket['segments'] ?? null) ? $ticket['segments'] : [];
 
@@ -284,6 +305,34 @@ class OrdersController
             'departure_time' => $departureTime,
             'airline_code' => $ticket['airline_code'] ?? null,
             'airline' => $ticket['airline'] ?? null,
+            'provider_name' => $order->provider_name,
+        ];
+    }
+
+    /**
+     * Build a compact hotel snapshot for the admin orders table.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function listingHotelSummary(Order $order): ?array
+    {
+        if ($order->service_type !== Order::SERVICE_TYPE_HOTEL) {
+            return null;
+        }
+
+        $ticket = $this->orderTicketPayloadBuilder->build($order, false);
+        $hotel = is_array($ticket['hotel'] ?? null) ? $ticket['hotel'] : [];
+
+        if ($hotel === [] && ! $order->provider_name) {
+            return null;
+        }
+
+        return [
+            'hotel_name' => $hotel['hotel_name'] ?? null,
+            'city_name' => $hotel['city_name'] ?? null,
+            'check_in' => $hotel['check_in'] ?? null,
+            'check_out' => $hotel['check_out'] ?? null,
+            'booking_reference' => $hotel['booking_reference'] ?? ($ticket['provider_order_number'] ?? null),
             'provider_name' => $order->provider_name,
         ];
     }

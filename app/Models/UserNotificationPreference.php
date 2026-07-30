@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'push_enabled',
     'whatsapp_enabled',
     'disabled_categories',
+    'topics',
 ])]
 class UserNotificationPreference extends Model
 {
@@ -29,6 +30,7 @@ class UserNotificationPreference extends Model
             'push_enabled' => 'boolean',
             'whatsapp_enabled' => 'boolean',
             'disabled_categories' => 'array',
+            'topics' => 'array',
         ];
     }
 

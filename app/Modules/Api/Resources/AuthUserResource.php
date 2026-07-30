@@ -11,7 +11,6 @@ class AuthUserResource extends JsonResource
     /**
      * Transform the resource into an array.
      *
-     * @param  Request  $request
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -20,7 +19,14 @@ class AuthUserResource extends JsonResource
         $authResult = $this->resource;
 
         return [
-            'token' => $authResult->token,
+            // Canonical token pair for mobile clients.
+            'access_token' => $authResult->accessToken,
+            'refresh_token' => $authResult->refreshToken,
+            'expires_in' => $authResult->expiresIn,
+            'expires_at' => $authResult->expiresAt,
+            'remember_me' => $authResult->rememberMe,
+            // Backward-compatible alias of access_token.
+            'token' => $authResult->accessToken,
             'user' => UserResource::make($authResult->user)->resolve($request),
         ];
     }

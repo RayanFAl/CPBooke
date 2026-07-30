@@ -2,6 +2,7 @@
 
 namespace App\Modules\Admin\Users\Http\Requests;
 
+use App\Support\Rbac\RbacRegistry;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -30,6 +31,16 @@ class UpdateUserRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:30'],
             'country' => ['nullable', 'string', 'max:100'],
             'role' => ['required', 'string', Rule::exists('roles', 'name')],
+            'permissions' => [
+                Rule::requiredIf(fn (): bool => $this->input('role') !== RbacRegistry::ROLE_SUPER_ADMIN),
+                'nullable',
+                'array',
+                Rule::when(
+                    $this->input('role') !== RbacRegistry::ROLE_SUPER_ADMIN,
+                    ['min:1']
+                ),
+            ],
+            'permissions.*' => ['string', Rule::exists('permissions', 'name')],
         ];
     }
 }

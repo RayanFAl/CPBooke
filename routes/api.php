@@ -9,10 +9,13 @@ Route::prefix('v1')
 		require __DIR__.'/api/v1/airports.php';
 		require __DIR__.'/api/v1/admin-loyalty.php';
 		require __DIR__.'/api/v1/auth.php';
+		require __DIR__.'/api/v1/favorites.php';
 		require __DIR__.'/api/v1/notifications.php';
 		require __DIR__.'/api/v1/orders.php';
 		require __DIR__.'/api/v1/pricing.php';
 		require __DIR__.'/api/v1/saved-passengers.php';
+		require __DIR__.'/api/v1/saved-vehicles.php';
+		require __DIR__.'/api/v1/saved-addresses.php';
 		require __DIR__.'/api/v1/support.php';
 		require __DIR__.'/api/v1/user.php';
 	});

@@ -4,27 +4,16 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Support\Rbac\RbacRegistry;
-use App\Models\SupportMessage;
-use App\Models\SupportTicket;
-use App\Models\SupportTicketHistory;
-use App\Models\NotificationLog;
-use App\Models\SavedPassenger;
-use App\Models\UserNotificationPreference;
-use App\Models\UserNotification;
-use App\Models\UserNotificationDevice;
-use App\Models\UserLoyaltyProfile;
-use App\Models\LoyaltyHistory;
 use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Notifications\Notifiable;
 
 #[Fillable([
     'name',
@@ -32,13 +21,18 @@ use Illuminate\Notifications\Notifiable;
     'email',
     'phone',
     'country',
+    'avatar_path',
     'password',
     'is_admin',
     'account_type',
     'is_active',
     'last_login_at',
+    'two_factor_secret',
+    'two_factor_confirmed_at',
+    'email_verified_at',
+    'phone_verified_at',
 ])]
-#[Hidden(['password', 'remember_token'])]
+#[Hidden(['password', 'remember_token', 'two_factor_secret', 'avatar_path'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -59,11 +53,38 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
             'is_admin' => 'boolean',
             'is_active' => 'boolean',
             'last_login_at' => 'datetime',
+            'two_factor_confirmed_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function avatarUrl(): ?string
+    {
+        if (! filled($this->avatar_path)) {
+            return null;
+        }
+
+        $path = \Illuminate\Support\Facades\Storage::disk('public')->url((string) $this->avatar_path);
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        return url($path);
+    }
+
+    public function isEmailVerified(): bool
+    {
+        return $this->email_verified_at !== null;
+    }
+
+    public function isPhoneVerified(): bool
+    {
+        return $this->phone_verified_at !== null;
     }
 
     /**
@@ -98,6 +119,14 @@ class User extends Authenticatable
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class)->withTimestamps();
+    }
+
+    /**
+     * Get the permissions assigned directly to the user.
+     */
+    public function permissions(): BelongsToMany
+    {
+        return $this->belongsToMany(Permission::class)->withTimestamps();
     }
 
     /**
@@ -206,6 +235,34 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the saved vehicles owned by the user.
+     */
+    public function savedVehicles(): HasMany
+    {
+        return $this->hasMany(SavedVehicle::class)
+            ->latest('created_at');
+    }
+
+    /**
+     * Get the saved addresses owned by the user.
+     */
+    public function savedAddresses(): HasMany
+    {
+        return $this->hasMany(SavedAddress::class)
+            ->orderByDesc('is_default')
+            ->latest('updated_at');
+    }
+
+    /**
+     * Get the favorites owned by the user.
+     */
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(Favorite::class)
+            ->latest('created_at');
+    }
+
+    /**
      * Determine whether the user can access the admin area.
      */
     public function canAccessAdminPanel(): bool
@@ -264,6 +321,14 @@ class User extends Authenticatable
             return true;
         }
 
+        if ($this->hasDirectPermissions()) {
+            if ($this->relationLoaded('permissions')) {
+                return $this->permissions->pluck('name')->contains($permission);
+            }
+
+            return $this->permissions()->where('name', $permission)->exists();
+        }
+
         if ($this->relationLoaded('roles')) {
             return $this->roles
                 ->loadMissing('permissions')
@@ -310,6 +375,60 @@ class User extends Authenticatable
         ])->save();
 
         $this->unsetRelation('roles');
+    }
+
+    /**
+     * Sync the user permissions by their names.
+     *
+     * @param  array<int, string>  $permissionNames
+     */
+    public function syncPermissionsByName(array $permissionNames): void
+    {
+        if (! $this->hasPermissionUserTable()) {
+            return;
+        }
+
+        $permissionIds = Permission::query()
+            ->whereIn('name', $permissionNames)
+            ->pluck('id')
+            ->all();
+
+        $this->permissions()->sync($permissionIds);
+        $this->unsetRelation('permissions');
+    }
+
+    /**
+     * Determine whether the user has direct permission assignments.
+     */
+    public function hasDirectPermissions(): bool
+    {
+        if (! $this->hasPermissionUserTable()) {
+            return false;
+        }
+
+        if ($this->relationLoaded('permissions')) {
+            return $this->permissions->isNotEmpty();
+        }
+
+        return $this->permissions()->exists();
+    }
+
+    /**
+     * Get the permission names assigned directly to the user.
+     *
+     * @return array<int, string>
+     */
+    public function directPermissionNames(): array
+    {
+        if (! $this->hasPermissionUserTable()) {
+            return [];
+        }
+
+        if ($this->relationLoaded('permissions')) {
+            return $this->permissions->pluck('name')->values()->all();
+        }
+
+        return $this->permissions()->pluck('name')->all();
     }
 
     /**
@@ -365,6 +484,10 @@ class User extends Authenticatable
             return RbacRegistry::permissionNames();
         }
 
+        if ($this->hasDirectPermissions()) {
+            return $this->directPermissionNames();
+        }
+
         $roles = $this->relationLoaded('roles')
             ? $this->roles->loadMissing('permissions')
             : $this->roles()->with('permissions')->get();
@@ -390,5 +513,13 @@ class User extends Authenticatable
             && Schema::hasTable('permissions')
             && Schema::hasTable('role_user')
             && Schema::hasTable('permission_role');
+    }
+
+    /**
+     * Determine whether direct user-permission assignments are supported.
+     */
+    private function hasPermissionUserTable(): bool
+    {
+        return $this->hasRbacTables() && Schema::hasTable('permission_user');
     }
 }

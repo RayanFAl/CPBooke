@@ -7,6 +7,10 @@ const props = defineProps({
         type: Object,
         default: null,
     },
+    ticketId: {
+        type: [Number, String],
+        default: null,
+    },
 });
 
 const { locale, t } = useAdminLocale();
@@ -46,6 +50,18 @@ const statCards = computed(() => {
 
 <template>
     <div v-if="report" class="space-y-5">
+        <div class="flex flex-wrap items-center justify-end gap-3">
+            <a
+                v-if="ticketId"
+                :href="route('admin.support.resolution-report.print', ticketId)"
+                target="_blank"
+                rel="noopener"
+                class="inline-flex items-center justify-center rounded-full bg-slate-950 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-slate-800"
+            >
+                {{ t('Print report') }}
+            </a>
+        </div>
+
         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div v-for="card in statCards" :key="card.label" class="rounded-2xl bg-slate-50 px-4 py-4">
                 <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{{ card.label }}</p>

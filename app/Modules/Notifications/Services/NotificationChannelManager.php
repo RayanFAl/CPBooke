@@ -46,23 +46,25 @@ class NotificationChannelManager
                 'channel' => NotificationChannels::EMAIL,
                 'healthy' => true,
                 'provider' => config('mail.default', 'mail'),
-                'configured' => true,
+                'configured' => filled(config('mail.mailers.'.config('mail.default').'.transport'))
+                    || config('mail.default') === 'log'
+                    || config('mail.default') === 'array',
             ],
             [
                 'channel' => NotificationChannels::PUSH,
-                'healthy' => true,
+                'healthy' => filled(config('services.notifications.fcm_server_key')),
                 'provider' => 'fcm',
                 'configured' => filled(config('services.notifications.fcm_server_key')),
             ],
             [
                 'channel' => NotificationChannels::SMS,
-                'healthy' => true,
+                'healthy' => filled(config('services.notifications.sms_endpoint')),
                 'provider' => 'sms-gateway',
                 'configured' => filled(config('services.notifications.sms_endpoint')),
             ],
             [
                 'channel' => NotificationChannels::WHATSAPP,
-                'healthy' => true,
+                'healthy' => filled(config('services.notifications.whatsapp_endpoint')),
                 'provider' => 'whatsapp-gateway',
                 'configured' => filled(config('services.notifications.whatsapp_endpoint')),
             ],

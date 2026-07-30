@@ -6,6 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Modules\Api\Orders\Http\Requests\CreateOrderRequest;
 use App\Modules\Api\Orders\Http\Requests\SyncBooknowOrderRequest;
+use App\Modules\Api\Orders\Http\Requests\SyncBundleOrderRequest;
+use App\Modules\Api\Orders\Http\Requests\SyncEsimOrderRequest;
+use App\Modules\Api\Orders\Http\Requests\SyncHotelOrderRequest;
+use App\Modules\Api\Orders\Http\Requests\SyncInsuranceOrderRequest;
 use App\Modules\Api\Orders\Services\BooknowOrderSyncService;
 use App\Modules\Api\Orders\Services\OrderService;
 use App\Modules\Api\Resources\BooknowOrderResource;
@@ -43,15 +47,58 @@ class OrderController extends Controller
         return $this->syncBooknowOrder($request);
     }
 
+    /**
+     * Sync an eSIM purchase into CPBooke (idempotent by provider_booking.booking_id).
+     */
+    public function syncEsim(Request $request): JsonResponse
+    {
+        return $this->syncTypedBooknowOrder($request, SyncEsimOrderRequest::class);
+    }
+
+    /**
+     * Sync an insurance purchase into CPBooke (idempotent by provider_booking.booking_id).
+     */
+    public function syncInsurance(Request $request): JsonResponse
+    {
+        return $this->syncTypedBooknowOrder($request, SyncInsuranceOrderRequest::class);
+    }
+
+    /**
+     * Sync a hotel booking into CPBooke (idempotent by provider_booking.booking_id).
+     */
+    public function syncHotel(Request $request): JsonResponse
+    {
+        return $this->syncTypedBooknowOrder($request, SyncHotelOrderRequest::class);
+    }
+
+    /**
+     * Sync a unified flight + add-ons (eSIM / insurance) order (idempotent by flight booking_id).
+     */
+    public function syncBundle(Request $request): JsonResponse
+    {
+        return $this->syncTypedBooknowOrder($request, SyncBundleOrderRequest::class);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $this->authorize('viewAny', Order::class);
 
-        $orders = $this->orderService->paginateForCustomer($request->user());
+        $productType = $request->query('product_type');
+        $productType = is_string($productType) && $productType !== '' ? $productType : null;
+
+        $orders = $this->orderService->paginateForCustomer($request->user(), productType: $productType);
+
+        $resolved = collect($orders->items())->map(function (Order $order) use ($request): array {
+            if ($order->external_booking_id) {
+                return BooknowOrderResource::make($order)->resolve($request);
+            }
+
+            return OrderResource::make($order)->resolve($request);
+        })->all();
 
         return ApiResponse::success(
             [
-                'orders' => OrderResource::collection($orders->items())->resolve($request),
+                'orders' => $resolved,
             ],
             'Orders fetched successfully.',
             $this->orderService->paginationMeta($orders),
@@ -93,7 +140,16 @@ class OrderController extends Controller
 
     private function syncBooknowOrder(Request $request): JsonResponse
     {
-        $syncRequest = SyncBooknowOrderRequest::createFrom($request);
+        return $this->syncTypedBooknowOrder($request, SyncBooknowOrderRequest::class);
+    }
+
+    /**
+     * @param  class-string<SyncBooknowOrderRequest|SyncEsimOrderRequest|SyncInsuranceOrderRequest|SyncHotelOrderRequest|SyncBundleOrderRequest>  $requestClass
+     */
+    private function syncTypedBooknowOrder(Request $request, string $requestClass): JsonResponse
+    {
+        /** @var SyncBooknowOrderRequest|SyncEsimOrderRequest|SyncInsuranceOrderRequest|SyncHotelOrderRequest|SyncBundleOrderRequest $syncRequest */
+        $syncRequest = $requestClass::createFrom($request);
         $syncRequest->setContainer(app());
         $syncRequest->setRedirector(app('redirect'));
         $syncRequest->validateResolved();

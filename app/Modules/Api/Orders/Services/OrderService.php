@@ -2,10 +2,12 @@
 
 namespace App\Modules\Api\Orders\Services;
 
+use App\Models\AuditLog;
 use App\Models\FinancialTransaction;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\User;
+use App\Modules\Audit\Services\AuditRecorder;
 use App\Modules\Api\DTO\CreateOrderDTO;
 use App\Modules\Orders\Events\OrderCompleted as OrderCompletedEvent;
 use App\Modules\Orders\Events\OrderConfirmed as OrderConfirmedEvent;
@@ -25,6 +27,7 @@ class OrderService
 
     public function __construct(
         private readonly BookingProviderService $bookingProviderService,
+        private readonly AuditRecorder $auditRecorder,
     ) {
     }
 
@@ -101,10 +104,14 @@ class OrderService
     /**
      * Paginate the authenticated customer's orders.
      */
-    public function paginateForCustomer(User $customer, int $perPage = 10): LengthAwarePaginator
+    public function paginateForCustomer(User $customer, int $perPage = 10, ?string $productType = null): LengthAwarePaginator
     {
         return Order::query()
             ->whereBelongsTo($customer, 'customer')
+            ->when(
+                $productType !== null && $productType !== '',
+                fn ($query) => $query->where('service_type', $productType),
+            )
             ->latest('id')
             ->paginate($perPage);
     }
@@ -153,13 +160,11 @@ class OrderService
             }
 
             $searchQuery
-                ->orWhere('booking_reference', 'like', '%'.$search.'%')
-                ->orWhere('external_booking_id', 'like', '%'.$search.'%')
-                ->orWhere('provider_name', 'like', '%'.$search.'%')
-                ->orWhere('details->pnr', 'like', '%'.$search.'%')
-                ->orWhere('details->provider_order_number', 'like', '%'.$search.'%')
-                ->orWhere('request_payload', 'like', '%'.$search.'%')
-                ->orWhere('response_payload', 'like', '%'.$search.'%')
+                ->orWhere('booking_reference', 'like', $search.'%')
+                ->orWhere('external_booking_id', 'like', $search.'%')
+                ->orWhere('provider_name', 'like', $search.'%')
+                ->orWhere('details->pnr', $search)
+                ->orWhere('details->provider_order_number', $search)
                 ->orWhereHas('customer', function ($customerQuery) use ($search): void {
                     $customerQuery
                         ->where('name', 'like', '%'.$search.'%')
@@ -457,6 +462,19 @@ class OrderService
         }, $dirtyTrackedFields);
 
         OrderHistory::query()->insert($entries);
+
+        foreach ($dirtyTrackedFields as $field) {
+            $this->auditRecorder->success(
+                AuditLog::MODULE_ORDERS,
+                'order.'.$field.'_updated',
+                'Order #'.$order->id.' '.$field.' updated',
+                AuditLog::ENTITY_ORDER,
+                $order->id,
+                $actor,
+                [$field => $this->normalizeHistoryValue($originalValues[$field] ?? null)],
+                [$field => $this->normalizeHistoryValue($order->getAttribute($field))],
+            );
+        }
     }
 
     /**

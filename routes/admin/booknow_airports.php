@@ -1,6 +1,8 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\BooknowAirportController;
+use Illuminate\Support\Facades\Route;
 
-Route::resource('booknow_airports', BooknowAirportController::class);
+Route::middleware('permission:settings.manage')->group(function (): void {
+    Route::resource('booknow_airports', BooknowAirportController::class);
+});

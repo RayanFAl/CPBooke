@@ -27,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->api(append: [
+            \App\Http\Middleware\EnsureApiNotInMaintenance::class,
             \App\Http\Middleware\RecordSlowRequests::class,
         ]);
 
@@ -34,6 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\EnsureUserCanAccessAdmin::class,
             'role' => \App\Http\Middleware\EnsureUserHasRole::class,
             'permission' => \App\Http\Middleware\EnsureUserHasPermission::class,
+            'partner.key' => \App\Modules\Partners\Http\Middleware\AuthenticatePartnerApiKey::class,
         ]);
 
         $middleware->api(prepend: [

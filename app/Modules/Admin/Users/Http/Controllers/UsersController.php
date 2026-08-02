@@ -50,7 +50,7 @@ class UsersController
         return Inertia::render('admin/users/pages/Create', [
             'roles' => $this->accessControlService->availableRoleOptionsFor($request->user()),
             'permissionGroups' => $this->accessControlService->permissionGroupsFor($request->user()),
-            'rolePermissions' => $this->accessControlService->rolePermissionMap(),
+            'rolePermissions' => $this->accessControlService->assignableRolePermissionMapFor($request->user()),
         ]);
     }
 
@@ -93,7 +93,7 @@ class UsersController
             'user' => $this->userService->editPayload($user),
             'roles' => $this->accessControlService->availableRoleOptionsFor($actor),
             'permissionGroups' => $this->accessControlService->permissionGroupsFor($actor),
-            'rolePermissions' => $this->accessControlService->rolePermissionMap(),
+            'rolePermissions' => $this->accessControlService->assignableRolePermissionMapFor($actor),
         ]);
     }
 

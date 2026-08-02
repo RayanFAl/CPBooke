@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, reactive } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 
 const props = defineProps({
     wallets: {
@@ -20,6 +21,7 @@ const props = defineProps({
 });
 
 const { locale, t } = useAdminLocale();
+const { defaultCurrency } = usePlatformCurrency();
 
 const filterForm = reactive({
     search: props.filters.search ?? '',
@@ -27,7 +29,7 @@ const filterForm = reactive({
 
 const formatMoney = (amount, currency) => new Intl.NumberFormat(locale.value, {
     style: 'currency',
-    currency: currency || 'LYD',
+    currency: currency || defaultCurrency.value,
 }).format(Number(amount ?? 0));
 
 const applyFilters = () => {

@@ -57,7 +57,9 @@ class SettlementController
 
         return Inertia::render('admin/settlements/pages/Create', [
             'providers' => Provider::query()->orderBy('name')->get(['id', 'name', 'key', 'default_currency']),
-            'default_currency' => config('settlements.default_currency', 'LYD'),
+            'default_currency' => \App\Support\Platform\PlatformSettings::defaultCurrency(
+                (string) config('settlements.default_currency', 'LYD')
+            ),
         ]);
     }
 

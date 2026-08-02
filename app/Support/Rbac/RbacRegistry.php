@@ -119,6 +119,8 @@ class RbacRegistry
             self::permission('notifications.manage-templates', 'notifications', 'update_templates', 'Manage notification templates', 'Edit notification templates and channel settings.'),
             self::permission('notifications.retry-failed', 'notifications', 'retry', 'Retry failed notifications', 'Retry failed notification deliveries from the admin dashboard.'),
             self::permission('settings.manage', 'admin', 'manage_settings', 'Manage settings', 'Access platform settings and global administrative configuration.'),
+            self::permission('partners.view', 'partners', 'view', 'View partners', 'Access partner integrations, API keys metadata, and webhook endpoints.'),
+            self::permission('partners.manage', 'partners', 'manage', 'Manage partners', 'Create partners, issue/revoke API keys, and configure webhook endpoints.'),
         ];
     }
 
@@ -180,6 +182,8 @@ class RbacRegistry
                 'notifications.manage-templates',
                 'notifications.retry-failed',
                 'settings.manage',
+                'partners.view',
+                'partners.manage',
             ],
             self::ROLE_TEAM_MEMBER => [
                 'users.view',
@@ -240,6 +244,7 @@ class RbacRegistry
                 'governance.view',
                 'loyalty.view',
                 'notifications.view',
+                'partners.view',
             ],
             self::ROLE_LOYALTY_MANAGER => [
                 'orders.view',
@@ -268,6 +273,7 @@ class RbacRegistry
                 'governance.view',
                 'loyalty.view',
                 'notifications.view',
+                'partners.view',
             ],
         ];
     }

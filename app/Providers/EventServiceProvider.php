@@ -17,6 +17,7 @@ use App\Modules\Orders\Events\OrderConfirmed;
 use App\Modules\Orders\Events\OrderCreated;
 use App\Modules\Orders\Events\PaymentSucceeded;
 use App\Modules\Orders\Events\RefundIssued;
+use App\Modules\Partners\Listeners\DispatchPartnerWebhookListener;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 
@@ -41,6 +42,7 @@ class EventServiceProvider extends ServiceProvider
         ],
         SupportTicketStatusChanged::class => [
             SupportEventLoggerListener::class,
+            DispatchSystemNotificationListener::class,
         ],
         SupportTicketAssigned::class => [
             SupportEventLoggerListener::class,
@@ -48,20 +50,24 @@ class EventServiceProvider extends ServiceProvider
         ],
         OrderCreated::class => [
             DispatchSystemNotificationListener::class,
+            DispatchPartnerWebhookListener::class,
             RecalculateUserLoyaltyListener::class,
         ],
         OrderConfirmed::class => [
             DispatchSystemNotificationListener::class,
+            DispatchPartnerWebhookListener::class,
         ],
         OrderCompleted::class => [
             RecalculateUserLoyaltyListener::class,
         ],
         PaymentSucceeded::class => [
             DispatchSystemNotificationListener::class,
+            DispatchPartnerWebhookListener::class,
             RecalculateUserLoyaltyListener::class,
         ],
         RefundIssued::class => [
             DispatchSystemNotificationListener::class,
+            DispatchPartnerWebhookListener::class,
             RecalculateUserLoyaltyListener::class,
         ],
         LoyaltyTierChanged::class => [

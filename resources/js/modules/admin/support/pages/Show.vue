@@ -7,6 +7,7 @@ import SystemTimeline from '../../components/SystemTimeline.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 import { getEcho } from '../../../../lib/echo';
 
 const props = defineProps({
@@ -57,6 +58,7 @@ const props = defineProps({
 });
 
 const { locale, t } = useAdminLocale();
+const { defaultCurrency } = usePlatformCurrency();
 const page = usePage();
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
 const canViewUsers = computed(() => permissions.value.includes('users.view'));
@@ -127,19 +129,7 @@ const normalizeAttachmentUrl = (value) => {
     return `/${value.replace(/^\/+/, '')}`;
 };
 
-const attachmentSource = (message) => {
-    const directUrl = normalizeAttachmentUrl(message?.attachment_url);
-
-    if (directUrl) {
-        return directUrl;
-    }
-
-    if (!message?.attachment_path) {
-        return null;
-    }
-
-    return `/storage/${String(message.attachment_path).replace(/^\/+/, '')}`;
-};
+const attachmentSource = (message) => normalizeAttachmentUrl(message?.attachment_url);
 
 const imageMessages = computed(() => props.ticket.messages.filter((message) => message.attachment_is_image && attachmentSource(message)));
 
@@ -248,14 +238,14 @@ const formatLabel = (value) => {
     return t(normalizedValue);
 };
 
-const formatMoney = (amount, currency = 'LYD') => {
+const formatMoney = (amount, currency = null) => {
     if (amount === null || amount === undefined) {
         return t('Not available');
     }
 
     return new Intl.NumberFormat(locale.value, {
         style: 'currency',
-        currency: currency || 'LYD',
+        currency: currency || defaultCurrency.value,
     }).format(Number(amount));
 };
 

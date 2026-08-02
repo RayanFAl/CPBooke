@@ -2,6 +2,7 @@
 
 namespace App\Modules\Admin\Users\Http\Requests;
 
+use App\Modules\Admin\Access\Services\AccessControlService;
 use App\Support\Rbac\RbacRegistry;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -24,13 +25,17 @@ class UpdateUserRequest extends FormRequest
     public function rules(): array
     {
         $userId = $this->route('user')?->id;
+        $assignableRoles = app(AccessControlService::class)
+            ->availableRolesFor($this->user())
+            ->pluck('name')
+            ->all();
 
         return [
             'full_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:191', Rule::unique('users', 'email')->ignore($userId)],
             'phone' => ['nullable', 'string', 'max:30'],
             'country' => ['nullable', 'string', 'max:100'],
-            'role' => ['required', 'string', Rule::exists('roles', 'name')],
+            'role' => ['required', 'string', Rule::in($assignableRoles)],
             'permissions' => [
                 Rule::requiredIf(fn (): bool => $this->input('role') !== RbacRegistry::ROLE_SUPER_ADMIN),
                 'nullable',

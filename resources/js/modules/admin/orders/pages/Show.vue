@@ -5,6 +5,7 @@ import SystemTimeline from '../../components/SystemTimeline.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 
 const props = defineProps({
     order: {
@@ -27,6 +28,7 @@ const props = defineProps({
 
 const page = usePage();
 const { locale, t } = useAdminLocale();
+const { defaultCurrency } = usePlatformCurrency();
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
 
 const canUpdateStatus = computed(() => permissions.value.includes('orders.change-status'));
@@ -282,14 +284,14 @@ const formatDateTime = (value) => {
     }).format(new Date(value));
 };
 
-const formatMoney = (amount, currency = 'LYD') => {
+const formatMoney = (amount, currency = null) => {
     if (amount === null || amount === undefined) {
         return t('Restricted');
     }
 
     return new Intl.NumberFormat(locale.value, {
         style: 'currency',
-        currency: currency || 'LYD',
+        currency: currency || defaultCurrency.value,
     }).format(Number(amount));
 };
 

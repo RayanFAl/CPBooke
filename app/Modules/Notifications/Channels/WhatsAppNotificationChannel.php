@@ -51,6 +51,15 @@ class WhatsAppNotificationChannel implements NotificationChannel
             ];
         }
 
+        if (app()->environment('production')) {
+            return [
+                'provider' => 'whatsapp-gateway',
+                'delivered' => false,
+                'reason' => 'missing_endpoint',
+                'recipient' => $user->phone,
+            ];
+        }
+
         return [
             'provider' => 'whatsapp-simulated',
             'delivered' => true,

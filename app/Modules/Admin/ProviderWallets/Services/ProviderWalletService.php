@@ -81,7 +81,7 @@ class ProviderWalletService
         return $this->walletService->debit(
             providerId: $provider->id,
             amount: $amount,
-            currency: (string) ($order->currency ?: 'LYD'),
+            currency: (string) ($order->currency ?: \App\Support\Platform\PlatformSettings::defaultCurrency()),
             referenceType: $referenceType,
             referenceId: $order->id,
             options: [

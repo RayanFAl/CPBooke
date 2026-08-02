@@ -51,6 +51,15 @@ class SmsNotificationChannel implements NotificationChannel
             ];
         }
 
+        if (app()->environment('production')) {
+            return [
+                'provider' => 'sms-gateway',
+                'delivered' => false,
+                'reason' => 'missing_endpoint',
+                'recipient' => $user->phone,
+            ];
+        }
+
         return [
             'provider' => 'sms-simulated',
             'delivered' => true,

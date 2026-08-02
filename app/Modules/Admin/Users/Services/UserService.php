@@ -312,8 +312,8 @@ class UserService
         $nextRoleName = (string) $data['role'];
         $permissionNames = $this->normalizePermissionNames($nextRoleName, $data['permissions'] ?? []);
 
-        $this->accessControlService->assertCanAssignRole($actor, $nextRoleName);
-        $this->accessControlService->assertCanAssignPermissions($actor, $permissionNames, $nextRoleName);
+        $this->accessControlService->assertCanAssignRole($actor, $nextRoleName, $user);
+        $this->accessControlService->assertCanAssignPermissions($actor, $permissionNames, $nextRoleName, $user);
 
         if ($user->hasRole(RbacRegistry::ROLE_SUPER_ADMIN)
             && $currentRoleName !== $nextRoleName

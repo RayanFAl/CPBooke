@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout.vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 
 const props = defineProps({
     supplier: { type: Object, required: true },
@@ -11,6 +12,7 @@ const props = defineProps({
 });
 
 const { locale, t } = useAdminLocale();
+const { defaultCurrency } = usePlatformCurrency();
 const page = usePage();
 const flashSuccess = computed(() => page.props.flash?.success ?? null);
 
@@ -21,7 +23,7 @@ const formatMoney = (amount, currency) => {
 
     return new Intl.NumberFormat(locale.value, {
         style: 'currency',
-        currency: currency || props.supplier.default_currency || 'LYD',
+        currency: currency || props.supplier.default_currency || defaultCurrency.value,
     }).format(Number(amount));
 };
 </script>

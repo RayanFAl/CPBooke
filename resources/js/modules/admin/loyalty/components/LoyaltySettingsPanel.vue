@@ -1,6 +1,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 
 const props = defineProps({
     initialSettings: {
@@ -22,6 +23,7 @@ const props = defineProps({
 });
 
 const { t } = useAdminLocale();
+const { defaultCurrency } = usePlatformCurrency();
 
 const defaults = () => ({
     loyalty_enabled: true,
@@ -29,7 +31,7 @@ const defaults = () => ({
     auto_downgrade_enabled: false,
     visible_in_mobile_app: true,
     allow_discount_stacking: false,
-    default_currency: 'LYD',
+    default_currency: defaultCurrency.value,
     max_global_discount_amount: '',
     minimum_discountable_order_amount: '',
     settings_version: 1,
@@ -42,7 +44,7 @@ const normalizeSettings = (settings) => ({
     auto_downgrade_enabled: Boolean(settings?.auto_downgrade_enabled ?? false),
     visible_in_mobile_app: Boolean(settings?.visible_in_mobile_app ?? true),
     allow_discount_stacking: Boolean(settings?.allow_discount_stacking ?? false),
-    default_currency: String(settings?.default_currency ?? 'LYD'),
+    default_currency: String(settings?.default_currency ?? defaultCurrency.value),
     max_global_discount_amount: settings?.max_global_discount_amount ?? '',
     minimum_discountable_order_amount: settings?.minimum_discountable_order_amount ?? '',
     settings_version: Number(settings?.settings_version ?? 1),

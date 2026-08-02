@@ -945,7 +945,7 @@ class SupportTest extends TestCase
 
     public function test_support_agent_can_reply_with_attachment(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         [$actor, $customer] = $this->supportActorAndCustomer();
 
@@ -977,7 +977,7 @@ class SupportTest extends TestCase
         $this->assertSame('support-note.pdf', $message->attachment_name);
         $this->assertSame('application/pdf', $message->attachment_mime);
 
-        Storage::disk('public')->assertExists($message->attachment_path);
+        Storage::disk('local')->assertExists($message->attachment_path);
     }
 
     public function test_support_auto_assignment_uses_weighted_scoring_and_falls_back_when_all_agents_are_overloaded(): void

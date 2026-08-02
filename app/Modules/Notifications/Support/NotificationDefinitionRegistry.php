@@ -8,6 +8,7 @@ use App\Modules\Admin\Finance\Events\CriticalFinanceAnomaliesDetected;
 use App\Modules\Admin\Support\Events\SupportTicketAssigned;
 use App\Modules\Admin\Support\Events\SupportTicketCreated;
 use App\Modules\Admin\Support\Events\SupportTicketReplied;
+use App\Modules\Admin\Support\Events\SupportTicketStatusChanged;
 use App\Modules\Loyalty\Events\LoyaltyTierChanged;
 use App\Modules\Orders\Events\OrderConfirmed;
 use App\Modules\Orders\Events\OrderCreated;
@@ -31,6 +32,7 @@ class NotificationDefinitionRegistry
             $event instanceof SupportTicketCreated => $this->supportTicketCreatedDefinitions($event),
             $event instanceof SupportTicketReplied => $this->supportTicketRepliedDefinitions($event),
             $event instanceof SupportTicketAssigned => $this->supportTicketAssignedDefinitions($event),
+            $event instanceof SupportTicketStatusChanged => $this->supportTicketStatusChangedDefinitions($event),
             $event instanceof LoyaltyTierChanged => $this->loyaltyTierChangedDefinitions($event),
             $event instanceof CriticalFinanceAnomaliesDetected => $this->criticalFinanceAnomalyDefinitions($event),
             default => [],
@@ -168,7 +170,9 @@ class NotificationDefinitionRegistry
      */
     private function supportTicketCreatedDefinitions(SupportTicketCreated $event): array
     {
-        $definitions = [[
+        // Agent assignment notifications are handled by SupportTicketAssigned to avoid duplicates
+        // when createTicket() dispatches both Created and Assigned.
+        return [[
             'code' => 'SUPPORT_TICKET_CREATED_CUSTOMER',
             'name' => 'Support Ticket Created For Customer',
             'subject' => 'Support ticket {ticket_number} was created',
@@ -185,27 +189,6 @@ class NotificationDefinitionRegistry
                 'ticket_subject' => $event->ticket->subject,
             ],
         ]];
-
-        if ($event->ticket->assignee !== null) {
-            $definitions[] = [
-                'code' => 'SUPPORT_TICKET_CREATED_AGENT',
-                'name' => 'Support Ticket Created For Assigned Agent',
-                'subject' => 'New ticket {ticket_number} assigned to you',
-                'body' => 'Ticket {ticket_number} is now in your queue. Subject: {ticket_subject}.',
-                'channels' => [NotificationChannels::IN_APP, NotificationChannels::PUSH],
-                'variables' => ['ticket_number', 'ticket_subject'],
-                'notification_type' => 'support',
-                'related_type' => 'support_ticket',
-                'related_id' => $event->ticket->id,
-                'users' => array_filter([$event->ticket->assignee]),
-                'payload' => [
-                    'ticket_number' => $event->ticket->ticket_number,
-                    'ticket_subject' => $event->ticket->subject,
-                ],
-            ];
-        }
-
-        return $definitions;
     }
 
     /**
@@ -274,6 +257,44 @@ class NotificationDefinitionRegistry
             'payload' => [
                 'ticket_number' => $event->ticket->ticket_number,
                 'ticket_priority' => $event->ticket->priority,
+            ],
+        ]];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function supportTicketStatusChangedDefinitions(SupportTicketStatusChanged $event): array
+    {
+        if ($event->oldStatus === $event->newStatus || $event->ticket->user === null) {
+            return [];
+        }
+
+        $isTerminal = in_array($event->newStatus, ['resolved', 'closed'], true);
+        $statusLabel = str_replace('_', ' ', $event->newStatus);
+
+        return [[
+            'code' => $isTerminal ? 'SUPPORT_TICKET_CLOSED' : 'SUPPORT_TICKET_STATUS_CHANGED',
+            'name' => $isTerminal ? 'Support Ticket Closed' : 'Support Ticket Status Changed',
+            'subject' => $isTerminal
+                ? 'Support ticket {ticket_number} was {ticket_status}'
+                : 'Support ticket {ticket_number} status updated',
+            'body' => $isTerminal
+                ? 'Hello {user_name}, your support ticket {ticket_number} is now {ticket_status}.'
+                : 'Hello {user_name}, ticket {ticket_number} moved from {old_status} to {ticket_status}.',
+            'channels' => $isTerminal
+                ? [NotificationChannels::IN_APP, NotificationChannels::EMAIL]
+                : [NotificationChannels::IN_APP],
+            'variables' => ['user_name', 'ticket_number', 'ticket_status', 'old_status'],
+            'notification_type' => 'support',
+            'related_type' => 'support_ticket',
+            'related_id' => $event->ticket->id,
+            'users' => array_filter([$event->ticket->user]),
+            'payload' => [
+                'user_name' => $event->ticket->user?->full_name ?: $event->ticket->user?->name ?: 'Customer',
+                'ticket_number' => $event->ticket->ticket_number,
+                'ticket_status' => $statusLabel,
+                'old_status' => str_replace('_', ' ', $event->oldStatus),
             ],
         ]];
     }

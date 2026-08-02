@@ -2,6 +2,7 @@
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 
 const props = defineProps({
     providers: {
@@ -23,10 +24,11 @@ const props = defineProps({
 });
 
 const { t } = useAdminLocale();
+const { defaultCurrency } = usePlatformCurrency();
 
 const walletForm = useForm({
     provider_id: props.selected_provider_id || props.providers[0]?.id || '',
-    currency: 'LYD',
+    currency: defaultCurrency.value,
     environment: 'production',
     low_balance_threshold: '',
     allow_negative: props.default_allow_negative,
@@ -131,7 +133,7 @@ const submitProvider = () => {
                             type="text"
                             maxlength="3"
                             class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm uppercase"
-                            placeholder="LYD"
+                            :placeholder="defaultCurrency"
                         >
                         <p v-if="walletForm.errors.currency" class="mt-1 text-sm text-rose-600">{{ walletForm.errors.currency }}</p>
                     </div>

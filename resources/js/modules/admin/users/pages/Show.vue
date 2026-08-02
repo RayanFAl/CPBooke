@@ -6,6 +6,7 @@ import UserStatusBadge from '../components/UserStatusBadge.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 
 const props = defineProps({
     user: {
@@ -15,6 +16,7 @@ const props = defineProps({
 });
 
 const { locale, t } = useAdminLocale();
+const { defaultCurrency } = usePlatformCurrency();
 
 const page = usePage();
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
@@ -99,7 +101,7 @@ const syncTabFromHash = () => {
 
 const walletBalanceLabel = computed(() => {
     const balance = props.user.financial_summary?.wallet_balance;
-    const currency = props.user.financial_summary?.currency || 'LYD';
+    const currency = props.user.financial_summary?.currency || defaultCurrency.value;
 
     if (balance === null || balance === undefined) {
         return t('Not available');

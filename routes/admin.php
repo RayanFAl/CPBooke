@@ -25,7 +25,7 @@ Route::prefix('admin')
         require base_path('routes/admin/notifications.php');
         require base_path('routes/admin/support.php');
         require base_path('routes/admin/settings.php');
+        require base_path('routes/admin/partners.php');
         require base_path('routes/admin/home.php');
         require base_path('routes/admin/airports.php');
-        require base_path('routes/admin/booknow_airports.php');
     });

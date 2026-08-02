@@ -4,6 +4,7 @@ namespace App\Modules\Api\Home\Services;
 
 use App\Models\HomeBanner;
 use App\Models\HomeOffer;
+use App\Support\Platform\PlatformSettings;
 use Illuminate\Http\Request;
 
 class HomeContentService
@@ -46,6 +47,10 @@ class HomeContentService
      */
     public function offers(?string $locale = null, ?string $platform = null, int $limit = 20): array
     {
+        if (! PlatformSettings::homeOffersEnabled()) {
+            return [];
+        }
+
         $locale ??= 'en';
         $limit = min(max($limit, 1), 50);
 

@@ -152,6 +152,20 @@ export const navigationItems = [
                 permission: 'audit.view',
                 icon: 'governance',
             },
+            {
+                label: 'Partners',
+                route: 'admin.partners.index',
+                startsWith: '/admin/partners',
+                permission: 'partners.view',
+                icon: 'governance',
+            },
+            {
+                label: 'Settings',
+                route: 'admin.settings.index',
+                startsWith: '/admin/settings',
+                permission: 'settings.manage',
+                icon: 'dashboard',
+            },
         ],
     },
 ];

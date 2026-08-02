@@ -4,6 +4,7 @@ import SystemTimeline from '../../components/SystemTimeline.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 
 const props = defineProps({
     wallet: {
@@ -25,6 +26,7 @@ const props = defineProps({
 });
 
 const { locale, t } = useAdminLocale();
+const { defaultCurrency } = usePlatformCurrency();
 const page = usePage();
 const flashSuccess = computed(() => page.props.flash?.success ?? null);
 
@@ -40,7 +42,7 @@ const adjustForm = useForm({
 
 const formatMoney = (amount, currency) => new Intl.NumberFormat(locale.value, {
     style: 'currency',
-    currency: currency || props.wallet.currency || 'LYD',
+    currency: currency || props.wallet.currency || defaultCurrency.value,
 }).format(Number(amount ?? 0));
 
 const formatDateTime = (value) => {

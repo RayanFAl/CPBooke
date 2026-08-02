@@ -6,6 +6,7 @@ import PaymentStatusBadge from '../components/PaymentStatusBadge.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, reactive } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 
 const props = defineProps({
     orders: {
@@ -24,6 +25,7 @@ const props = defineProps({
 
 const page = usePage();
 const { locale, t } = useAdminLocale();
+const { defaultCurrency } = usePlatformCurrency();
 
 const filterForm = reactive({
     search: props.filters.search ?? '',
@@ -53,14 +55,14 @@ const resetFilters = () => {
     applyFilters();
 };
 
-const formatMoney = (amount, currency = 'LYD') => {
+const formatMoney = (amount, currency = null) => {
     if (amount === null || amount === undefined) {
         return t('Restricted');
     }
 
     return new Intl.NumberFormat(locale.value, {
         style: 'currency',
-        currency: currency || 'LYD',
+        currency: currency || defaultCurrency.value,
     }).format(Number(amount));
 };
 

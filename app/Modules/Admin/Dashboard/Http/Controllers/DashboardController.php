@@ -160,7 +160,9 @@ class DashboardController
                     'status' => $order->status,
                     'payment_status' => $hasOrderPaymentStatusColumn ? $order->payment_status : null,
                     'amount' => $hasOrderTotalAmountColumn ? (float) ($order->total_amount ?? 0) : 0,
-                    'currency' => $hasOrderCurrencyColumn ? ($order->currency ?: 'LYD') : 'LYD',
+                    'currency' => $hasOrderCurrencyColumn
+                        ? ($order->currency ?: \App\Support\Platform\PlatformSettings::defaultCurrency())
+                        : \App\Support\Platform\PlatformSettings::defaultCurrency(),
                     'created_at' => optional($order->created_at)?->toIso8601String(),
                 ])
                 ->all();

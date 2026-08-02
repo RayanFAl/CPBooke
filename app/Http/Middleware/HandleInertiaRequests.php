@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Modules\Admin\Settings\Services\SystemSettingsAdminService;
+use App\Support\Platform\PlatformSettings;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -30,6 +32,28 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
+        $platform = null;
+
+        if ($user?->isAdminAccount()) {
+            try {
+                $settings = app(SystemSettingsAdminService::class)->getSettings();
+                $platform = [
+                    'default_currency' => PlatformSettings::defaultCurrency(),
+                    'company_display_name' => $settings->company_display_name ?: config('app.name'),
+                    'timezone' => $settings->timezone ?: config('app.timezone'),
+                    'maintenance_mode' => PlatformSettings::maintenanceMode(),
+                    'support_chat_enabled' => PlatformSettings::supportChatEnabled(),
+                ];
+            } catch (\Throwable) {
+                $platform = [
+                    'default_currency' => PlatformSettings::defaultCurrency(),
+                    'company_display_name' => config('app.name'),
+                    'timezone' => config('app.timezone'),
+                    'maintenance_mode' => false,
+                    'support_chat_enabled' => true,
+                ];
+            }
+        }
 
         return [
             ...parent::share($request),
@@ -47,6 +71,7 @@ class HandleInertiaRequests extends Middleware
                     'permissions' => $user->permissionNames(),
                 ] : null,
             ],
+            'platform' => $platform,
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),

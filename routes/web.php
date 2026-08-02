@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CustomerSupportChatController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SupportAttachmentController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -11,6 +12,11 @@ Route::get('/', function () {
 
     return redirect()->route(auth()->user()->homeRouteName());
 });
+
+Route::get('/support/attachments/{message}', [SupportAttachmentController::class, 'show'])
+    ->middleware(['signed', 'throttle:60,1'])
+    ->whereNumber('message')
+    ->name('support.attachments.show');
 
 Route::middleware('auth')->group(function () {
     Route::get('/support/chat', CustomerSupportChatController::class)->name('customer.support.chat');

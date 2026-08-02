@@ -2,19 +2,21 @@
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 
 const props = defineProps({
     providers: { type: Array, default: () => [] },
-    default_currency: { type: String, default: 'LYD' },
+    default_currency: { type: String, default: null },
 });
 
 const { t } = useAdminLocale();
+const { defaultCurrency } = usePlatformCurrency();
 
 const form = useForm({
     provider_id: props.providers[0]?.id ?? '',
     period_start: '',
     period_end: '',
-    currency: props.default_currency,
+    currency: props.default_currency || defaultCurrency.value,
     notes: '',
 });
 

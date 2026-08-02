@@ -8,14 +8,15 @@ use App\Models\User;
 use App\Modules\Admin\Support\Events\SupportMessageBroadcasted;
 use App\Modules\Admin\Support\Events\SupportTicketUpdatedBroadcasted;
 use App\Modules\Admin\Support\Events\SupportTypingBroadcasted;
-use App\Modules\Support\Presenters\SupportChatPayloadBuilder;
-use App\Modules\Support\Services\SupportService;
-use App\Modules\Support\Services\SupportBroadcastService;
-use App\Modules\Support\Storage\SupportAttachmentStorage;
 use App\Modules\Api\Support\Http\Requests\StoreSupportChatMessageRequest;
 use App\Modules\Api\Support\Http\Requests\StoreSupportSeenRequest;
 use App\Modules\Api\Support\Http\Requests\StoreSupportTypingRequest;
 use App\Modules\Api\Support\Http\Responses\ApiResponse;
+use App\Modules\Support\Presenters\SupportChatPayloadBuilder;
+use App\Modules\Support\Services\SupportBroadcastService;
+use App\Modules\Support\Services\SupportService;
+use App\Modules\Support\Storage\SupportAttachmentStorage;
+use App\Support\Platform\PlatformSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -33,13 +34,17 @@ class SupportChatApiController extends Controller
     {
         abort_unless($request->user()?->isCustomerAccount(), 403);
 
+        if ($disabled = $this->supportChatDisabledResponse()) {
+            return $disabled;
+        }
+
         $perPage = min(max((int) $request->integer('per_page', 15), 1), 50);
         $tickets = $this->supportService->getChatTicketsForCustomer($request->user(), $perPage);
 
         return ApiResponse::success(
             [
                 'tickets' => collect($tickets->items())
-                    ->map(fn ($ticket): array => $this->payloadBuilder->ticket($ticket, 'customer'))
+                    ->map(fn ($ticket): array => $this->payloadBuilder->ticket($ticket, 'user'))
                     ->values()
                     ->all(),
             ],
@@ -57,11 +62,15 @@ class SupportChatApiController extends Controller
     {
         abort_unless($request->user()?->isCustomerAccount(), 403);
 
+        if ($disabled = $this->supportChatDisabledResponse()) {
+            return $disabled;
+        }
+
         $supportTicket = $this->supportService->getChatTicketForCustomer($request->user(), $ticket);
 
         return ApiResponse::success(
             [
-                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'customer'),
+                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'user'),
             ],
             'Support chat ticket fetched successfully.',
         );
@@ -71,13 +80,17 @@ class SupportChatApiController extends Controller
     {
         abort_unless($request->user()?->isCustomerAccount(), 403);
 
+        if ($disabled = $this->supportChatDisabledResponse()) {
+            return $disabled;
+        }
+
         $perPage = min(max((int) $request->integer('per_page', 20), 1), 100);
         $supportTicket = $this->supportService->getChatTicketForCustomer($request->user(), $ticket);
         $messages = $this->supportService->getChatMessagesForCustomer($request->user(), $ticket, $perPage);
 
         return ApiResponse::success(
             [
-                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'customer'),
+                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'user'),
                 'messages' => $this->payloadBuilder->messages($messages->items()),
             ],
             'Support chat messages fetched successfully.',
@@ -92,6 +105,10 @@ class SupportChatApiController extends Controller
 
     public function storeMessage(StoreSupportChatMessageRequest $request, int $ticket): JsonResponse
     {
+        if ($disabled = $this->supportChatDisabledResponse()) {
+            return $disabled;
+        }
+
         $supportTicket = $this->supportService->getChatTicketForCustomer($request->user(), $ticket);
 
         $this->supportService->addCustomerMessage(
@@ -122,7 +139,7 @@ class SupportChatApiController extends Controller
 
         return ApiResponse::success(
             [
-                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'customer'),
+                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'user'),
                 'message' => $message ? $this->payloadBuilder->message($message) : null,
             ],
             'Support chat message sent successfully.',
@@ -131,6 +148,10 @@ class SupportChatApiController extends Controller
 
     public function showTyping(StoreSupportTypingRequest $request, int $ticket): JsonResponse
     {
+        if ($disabled = $this->supportChatDisabledResponse()) {
+            return $disabled;
+        }
+
         $supportTicket = $this->supportService->getChatTicketForCustomer($request->user(), $ticket);
 
         if ($request->hasTypingInput()) {
@@ -155,6 +176,10 @@ class SupportChatApiController extends Controller
 
     public function typing(StoreSupportTypingRequest $request, int $ticket): JsonResponse
     {
+        if ($disabled = $this->supportChatDisabledResponse()) {
+            return $disabled;
+        }
+
         $supportTicket = $this->supportService->getChatTicketForCustomer($request->user(), $ticket);
 
         $typingPayload = $this->broadcastCustomerTyping(
@@ -169,7 +194,7 @@ class SupportChatApiController extends Controller
         return ApiResponse::success(
             [
                 'is_typing' => (bool) $typingPayload['typing'],
-                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'customer'),
+                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'user'),
                 'typing' => $typingPayload,
             ],
             'Support typing state updated successfully.',
@@ -178,6 +203,10 @@ class SupportChatApiController extends Controller
 
     public function seen(StoreSupportSeenRequest $request, int $ticket): JsonResponse
     {
+        if ($disabled = $this->supportChatDisabledResponse()) {
+            return $disabled;
+        }
+
         $supportTicket = $this->supportService->getChatTicketForCustomer($request->user(), $ticket);
 
         $seenCount = $this->supportService->markMessagesSeenForCustomer(
@@ -195,7 +224,7 @@ class SupportChatApiController extends Controller
 
         return ApiResponse::success(
             [
-                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'customer'),
+                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'user'),
                 'seen_count' => $seenCount,
             ],
             'Support messages marked as seen successfully.',
@@ -222,5 +251,19 @@ class SupportChatApiController extends Controller
         $this->supportBroadcastService->dispatch(new SupportTypingBroadcasted($supportTicket->id, $typingPayload));
 
         return $typingPayload;
+    }
+
+    private function supportChatDisabledResponse(): ?JsonResponse
+    {
+        if (PlatformSettings::supportChatEnabled()) {
+            return null;
+        }
+
+        return ApiResponse::error(
+            'Customer support chat is temporarily unavailable.',
+            [],
+            'support_chat_disabled',
+            403,
+        );
     }
 }

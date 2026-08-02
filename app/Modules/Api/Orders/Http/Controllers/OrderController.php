@@ -15,6 +15,7 @@ use App\Modules\Api\Orders\Services\OrderService;
 use App\Modules\Api\Resources\BooknowOrderResource;
 use App\Modules\Api\Resources\OrderResource;
 use App\Modules\Api\Support\Http\Responses\ApiResponse;
+use App\Support\Platform\PlatformSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -31,6 +32,15 @@ class OrderController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        if (! PlatformSettings::ordersLegacyCreateEnabled()) {
+            return ApiResponse::error(
+                'Legacy order creation is disabled. Use BookNow sync endpoints instead.',
+                [],
+                'legacy_order_create_disabled',
+                403,
+            );
+        }
+
         $legacyRequest = CreateOrderRequest::createFrom($request);
         $legacyRequest->setContainer(app());
         $legacyRequest->setRedirector(app('redirect'));

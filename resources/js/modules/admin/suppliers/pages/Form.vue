@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 
 const props = defineProps({
     supplier: { type: Object, default: null },
@@ -10,6 +11,7 @@ const props = defineProps({
 });
 
 const { t } = useAdminLocale();
+const { defaultCurrency } = usePlatformCurrency();
 const isEdit = computed(() => Boolean(props.supplier?.id));
 
 const form = useForm({
@@ -20,7 +22,7 @@ const form = useForm({
     commission_rate: props.supplier?.commission_rate ?? '',
     settlement_cycle: props.supplier?.settlement_cycle ?? 'monthly',
     credit_limit: props.supplier?.credit_limit ?? '',
-    default_currency: props.supplier?.default_currency ?? 'LYD',
+    default_currency: props.supplier?.default_currency ?? defaultCurrency.value,
     contact_name: props.supplier?.contact_name ?? '',
     contact_email: props.supplier?.contact_email ?? '',
     contact_phone: props.supplier?.contact_phone ?? '',

@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import OrderStatusBadge from './OrderStatusBadge.vue';
 import PaymentStatusBadge from './PaymentStatusBadge.vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 
 const props = defineProps({
     ticket: {
@@ -26,6 +27,7 @@ const props = defineProps({
 const emit = defineEmits(['booked-by-click', 'action-click']);
 
 const { locale, t } = useAdminLocale();
+const { defaultCurrency } = usePlatformCurrency();
 const logoFailed = ref(false);
 const hotelImageFailed = ref(false);
 
@@ -452,14 +454,14 @@ const formatValue = (value) => {
     return String(value);
 };
 
-const formatMoney = (amount, itemCurrency = props.currency || 'LYD') => {
+const formatMoney = (amount, itemCurrency = props.currency || defaultCurrency.value) => {
     if (amount === null || amount === undefined || amount === '') {
         return t('Not available');
     }
 
     return new Intl.NumberFormat(locale.value, {
         style: 'currency',
-        currency: itemCurrency || props.currency || 'LYD',
+        currency: itemCurrency || props.currency || defaultCurrency.value,
     }).format(Number(amount));
 };
 

@@ -112,7 +112,7 @@ class SupplierService
             'credit_limit' => isset($data['credit_limit']) && $data['credit_limit'] !== ''
                 ? number_format((float) $data['credit_limit'], 2, '.', '')
                 : null,
-            'default_currency' => strtoupper((string) ($data['default_currency'] ?? 'LYD')),
+            'default_currency' => strtoupper((string) ($data['default_currency'] ?? \App\Support\Platform\PlatformSettings::defaultCurrency())),
             'contact_name' => $data['contact_name'] ?? null,
             'contact_email' => $data['contact_email'] ?? null,
             'contact_phone' => $data['contact_phone'] ?? null,

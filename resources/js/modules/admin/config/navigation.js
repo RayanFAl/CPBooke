@@ -43,6 +43,13 @@ export const navigationItems = [
                 permission: 'settings.manage',
                 icon: 'airports',
             },
+            {
+                label: 'Home Content',
+                route: 'admin.home.index',
+                startsWith: '/admin/home',
+                permission: 'settings.manage',
+                icon: 'dashboard',
+            },
         ],
     },
     {

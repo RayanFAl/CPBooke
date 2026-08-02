@@ -1,6 +1,8 @@
 <script setup>
 import AdminModulePage from '../../components/AdminModulePage.vue';
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import FinanceCard from '../components/FinanceCard.vue';
+import FilterBar from '../components/FilterBar.vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
@@ -211,37 +213,43 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div class="border-b border-slate-200 px-6 py-5">
-                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                        <label class="text-sm text-slate-600">
-                            <span class="block font-medium text-slate-700">{{ t('Date from') }}</span>
-                            <input v-model="filtersForm.date_from" type="date" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3" />
-                        </label>
-                        <label class="text-sm text-slate-600">
-                            <span class="block font-medium text-slate-700">{{ t('Date to') }}</span>
-                            <input v-model="filtersForm.date_to" type="date" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3" />
-                        </label>
-                        <label class="text-sm text-slate-600">
-                            <span class="block font-medium text-slate-700">{{ t('Service type') }}</span>
-                            <select v-model="filtersForm.service_type" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3">
-                                <option value="">{{ t('All services') }}</option>
-                                <option v-for="option in filter_options.service_types" :key="option.name" :value="option.name">{{ option.label }}</option>
-                            </select>
-                        </label>
-                        <label class="text-sm text-slate-600">
-                            <span class="block font-medium text-slate-700">{{ t('Country') }}</span>
-                            <input v-model="filtersForm.country" type="text" maxlength="2" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 uppercase" />
-                        </label>
-                        <label class="text-sm text-slate-600">
-                            <span class="block font-medium text-slate-700">{{ t('Provider') }}</span>
-                            <input v-model="filtersForm.provider_name" type="text" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3" />
-                        </label>
-                    </div>
+                    <FilterBar>
+                        <template #filters>
+                            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                                <label class="text-sm text-slate-600">
+                                    <span class="block font-medium text-slate-700">{{ t('Date from') }}</span>
+                                    <input v-model="filtersForm.date_from" type="date" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3" />
+                                </label>
+                                <label class="text-sm text-slate-600">
+                                    <span class="block font-medium text-slate-700">{{ t('Date to') }}</span>
+                                    <input v-model="filtersForm.date_to" type="date" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3" />
+                                </label>
+                                <label class="text-sm text-slate-600">
+                                    <span class="block font-medium text-slate-700">{{ t('Service type') }}</span>
+                                    <select v-model="filtersForm.service_type" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3">
+                                        <option value="">{{ t('All services') }}</option>
+                                        <option v-for="option in filter_options.service_types" :key="option.name" :value="option.name">{{ option.label }}</option>
+                                    </select>
+                                </label>
+                                <label class="text-sm text-slate-600">
+                                    <span class="block font-medium text-slate-700">{{ t('Country') }}</span>
+                                    <input v-model="filtersForm.country" type="text" maxlength="2" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 uppercase" />
+                                </label>
+                                <label class="text-sm text-slate-600">
+                                    <span class="block font-medium text-slate-700">{{ t('Provider') }}</span>
+                                    <input v-model="filtersForm.provider_name" type="text" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3" />
+                                </label>
+                            </div>
+                        </template>
 
-                    <div class="mt-4 flex flex-wrap gap-3">
-                        <button type="button" class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800" @click="applyFilters">
-                            {{ t('Apply filters') }}
-                        </button>
-                    </div>
+                        <template #actions>
+                            <div class="mt-4 flex flex-wrap gap-3">
+                                <button type="button" class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800" @click="applyFilters">
+                                    {{ t('Apply filters') }}
+                                </button>
+                            </div>
+                        </template>
+                    </FilterBar>
                 </div>
 
                 <div class="px-3 py-3">
@@ -265,10 +273,9 @@ onBeforeUnmount(() => {
 
             <div v-if="activeTab === 'overview'" class="mt-4 space-y-4">
                 <div class="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-                    <article v-for="card in kpiCards" :key="card.key" class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{{ card.label }}</p>
-                        <p class="mt-3 text-3xl font-semibold" :class="card.tone">{{ card.value }}</p>
-                    </article>
+                    <FinanceCard v-for="card in kpiCards" :key="card.key" :title="card.label">
+                        <p class="mt-1 text-3xl font-semibold" :class="card.tone">{{ card.value }}</p>
+                    </FinanceCard>
                 </div>
 
                 <section class="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">

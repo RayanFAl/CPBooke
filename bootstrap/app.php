@@ -23,6 +23,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
+            \App\Http\Middleware\RecordSlowRequests::class,
+        ]);
+
+        $middleware->api(append: [
+            \App\Http\Middleware\RecordSlowRequests::class,
         ]);
 
         $middleware->alias([
@@ -36,6 +41,15 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->reportable(function (\Throwable $exception): void {
+            try {
+                app(\App\Modules\Monitoring\Services\ApplicationEventRecorder::class)
+                    ->exception($exception);
+            } catch (\Throwable) {
+                // Never break reporting.
+            }
+        });
+
         $exceptions->render(function (ValidationException $exception, Request $request) {
             if (! $request->is('api/*')) {
                 return null;
@@ -54,6 +68,13 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
+            $tokenExpired = app(\App\Modules\Api\Auth\Services\ApiTokenService::class)
+                ->bearerTokenIsExpired($request->bearerToken());
+
+            if ($tokenExpired) {
+                return ApiResponse::error('Session expired.', [], 'token_expired', 401);
+            }
+
             return ApiResponse::error('Unauthenticated.', [], 'unauthenticated', 401);
         });
 
@@ -70,7 +91,7 @@ return Application::configure(basePath: dirname(__DIR__))
             );
         });
 
-        $exceptions->render(function (Throwable $exception, Request $request) {
+        $exceptions->render(function (\Throwable $exception, Request $request) {
             if (! $request->is('api/*')) {
                 return null;
             }

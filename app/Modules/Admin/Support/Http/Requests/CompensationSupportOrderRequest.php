@@ -10,7 +10,7 @@ class CompensationSupportOrderRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return $this->user()?->can('support.partial-refund') ?? false;
     }
 
     public function rules(): array

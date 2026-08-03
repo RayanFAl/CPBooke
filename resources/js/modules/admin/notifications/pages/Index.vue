@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue';
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import AdminModulePage from '../../components/AdminModulePage.vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
@@ -12,6 +13,20 @@ const props = defineProps({
 });
 
 const { t } = useAdminLocale();
+
+const pushTargets = computed(() => props.dashboard.push_targets ?? []);
+
+const pushForm = useForm({
+    user_id: pushTargets.value[0]?.id ?? '',
+    title: 'CPBooke News',
+    body: 'مرحباً! هذا إشعار تجريبي من CPBooke.',
+});
+
+const sendTestPush = () => {
+    pushForm.post(route('admin.notifications.push-test'), {
+        preserveScroll: true,
+    });
+};
 
 const retryLog = (id) => {
     useForm({}).post(route('admin.notifications.retry', id), {
@@ -44,7 +59,81 @@ const pretty = (value) => {
 <template>
     <AdminLayout title="Notifications" description="Observe delivery health, retry failed notifications, and manage message templates from one backbone console.">
         <AdminModulePage eyebrow="Engagement" title="Notifications" description="Centralized logs, templates, and channel visibility for the notification engine.">
-            <div class="grid gap-4 md:grid-cols-5">
+            <section class="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 shadow-sm">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-amber-700">{{ t('Temporary') }}</p>
+                        <h2 class="mt-1 text-lg font-semibold text-slate-950">{{ t('Push notification tester') }}</h2>
+                        <p class="mt-1 text-sm text-slate-600">
+                            {{ t('Send a real FCM push to a user with an active device. For local experiments only.') }}
+                        </p>
+                    </div>
+                    <span class="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">
+                        {{ t('Temp panel') }}
+                    </span>
+                </div>
+
+                <form class="mt-4 grid gap-4 lg:grid-cols-[1.2fr_1fr_1fr_auto]" @submit.prevent="sendTestPush">
+                    <label class="block">
+                        <span class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Recipient') }}</span>
+                        <select
+                            v-model="pushForm.user_id"
+                            class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                            required
+                        >
+                            <option disabled value="">{{ t('Select a user with a device') }}</option>
+                            <option
+                                v-for="target in pushTargets"
+                                :key="target.id"
+                                :value="target.id"
+                            >
+                                #{{ target.id }} · {{ target.name || target.email }} · {{ target.devices }} {{ t('devices') }}
+                            </option>
+                        </select>
+                        <p v-if="pushForm.errors.user_id" class="mt-1 text-xs text-rose-600">{{ pushForm.errors.user_id }}</p>
+                    </label>
+
+                    <label class="block">
+                        <span class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Title') }}</span>
+                        <input
+                            v-model="pushForm.title"
+                            type="text"
+                            maxlength="120"
+                            class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                            required
+                        >
+                        <p v-if="pushForm.errors.title" class="mt-1 text-xs text-rose-600">{{ pushForm.errors.title }}</p>
+                    </label>
+
+                    <label class="block lg:col-span-1">
+                        <span class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Body') }}</span>
+                        <input
+                            v-model="pushForm.body"
+                            type="text"
+                            maxlength="500"
+                            class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                            required
+                        >
+                        <p v-if="pushForm.errors.body" class="mt-1 text-xs text-rose-600">{{ pushForm.errors.body }}</p>
+                    </label>
+
+                    <div class="flex items-end">
+                        <button
+                            type="submit"
+                            class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="pushForm.processing || pushTargets.length === 0"
+                        >
+                            {{ pushForm.processing ? t('Sending...') : t('Send push') }}
+                        </button>
+                    </div>
+                </form>
+
+                <p v-if="pushTargets.length === 0" class="mt-3 text-sm text-amber-800">
+                    {{ t('No users with active push devices yet. Open the mobile app and register a device token first.') }}
+                </p>
+            </section>
+
+            <div class="mt-4 grid gap-4 md:grid-cols-5">
                 <article v-for="metric in [
                     { key: 'total_logs', label: 'Total logs' },
                     { key: 'pending_logs', label: 'Pending' },

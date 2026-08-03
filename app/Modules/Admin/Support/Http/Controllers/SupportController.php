@@ -16,11 +16,13 @@ use App\Modules\Admin\Support\Http\Requests\UpdateSupportTicketStatusRequest;
 use App\Modules\Admin\Support\Presenters\SupportAdminPresenter;
 use App\Modules\Admin\Support\Queries\SupportInboxQuery;
 use App\Modules\Admin\Support\Services\SupportResolutionReportService;
-use App\Modules\Support\Services\SupportService;
-use App\Modules\Support\Presenters\SupportChatPayloadBuilder;
 use App\Modules\Admin\Support\SupportFormOptions;
 use App\Modules\Api\Orders\Services\OrderActionService;
+use App\Modules\Approvals\Services\SupportOrderApprovalBridge;
+use App\Modules\Audit\Services\EntityTimelineService;
+use App\Modules\Support\Presenters\SupportChatPayloadBuilder;
 use App\Modules\Support\Services\SupportBroadcastService;
+use App\Modules\Support\Services\SupportService;
 use App\Modules\Support\Storage\SupportAttachmentStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,9 +43,10 @@ class SupportController
         private readonly SupportAttachmentStorage $supportAttachmentStorage,
         private readonly SupportResolutionReportService $supportResolutionReportService,
         private readonly OrderActionService $orderActionService,
+        private readonly SupportOrderApprovalBridge $supportOrderApprovalBridge,
         private readonly SupportBroadcastService $supportBroadcastService,
-    ) {
-    }
+        private readonly EntityTimelineService $entityTimelineService,
+    ) {}
 
     /**
      * Display the support ticket inbox.
@@ -61,6 +64,7 @@ class SupportController
             'order_id' => ['nullable', 'integer'],
             'search' => ['nullable', 'string', 'max:255'],
             'sort' => ['nullable', 'string'],
+            'queue' => ['nullable', 'string', 'in:all,unread,unassigned,mine,sla_risk'],
         ]);
 
         $filters = [
@@ -72,6 +76,7 @@ class SupportController
             'order_id' => isset($filters['order_id']) ? (int) $filters['order_id'] : null,
             'search' => $filters['search'] ?? null,
             'sort' => $filters['sort'] ?? 'latest',
+            'queue' => $filters['queue'] ?? 'all',
         ];
 
         if (! Schema::hasTable('support_tickets')) {
@@ -110,6 +115,11 @@ class SupportController
         $query = $this->supportInboxQuery->applyFilter($query, 'order_id', $filters['order_id']);
 
         $query = $this->supportInboxQuery->applyFilter($query, 'status', $filters['status']);
+        $query = $this->supportInboxQuery->applyQueueFilter(
+            $query,
+            $filters['queue'],
+            $request->user()?->id,
+        );
         $query = $this->supportInboxQuery->applySort($query, $filters['sort']);
 
         /** @var LengthAwarePaginator $tickets */
@@ -246,6 +256,7 @@ class SupportController
             ],
             'notification_logs_enabled' => Schema::hasTable('notification_logs'),
             'customer_notification_logs' => $this->supportAdminPresenter->customerNotificationLogs($supportTicket),
+            'system_timeline' => $this->entityTimelineService->forSupportTicket($supportTicket),
         ]);
     }
 
@@ -351,7 +362,7 @@ class SupportController
         ));
 
         return redirect()
-            ->route('admin.support.show', $supportTicket)
+            ->back(fallback: route('admin.support.show', $supportTicket))
             ->with('success', 'Ticket assignment updated successfully.');
     }
 
@@ -362,15 +373,18 @@ class SupportController
     {
         Gate::authorize('support.view');
 
-        $this->orderActionService->cancelFromSupport(
+        $result = $this->supportOrderApprovalBridge->submitCancel(
             $supportTicket,
             $request->user(),
             $request->string('reason')->value(),
         );
 
-        return redirect()
-            ->route('admin.support.show', $supportTicket)
-            ->with('success', 'Order cancelled successfully from support.');
+        return $this->redirectAfterOrderAction(
+            $supportTicket,
+            $result,
+            executedMessage: 'Order cancelled successfully from support.',
+            pendingMessage: 'Cancellation request submitted for approval.',
+        );
     }
 
     /**
@@ -380,15 +394,18 @@ class SupportController
     {
         Gate::authorize('support.view');
 
-        $this->orderActionService->fullRefundFromSupport(
+        $result = $this->supportOrderApprovalBridge->submitFullRefund(
             $supportTicket,
             $request->user(),
             $request->string('reason')->value(),
         );
 
-        return redirect()
-            ->route('admin.support.show', $supportTicket)
-            ->with('success', 'Full refund applied successfully from support.');
+        return $this->redirectAfterOrderAction(
+            $supportTicket,
+            $result,
+            executedMessage: 'Full refund applied successfully from support.',
+            pendingMessage: 'Refund request submitted for approval.',
+        );
     }
 
     /**
@@ -398,16 +415,19 @@ class SupportController
     {
         Gate::authorize('support.view');
 
-        $this->orderActionService->partialRefundFromSupport(
+        $result = $this->supportOrderApprovalBridge->submitPartialRefund(
             $supportTicket,
             $request->user(),
             (float) $request->input('amount'),
             $request->string('reason')->value(),
         );
 
-        return redirect()
-            ->route('admin.support.show', $supportTicket)
-            ->with('success', 'Partial refund applied successfully from support.');
+        return $this->redirectAfterOrderAction(
+            $supportTicket,
+            $result,
+            executedMessage: 'Partial refund applied successfully from support.',
+            pendingMessage: 'Refund request submitted for approval.',
+        );
     }
 
     /**
@@ -447,5 +467,26 @@ class SupportController
         return redirect()
             ->route('admin.support.show', $supportTicket)
             ->with('success', 'Compensation applied successfully from support.');
+    }
+
+    /**
+     * @param  array{executed: bool, approval: \App\Models\Approval|null, result: array<string, mixed>|null}  $result
+     */
+    private function redirectAfterOrderAction(
+        SupportTicket $supportTicket,
+        array $result,
+        string $executedMessage,
+        string $pendingMessage,
+    ): RedirectResponse {
+        $redirect = redirect()->route('admin.support.show', $supportTicket);
+
+        if ($result['executed']) {
+            return $redirect->with('success', $executedMessage);
+        }
+
+        return $redirect->with(
+            'info',
+            $pendingMessage.' Approval #'.$result['approval']?->id.' is pending review.',
+        );
     }
 }

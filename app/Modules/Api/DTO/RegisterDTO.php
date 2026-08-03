@@ -10,6 +10,7 @@ final readonly class RegisterDTO
         public string $phone,
         public string $password,
         public string $deviceName,
+        public bool $rememberMe = false,
     ) {
     }
 
@@ -26,6 +27,7 @@ final readonly class RegisterDTO
             phone: $data['phone'],
             password: $data['password'],
             deviceName: $data['device_name'] ?? 'mobile-app',
+            rememberMe: (bool) ($data['remember_me'] ?? false),
         );
     }
 }

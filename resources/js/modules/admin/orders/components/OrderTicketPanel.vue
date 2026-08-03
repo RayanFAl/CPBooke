@@ -27,11 +27,100 @@ const emit = defineEmits(['booked-by-click', 'action-click']);
 
 const { locale, t } = useAdminLocale();
 const logoFailed = ref(false);
+const hotelImageFailed = ref(false);
 
 const labelClass = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500';
 const cardClass = 'overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm';
 
+const isHotel = computed(() => (
+    props.ticket.service_type === 'hotel'
+    || props.ticket.order_context?.service_type === 'hotel'
+    || Boolean(props.ticket.hotel?.hotel_name || props.ticket.hotel?.check_in)
+));
+
+const hotel = computed(() => props.ticket.hotel ?? null);
+
+const hotelLocation = computed(() => {
+    const parts = [hotel.value?.city_name, hotel.value?.country].filter(Boolean);
+
+    return parts.length > 0 ? parts.join(', ') : null;
+});
+
+const hotelStayFacts = computed(() => {
+    const facts = [];
+
+    if (hotel.value?.room_name) {
+        facts.push({ label: t('Room'), value: hotel.value.room_name });
+    } else if (hotel.value?.room_type) {
+        facts.push({ label: t('Room'), value: formatLabel(hotel.value.room_type) });
+    }
+
+    if (hotel.value?.board) {
+        facts.push({ label: t('Board'), value: String(hotel.value.board).toUpperCase() });
+    }
+
+    if (hotel.value?.nights) {
+        facts.push({
+            label: t('Nights'),
+            value: `${hotel.value.nights} ${Number(hotel.value.nights) === 1 ? t('night') : t('nights')}`,
+        });
+    }
+
+    if (hotel.value?.rooms) {
+        facts.push({
+            label: t('Rooms'),
+            value: String(hotel.value.rooms),
+        });
+    }
+
+    const adults = hotel.value?.adults;
+    const children = hotel.value?.children;
+    const guestsCount = hotel.value?.guests_count;
+
+    if (adults !== null && adults !== undefined && adults !== '') {
+        const parts = [`${adults} ${Number(adults) === 1 ? t('adult') : t('adults')}`];
+
+        if (children !== null && children !== undefined && Number(children) > 0) {
+            parts.push(`${children} ${Number(children) === 1 ? t('child') : t('children')}`);
+        }
+
+        facts.push({ label: t('Occupancy'), value: parts.join(' · ') });
+    } else if (guestsCount) {
+        facts.push({
+            label: t('Guests'),
+            value: String(guestsCount),
+        });
+    }
+
+    return facts;
+});
+
+const hotelGuests = computed(() => {
+    const list = props.ticket.guests?.length
+        ? props.ticket.guests
+        : (props.ticket.passengers ?? []);
+
+    return list.filter((guest) => guest && (guest.first_name || guest.last_name || guest.name));
+});
+
+const hotelStars = computed(() => {
+    const stars = Number(hotel.value?.stars ?? 0);
+
+    return Number.isFinite(stars) && stars > 0 ? Math.min(5, Math.round(stars)) : 0;
+});
+
+const hotelBookingRef = computed(() => (
+    hotel.value?.booking_reference
+    || hotel.value?.booking_id
+    || props.ticket.provider_order_number
+    || null
+));
+
 const airlineCode = computed(() => {
+    if (isHotel.value) {
+        return '';
+    }
+
     const flightNumber = props.ticket.segments?.[0]?.flight_number || props.ticket.flight_number;
     if (flightNumber) {
         const code = flightNumber.split(' ')[0];
@@ -206,7 +295,8 @@ const metaFields = computed(() => {
 });
 
 const showAdditionalDetails = computed(() => (
-    metaFields.value.length > 0 || extraEntries.value.length > 0 || metadataFields.value.length > 0
+    ! isHotel.value
+    && (metaFields.value.length > 0 || extraEntries.value.length > 0 || metadataFields.value.length > 0)
 ));
 
 const showContactsCard = computed(() => Boolean(
@@ -218,6 +308,10 @@ const showPricingCard = computed(() => Boolean(
 ));
 
 const couponRows = computed(() => {
+    if (isHotel.value) {
+        return [];
+    }
+
     if (Array.isArray(props.ticket.segment_coupons) && props.ticket.segment_coupons.length > 0) {
         return props.ticket.segment_coupons;
     }
@@ -244,7 +338,8 @@ const couponRows = computed(() => {
 });
 
 const hasAnyTicketData = computed(() => (
-    props.ticket.pnr
+    isHotel.value
+    || props.ticket.pnr
     || couponRows.value.length > 0
     || bookedByName.value
     || contactPhone.value
@@ -255,6 +350,14 @@ const hasAnyTicketData = computed(() => (
     || metadataFields.value.length > 0
     || metaFields.value.length > 0
 ));
+
+const copyHotelRef = async () => {
+    if (! hotelBookingRef.value || ! navigator.clipboard) {
+        return;
+    }
+
+    await navigator.clipboard.writeText(hotelBookingRef.value);
+};
 
 const copyPnr = async () => {
     if (! props.ticket.pnr || ! navigator.clipboard) {
@@ -441,6 +544,174 @@ const couponMetaParts = (row) => {
     </div>
 
     <div v-else class="space-y-4">
+        <article v-if="isHotel && hotel" :class="cardClass">
+            <div class="border-b border-slate-100 px-4 py-3">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="flex min-w-0 flex-1 items-start gap-3">
+                        <div class="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                            <img
+                                v-if="hotel.image_url && !hotelImageFailed"
+                                :src="hotel.image_url"
+                                :alt="hotel.hotel_name || t('Hotel')"
+                                class="h-full w-full object-cover"
+                                @error="hotelImageFailed = true"
+                            >
+                            <div
+                                v-else
+                                class="flex h-full w-full items-center justify-center text-slate-400"
+                                aria-hidden="true"
+                            >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="h-6 w-6">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M5 21V8.5L12 4l7 4.5V21M9 21v-5h6v5M9 10h.01M15 10h.01" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold text-slate-950">
+                                {{ hotel.hotel_name || t('Hotel stay') }}
+                            </p>
+                            <div
+                                v-if="hotelStars > 0"
+                                class="mt-1 flex items-center gap-0.5 text-amber-500"
+                                :aria-label="`${hotelStars} ${t('stars')}`"
+                            >
+                                <svg
+                                    v-for="star in hotelStars"
+                                    :key="star"
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                    class="h-3.5 w-3.5"
+                                    aria-hidden="true"
+                                >
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                </svg>
+                            </div>
+                            <p v-if="hotelLocation" class="mt-1 text-xs text-slate-500">
+                                {{ hotelLocation }}
+                            </p>
+                            <p v-else-if="hotel.address" class="mt-1 text-xs text-slate-500">
+                                {{ hotel.address }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div
+                            v-if="hotelBookingRef"
+                            class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 shadow-sm"
+                        >
+                            <span class="rounded-md bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white">
+                                {{ t('Ref') }}
+                            </span>
+                            <span class="font-mono text-sm font-bold tracking-wide text-slate-950">
+                                {{ hotelBookingRef }}
+                            </span>
+                            <button
+                                type="button"
+                                class="rounded-md border border-slate-200 bg-white p-1 text-slate-500 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800"
+                                :title="t('Copy')"
+                                @click="copyHotelRef"
+                            >
+                                <svg viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5" aria-hidden="true">
+                                    <path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z" />
+                                    <path d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5a1.5 1.5 0 00-1.5-1.5H5v-1z" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div v-if="providerStatusKey" class="flex items-center gap-2 text-sm text-slate-600">
+                            <OrderStatusBadge :status="providerStatusKey" />
+                        </div>
+
+                        <div
+                            v-if="showBookingActions"
+                            class="flex items-center gap-2"
+                            role="group"
+                            :aria-label="t('Booking actions')"
+                        >
+                            <button
+                                v-for="action in ticketActions"
+                                :key="action.id"
+                                type="button"
+                                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border bg-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2"
+                                :class="action.tone"
+                                :title="action.title"
+                                :aria-label="action.label"
+                                @click="handleAction(action.id)"
+                            >
+                                <svg
+                                    v-if="action.id === 'cancel'"
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                    class="h-4 w-4"
+                                    aria-hidden="true"
+                                >
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                                </svg>
+                                <svg
+                                    v-else
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                    class="h-4 w-4"
+                                    aria-hidden="true"
+                                >
+                                    <path fill-rule="evenodd" d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2h-.5zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                <div class="px-4 py-3">
+                    <p :class="labelClass">{{ t('Check-in') }}</p>
+                    <p class="mt-1.5 text-base font-semibold text-slate-950">{{ formatDateOnly(hotel.check_in) }}</p>
+                </div>
+                <div class="px-4 py-3">
+                    <p :class="labelClass">{{ t('Check-out') }}</p>
+                    <p class="mt-1.5 text-base font-semibold text-slate-950">{{ formatDateOnly(hotel.check_out) }}</p>
+                </div>
+            </div>
+
+            <div v-if="hotelStayFacts.length > 0" class="border-t border-slate-100 px-4 py-3">
+                <dl class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div v-for="fact in hotelStayFacts" :key="fact.label">
+                        <dt :class="labelClass">{{ fact.label }}</dt>
+                        <dd class="mt-0.5 text-sm font-medium text-slate-900">{{ fact.value }}</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div v-if="hotel.address && hotelLocation" class="border-t border-slate-100 px-4 py-3">
+                <p :class="labelClass">{{ t('Address') }}</p>
+                <p class="mt-0.5 text-sm text-slate-700">{{ hotel.address }}</p>
+            </div>
+        </article>
+
+        <div v-if="isHotel && hotelGuests.length > 0" :class="cardClass">
+            <div class="border-b border-slate-100 px-5 py-3">
+                <p class="text-sm font-semibold text-slate-950">{{ t('Guests') }}</p>
+            </div>
+            <ul class="divide-y divide-slate-100">
+                <li
+                    v-for="(guest, index) in hotelGuests"
+                    :key="index"
+                    class="flex items-center justify-between gap-3 px-5 py-3"
+                >
+                    <div class="min-w-0">
+                        <p class="text-sm font-medium text-slate-900">{{ passengerName(guest) }}</p>
+                        <p v-if="guest.email || guest.phone" class="mt-0.5 truncate text-xs text-slate-500">
+                            <span v-if="guest.email">{{ guest.email }}</span>
+                            <span v-if="guest.email && guest.phone"> · </span>
+                            <span v-if="guest.phone" dir="ltr">{{ guest.phone }}</span>
+                        </p>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
         <article
             v-for="(row, index) in couponRows"
             :key="`${row.flight_number}-${row.segment_index}-${index}`"
@@ -663,7 +934,7 @@ const couponMetaParts = (row) => {
             </div>
         </div>
 
-        <div v-if="ticket.items.length > 0 && couponRows.length === 0" :class="cardClass">
+        <div v-if="ticket.items.length > 0 && couponRows.length === 0 && !isHotel" :class="cardClass">
             <div class="border-b border-slate-100 px-5 py-3">
                 <p class="text-sm font-semibold text-slate-950">{{ t('Booking items') }}</p>
             </div>

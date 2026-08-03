@@ -26,6 +26,7 @@ class LoginRequest extends ApiFormRequest
             'login' => ['required', 'string', 'max:191'],
             'password' => ['required', 'string'],
             'device_name' => ['nullable', 'string', 'max:255'],
+            'remember_me' => ['sometimes', 'boolean'],
         ];
     }
 

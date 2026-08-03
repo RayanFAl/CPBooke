@@ -8,7 +8,7 @@ class CancelSupportOrderRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return $this->user()?->can('support.cancel-order') ?? false;
     }
 
     public function rules(): array

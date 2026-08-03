@@ -13,8 +13,8 @@ use App\Models\SupportTicketResolutionReport;
 use App\Models\User;
 use App\Modules\Admin\Orders\Services\OrderTicketPayloadBuilder;
 use App\Modules\Support\Services\SupportService;
+use App\Modules\Support\Storage\SupportAttachmentStorage;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class SupportAdminPresenter
@@ -22,6 +22,7 @@ class SupportAdminPresenter
     public function __construct(
         private readonly SupportService $supportService,
         private readonly OrderTicketPayloadBuilder $orderTicketPayloadBuilder,
+        private readonly SupportAttachmentStorage $attachmentStorage,
     ) {
     }
 
@@ -144,11 +145,10 @@ class SupportAdminPresenter
                     'message' => $message->message,
                     'is_internal' => $message->is_internal,
                     'sender_type' => $message->user?->isAdminAccount() ? 'agent' : 'user',
-                    'attachment_path' => $message->attachment_path,
                     'attachment_name' => $message->attachment_name,
                     'attachment_mime' => $message->attachment_mime,
                     'attachment_size' => $message->attachment_size,
-                    'attachment_url' => $this->attachmentUrl($message->attachment_path),
+                    'attachment_url' => $this->attachmentStorage->temporaryUrl($message),
                     'has_attachment' => $message->attachment_path !== null,
                     'attachment_is_image' => str_starts_with((string) $message->attachment_mime, 'image/'),
                     'created_at' => $message->created_at?->toDateTimeString(),
@@ -461,15 +461,6 @@ class SupportAdminPresenter
         }
 
         return $base;
-    }
-
-    private function attachmentUrl(?string $path): ?string
-    {
-        if ($path === null || $path === '') {
-            return null;
-        }
-
-        return Storage::disk('public')->url($path);
     }
 
     private function conversationState(?string $lastSenderType): ?string

@@ -38,6 +38,8 @@ return [
     'notifications' => [
         'fcm_server_key' => env('FCM_SERVER_KEY'),
         'fcm_sender_id' => env('FCM_SENDER_ID'),
+        // Preferred: Firebase Admin service-account JSON (FCM HTTP v1)
+        'firebase_credentials' => env('FIREBASE_CREDENTIALS', 'storage/app/firebase/firebase_credentials.json'),
         'sms_endpoint' => env('SMS_ENDPOINT'),
         'sms_token' => env('SMS_TOKEN'),
         'whatsapp_endpoint' => env('WHATSAPP_ENDPOINT'),

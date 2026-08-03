@@ -184,7 +184,7 @@ class ApiSupportTest extends TestCase
 
     public function test_customer_can_send_image_attachment_and_read_attachment_metadata(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $customer = User::factory()->create([
             'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
@@ -207,23 +207,31 @@ class ApiSupportTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.ticket.messages.0.attachment_name', 'voucher.png')
             ->assertJsonPath('data.ticket.messages.0.attachment_mime', 'image/png')
-            ->assertJsonPath('data.ticket.messages.0.attachment_is_image', true);
+            ->assertJsonPath('data.ticket.messages.0.attachment_is_image', true)
+            ->assertJsonMissingPath('data.ticket.messages.0.attachment_path');
 
         $message = SupportMessage::query()->firstOrFail();
 
-        Storage::disk('public')->assertExists($message->attachment_path);
+        Storage::disk('local')->assertExists($message->attachment_path);
+        $this->assertStringStartsWith('support/attachments/', $message->attachment_path);
+        $this->assertNotSame('voucher.png', basename((string) $message->attachment_path));
 
-        $this->getJson('/api/v1/support/tickets/current?subject=Upload%20travel%20voucher')
+        $current = $this->getJson('/api/v1/support/tickets/current?subject=Upload%20travel%20voucher')
             ->assertOk()
-            ->assertJsonPath('data.ticket.messages.0.attachment_path', $message->attachment_path)
             ->assertJsonPath('data.ticket.messages.0.attachment_name', 'voucher.png')
             ->assertJsonPath('data.ticket.messages.0.attachment_mime', 'image/png')
-            ->assertJsonPath('data.ticket.messages.0.attachment_size', $message->attachment_size);
+            ->assertJsonPath('data.ticket.messages.0.attachment_size', $message->attachment_size)
+            ->assertJsonMissingPath('data.ticket.messages.0.attachment_path');
+
+        $attachmentUrl = $current->json('data.ticket.messages.0.attachment_url');
+        $this->assertIsString($attachmentUrl);
+        $this->assertStringContainsString('/support/attachments/'.$message->id, $attachmentUrl);
+        $this->assertStringContainsString('signature=', $attachmentUrl);
     }
 
     public function test_customer_can_send_file_attachment_and_read_attachment_metadata(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $customer = User::factory()->create([
             'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
@@ -246,15 +254,16 @@ class ApiSupportTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.ticket.messages.0.attachment_name', 'itinerary.pdf')
             ->assertJsonPath('data.ticket.messages.0.attachment_mime', 'application/pdf')
-            ->assertJsonPath('data.ticket.messages.0.attachment_is_image', false);
+            ->assertJsonPath('data.ticket.messages.0.attachment_is_image', false)
+            ->assertJsonMissingPath('data.ticket.messages.0.attachment_path');
 
         $message = SupportMessage::query()->firstOrFail();
 
-        Storage::disk('public')->assertExists($message->attachment_path);
+        Storage::disk('local')->assertExists($message->attachment_path);
 
         $this->getJson('/api/v1/support/tickets/current?subject=Need%20itinerary%20copy')
             ->assertOk()
-            ->assertJsonPath('data.ticket.messages.0.attachment_path', $message->attachment_path)
+            ->assertJsonMissingPath('data.ticket.messages.0.attachment_path')
             ->assertJsonPath('data.ticket.messages.0.attachment_name', 'itinerary.pdf')
             ->assertJsonPath('data.ticket.messages.0.attachment_mime', 'application/pdf')
             ->assertJsonPath('data.ticket.messages.0.attachment_size', $message->attachment_size);

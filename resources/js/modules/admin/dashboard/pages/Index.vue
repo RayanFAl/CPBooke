@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 
 const props = defineProps({
     dashboard: {
@@ -28,6 +29,7 @@ const overviewCards = computed(() => props.dashboard.overview ?? []);
 const spotlightCards = computed(() => props.dashboard.spotlights ?? []);
 const latestOrders = computed(() => props.dashboard.latest_orders ?? []);
 const { locale, t } = useAdminLocale();
+const platformCurrency = usePlatformCurrency();
 
 const orderTrend = computed(() => props.dashboard.charts?.orders_trend ?? []);
 const revenueTrend = computed(() => props.dashboard.charts?.revenue_trend ?? []);
@@ -68,7 +70,7 @@ function metricValue(value, format) {
     if (format === 'currency') {
         return new Intl.NumberFormat(locale.value, {
             style: 'currency',
-            currency: 'LYD',
+            currency: platformCurrency.value || 'LYD',
             maximumFractionDigits: 0,
         }).format(Number(value ?? 0));
     }
@@ -92,10 +94,10 @@ function formatLabel(value) {
     return t(normalizedValue) ?? normalizedValue;
 }
 
-function formatMoney(value, currency = 'LYD') {
+function formatMoney(value, currency = platformCurrency.value || 'LYD') {
     return new Intl.NumberFormat(locale.value, {
         style: 'currency',
-        currency: currency || 'LYD',
+        currency: currency || platformCurrency.value || 'LYD',
         maximumFractionDigits: 0,
     }).format(Number(value ?? 0));
 }

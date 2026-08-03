@@ -194,13 +194,19 @@ class NotificationSystemTest extends TestCase
         $this->getJson('/api/v1/notifications')
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonCount(2, 'data.notifications');
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('meta.unread_count', 1);
+
+        $this->getJson('/api/v1/notifications/unread-count')
+            ->assertOk()
+            ->assertJsonPath('data.unread_count', 1);
 
         $this->getJson('/api/v1/notifications/unread')
             ->assertOk()
             ->assertJsonPath('data.count', 1)
             ->assertJsonCount(1, 'data.notifications')
-            ->assertJsonPath('data.notifications.0.id', $unread->id)
+            ->assertJsonPath('data.notifications.0.id', (string) $unread->id)
             ->assertJsonPath('data.notifications.0.is_read', false);
 
         $this->postJson('/api/v1/notifications/mark-as-read', [
@@ -439,5 +445,51 @@ class NotificationSystemTest extends TestCase
         app(FinancialConsistencyService::class)->reconcile(false);
 
         Event::assertDispatched(CriticalFinanceAnomaliesDetected::class);
+    }
+
+    public function test_support_ticket_reply_dispatches_customer_notification(): void
+    {
+        Queue::fake();
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+        $agent = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $ticket = \App\Models\SupportTicket::query()->create([
+            'ticket_number' => 'SUP-NOTIFY-0001',
+            'user_id' => $customer->id,
+            'order_id' => null,
+            'category' => 'technical_issue',
+            'priority' => 'medium',
+            'status' => 'open',
+            'assigned_to' => $agent->id,
+            'subject' => 'Need help',
+            'description' => 'Please assist.',
+        ]);
+
+        $message = \App\Models\SupportMessage::query()->create([
+            'support_ticket_id' => $ticket->id,
+            'user_id' => $agent->id,
+            'message' => 'We are looking into this.',
+            'is_internal' => false,
+        ]);
+
+        app(NotificationService::class)->dispatchForEvent(
+            new \App\Modules\Admin\Support\Events\SupportTicketReplied($ticket->load('user'), $message->load('user'))
+        );
+
+        $this->assertDatabaseHas('notification_logs', [
+            'user_id' => $customer->id,
+            'template_code' => 'SUPPORT_TICKET_REPLIED_CUSTOMER',
+            'channel' => NotificationChannels::IN_APP,
+            'status' => NotificationLog::STATUS_PENDING,
+        ]);
+
+        Queue::assertPushed(SendNotificationChannelJob::class);
     }
 }

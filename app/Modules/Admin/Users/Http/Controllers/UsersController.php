@@ -17,8 +17,7 @@ class UsersController
     public function __construct(
         private readonly UserService $userService,
         private readonly AccessControlService $accessControlService,
-    ) {
-    }
+    ) {}
 
     /**
      * Display the users listing.
@@ -50,6 +49,8 @@ class UsersController
     {
         return Inertia::render('admin/users/pages/Create', [
             'roles' => $this->accessControlService->availableRoleOptionsFor($request->user()),
+            'permissionGroups' => $this->accessControlService->permissionGroupsFor($request->user()),
+            'rolePermissions' => $this->accessControlService->rolePermissionMap(),
         ]);
     }
 
@@ -91,6 +92,8 @@ class UsersController
         return Inertia::render('admin/users/pages/Edit', [
             'user' => $this->userService->editPayload($user),
             'roles' => $this->accessControlService->availableRoleOptionsFor($actor),
+            'permissionGroups' => $this->accessControlService->permissionGroupsFor($actor),
+            'rolePermissions' => $this->accessControlService->rolePermissionMap(),
         ]);
     }
 

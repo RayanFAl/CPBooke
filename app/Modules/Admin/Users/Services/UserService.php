@@ -20,8 +20,7 @@ class UserService
     public function __construct(
         private readonly AccessControlService $accessControlService,
         private readonly CustomerLoyaltyService $loyaltyService,
-    ) {
-    }
+    ) {}
 
     /**
      * Build the paginated admin users listing.
@@ -263,6 +262,7 @@ class UserService
             'is_active' => (bool) $user->is_active,
             'is_admin' => (bool) $user->is_admin,
             'role' => $user->primaryRole()?->name,
+            'permissions' => $this->formPermissionNames($user),
         ];
     }
 
@@ -274,10 +274,12 @@ class UserService
     public function create(User $actor, array $data): User
     {
         $roleName = (string) $data['role'];
+        $permissionNames = $this->normalizePermissionNames($roleName, $data['permissions'] ?? []);
 
         $this->accessControlService->assertCanAssignRole($actor, $roleName);
+        $this->accessControlService->assertCanAssignPermissions($actor, $permissionNames, $roleName);
 
-        return DB::transaction(function () use ($data, $roleName): User {
+        return DB::transaction(function () use ($data, $roleName, $permissionNames): User {
             $user = User::query()->create([
                 'name' => $data['full_name'],
                 'full_name' => $data['full_name'],
@@ -291,8 +293,9 @@ class UserService
             ]);
 
             $user->syncRolesByName([$roleName]);
+            $this->syncUserPermissions($user, $roleName, $permissionNames);
 
-            return $user->load('roles');
+            return $user->load(['roles', 'permissions']);
         });
     }
 
@@ -307,8 +310,10 @@ class UserService
 
         $currentRoleName = $user->primaryRole()?->name;
         $nextRoleName = (string) $data['role'];
+        $permissionNames = $this->normalizePermissionNames($nextRoleName, $data['permissions'] ?? []);
 
         $this->accessControlService->assertCanAssignRole($actor, $nextRoleName);
+        $this->accessControlService->assertCanAssignPermissions($actor, $permissionNames, $nextRoleName);
 
         if ($user->hasRole(RbacRegistry::ROLE_SUPER_ADMIN)
             && $currentRoleName !== $nextRoleName
@@ -318,7 +323,7 @@ class UserService
             ]);
         }
 
-        return DB::transaction(function () use ($user, $data, $nextRoleName): User {
+        return DB::transaction(function () use ($user, $data, $nextRoleName, $permissionNames): User {
             $user->fill([
                 'name' => $data['full_name'],
                 'full_name' => $data['full_name'],
@@ -328,8 +333,9 @@ class UserService
             ])->save();
 
             $user->syncRolesByName([$nextRoleName]);
+            $this->syncUserPermissions($user, $nextRoleName, $permissionNames);
 
-            return $user->refresh()->load('roles');
+            return $user->refresh()->load(['roles', 'permissions']);
         });
     }
 
@@ -548,5 +554,66 @@ class UserService
             })
             ->whereKeyNot($user->getKey())
             ->doesntExist();
+    }
+
+    /**
+     * Resolve the permission names shown on create/edit forms.
+     *
+     * @return array<int, string>
+     */
+    private function formPermissionNames(User $user): array
+    {
+        if ($user->hasRole(RbacRegistry::ROLE_SUPER_ADMIN)) {
+            return RbacRegistry::permissionNames();
+        }
+
+        if ($user->hasDirectPermissions()) {
+            return $user->directPermissionNames();
+        }
+
+        $roleName = $user->primaryRole()?->name;
+
+        return $roleName
+            ? (RbacRegistry::rolePermissions()[$roleName] ?? [])
+            : [];
+    }
+
+    /**
+     * Normalize submitted permission names for persistence.
+     *
+     * @param  array<int, string>|null  $permissionNames
+     * @return array<int, string>
+     */
+    private function normalizePermissionNames(string $roleName, ?array $permissionNames): array
+    {
+        if ($roleName === RbacRegistry::ROLE_SUPER_ADMIN) {
+            return [];
+        }
+
+        return collect($permissionNames ?? [])
+            ->filter(fn ($permission): bool => is_string($permission) && $permission !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Persist direct permission assignments for the user.
+     *
+     * @param  array<int, string>  $permissionNames
+     */
+    private function syncUserPermissions(User $user, string $roleName, array $permissionNames): void
+    {
+        if (! Schema::hasTable('permission_user')) {
+            return;
+        }
+
+        if ($roleName === RbacRegistry::ROLE_SUPER_ADMIN) {
+            $user->syncPermissionsByName([]);
+
+            return;
+        }
+
+        $user->syncPermissionsByName($permissionNames);
     }
 }

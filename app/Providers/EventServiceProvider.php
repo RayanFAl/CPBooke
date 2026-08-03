@@ -41,6 +41,7 @@ class EventServiceProvider extends ServiceProvider
         ],
         SupportTicketStatusChanged::class => [
             SupportEventLoggerListener::class,
+            DispatchSystemNotificationListener::class,
         ],
         SupportTicketAssigned::class => [
             SupportEventLoggerListener::class,

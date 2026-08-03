@@ -2,6 +2,8 @@
 
 namespace App\Modules\Api\Support\Http\Requests;
 
+use App\Modules\Support\Storage\SupportAttachmentRules;
+
 class StoreSupportReplyRequest extends ApiFormRequest
 {
     /**
@@ -21,7 +23,7 @@ class StoreSupportReplyRequest extends ApiFormRequest
     {
         return [
             'message' => ['required_without:attachment', 'nullable', 'string', 'max:5000'],
-            'attachment' => ['nullable', 'file', 'max:20480', 'mimes:jpg,jpeg,png,gif,webp,heic,heif,pdf,doc,docx,xls,xlsx,csv,txt,mp4,mov,m4v,3gp,avi,webm', 'required_without:message'],
+            'attachment' => SupportAttachmentRules::fileRules(),
         ];
     }
 }

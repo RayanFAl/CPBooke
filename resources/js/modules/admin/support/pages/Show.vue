@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout.vue';
 import OrderTicketPanel from '../../orders/components/OrderTicketPanel.vue';
 import ResolutionReportForm from '../components/ResolutionReportForm.vue';
 import ResolutionReportView from '../components/ResolutionReportView.vue';
+import SystemTimeline from '../../components/SystemTimeline.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
@@ -46,6 +47,10 @@ const props = defineProps({
         default: false,
     },
     customer_notification_logs: {
+        type: Array,
+        default: () => [],
+    },
+    system_timeline: {
         type: Array,
         default: () => [],
     },
@@ -122,19 +127,7 @@ const normalizeAttachmentUrl = (value) => {
     return `/${value.replace(/^\/+/, '')}`;
 };
 
-const attachmentSource = (message) => {
-    const directUrl = normalizeAttachmentUrl(message?.attachment_url);
-
-    if (directUrl) {
-        return directUrl;
-    }
-
-    if (!message?.attachment_path) {
-        return null;
-    }
-
-    return `/storage/${String(message.attachment_path).replace(/^\/+/, '')}`;
-};
+const attachmentSource = (message) => normalizeAttachmentUrl(message?.attachment_url);
 
 const imageMessages = computed(() => props.ticket.messages.filter((message) => message.attachment_is_image && attachmentSource(message)));
 
@@ -1311,7 +1304,7 @@ const closeCustomerDrawer = () => {
                                         </span>
                                     </div>
                                     <div class="mt-4">
-                                        <ResolutionReportView :report="resolutionReport" />
+                                        <ResolutionReportView :report="resolutionReport" :ticket-id="ticket.id" />
                                     </div>
                                 </div>
 
@@ -1323,7 +1316,10 @@ const closeCustomerDrawer = () => {
                                 />
                             </div>
 
-                            <div v-else-if="activeWorkspaceTab === 'activity'" class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                            <div v-else-if="activeWorkspaceTab === 'activity'" class="space-y-4">
+                                <SystemTimeline :events="system_timeline" title="System Timeline" />
+
+                                <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                     <div>
                                         <h3 class="text-sm font-semibold text-slate-950">{{ t('Activity') }}</h3>
@@ -1479,6 +1475,7 @@ const closeCustomerDrawer = () => {
                                         {{ t('Open full notifications console') }} →
                                     </Link>
                                 </div>
+                            </div>
                             </div>
 
                             <div v-else-if="activeWorkspaceTab === 'details'" class="space-y-4">

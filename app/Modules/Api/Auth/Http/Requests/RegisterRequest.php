@@ -29,6 +29,7 @@ class RegisterRequest extends ApiFormRequest
             'phone' => ['required', 'string', 'max:30', 'unique:users,phone'],
             'password' => ['required', 'confirmed', Password::defaults()],
             'device_name' => ['nullable', 'string', 'max:255'],
+            'remember_me' => ['sometimes', 'boolean'],
         ];
     }
 

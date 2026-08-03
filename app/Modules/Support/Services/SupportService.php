@@ -2,6 +2,7 @@
 
 namespace App\Modules\Support\Services;
 
+use App\Models\AuditLog;
 use App\Models\SupportMessage;
 use App\Models\Order;
 use App\Models\SupportTicket;
@@ -11,6 +12,7 @@ use App\Modules\Admin\Support\Events\SupportTicketAssigned;
 use App\Modules\Admin\Support\Events\SupportTicketCreated;
 use App\Modules\Admin\Support\Events\SupportTicketReplied;
 use App\Modules\Admin\Support\Events\SupportTicketStatusChanged;
+use App\Modules\Audit\Services\AuditRecorder;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -32,6 +34,7 @@ class SupportService
     public function __construct(
         private readonly SupportAgentScoringService $supportAgentScoringService,
         private readonly SupportSLARiskService $supportSLARiskService,
+        private readonly AuditRecorder $auditRecorder,
     ) {
     }
 
@@ -839,6 +842,20 @@ class SupportService
             'new_value' => $newValue,
             'created_at' => now(),
         ]);
+
+        $actor = $userId ? User::query()->find($userId) : null;
+
+        $this->auditRecorder->success(
+            AuditLog::MODULE_SUPPORT,
+            'support.'.$action,
+            'Ticket '.($ticket->ticket_number ?: '#'.$ticket->id).' '.$action,
+            AuditLog::ENTITY_SUPPORT_TICKET,
+            $ticket->id,
+            $actor,
+            $field ? [$field => $oldValue] : null,
+            $field ? [$field => $newValue] : ['action' => $action],
+            ['order_id' => $ticket->order_id],
+        );
     }
 
     /**

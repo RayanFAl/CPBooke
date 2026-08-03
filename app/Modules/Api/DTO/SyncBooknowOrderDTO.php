@@ -51,7 +51,7 @@ final readonly class SyncBooknowOrderDTO
             grandTotal: number_format((float) $data['grand_total'], 2, '.', ''),
             providerBooking: $data['provider_booking'],
             contact: $data['contact'],
-            passengers: $data['passengers'],
+            passengers: $data['passengers'] ?? [],
             items: $data['items'],
             customerId: null,
             payment: $data['payment'] ?? null,
@@ -88,6 +88,55 @@ final readonly class SyncBooknowOrderDTO
 
     public function providerName(): string
     {
-        return (string) ($this->providerBooking['provider_name'] ?? 'booknow');
+        return (string) (
+            $this->providerBooking['provider_name']
+            ?? $this->providerBooking['provider']
+            ?? 'booknow'
+        );
+    }
+
+    public function providerKey(): string
+    {
+        $key = strtolower(trim((string) (
+            $this->providerBooking['provider_key']
+            ?? $this->providerBooking['provider']
+            ?? ''
+        )));
+
+        if ($key !== '') {
+            return $key;
+        }
+
+        return match ($this->productType) {
+            'esim' => 'booknow_esim',
+            'insurance' => 'booknow_insurance',
+            'hotel' => 'booknow_hotels',
+            default => 'booknow',
+        };
+    }
+
+    public function isBundle(): bool
+    {
+        if (($this->metadata['bundle'] ?? false) === true) {
+            return true;
+        }
+
+        $types = [];
+
+        foreach ($this->items as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $type = strtolower((string) ($item['type'] ?? ''));
+
+            if ($type !== '') {
+                $types[$type] = true;
+            }
+        }
+
+        $addonTypes = array_intersect(array_keys($types), ['esim', 'insurance', 'seat']);
+
+        return isset($types['flight']) && $addonTypes !== [];
     }
 }

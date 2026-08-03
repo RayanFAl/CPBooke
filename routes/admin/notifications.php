@@ -7,6 +7,10 @@ Route::get('/notifications', [NotificationsController::class, 'index'])
     ->middleware('permission:notifications.view')
     ->name('notifications.index');
 
+Route::post('/notifications/push-test', [NotificationsController::class, 'sendTestPush'])
+    ->middleware('permission:notifications.view')
+    ->name('notifications.push-test');
+
 Route::post('/notifications/logs/{notificationLog}/retry', [NotificationsController::class, 'retry'])
     ->middleware('permission:notifications.retry-failed')
     ->name('notifications.retry');

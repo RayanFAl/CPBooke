@@ -10,11 +10,18 @@ Route::middleware('auth:sanctum')
     ->controller(SupportApiController::class)
     ->group(function (): void {
         Route::get('/current', 'currentConversation')->name('current');
-        Route::post('/messages', 'sendMessage')->name('messages');
-        Route::post('/', 'store')->name('store');
+        Route::post('/messages', 'sendMessage')
+            ->middleware('throttle:30,1')
+            ->name('messages');
+        Route::post('/', 'store')
+            ->middleware('throttle:20,1')
+            ->name('store');
         Route::get('/', 'index')->name('index');
         Route::get('/{id}', 'show')->whereNumber('id')->name('show');
-        Route::post('/{id}/reply', 'reply')->whereNumber('id')->name('reply');
+        Route::post('/{id}/reply', 'reply')
+            ->middleware('throttle:30,1')
+            ->whereNumber('id')
+            ->name('reply');
     });
 
 Route::middleware('auth:sanctum')
@@ -25,8 +32,14 @@ Route::middleware('auth:sanctum')
         Route::get('/', 'index')->name('index');
         Route::get('/{ticket}', 'show')->whereNumber('ticket')->name('show');
         Route::get('/{ticket}/messages', 'messages')->whereNumber('ticket')->name('messages.index');
-        Route::post('/{ticket}/messages', 'storeMessage')->whereNumber('ticket')->name('messages.store');
+        Route::post('/{ticket}/messages', 'storeMessage')
+            ->middleware('throttle:30,1')
+            ->whereNumber('ticket')
+            ->name('messages.store');
         Route::get('/{ticket}/typing', 'showTyping')->whereNumber('ticket')->name('typing.show');
-        Route::post('/{ticket}/typing', 'typing')->whereNumber('ticket')->name('typing');
+        Route::post('/{ticket}/typing', 'typing')
+            ->middleware('throttle:60,1')
+            ->whereNumber('ticket')
+            ->name('typing');
         Route::post('/{ticket}/seen', 'seen')->whereNumber('ticket')->name('seen');
     });

@@ -3,8 +3,10 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import PermissionChecklist from '../components/PermissionChecklist.vue';
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { computed, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 
 const props = defineProps({
@@ -12,9 +14,19 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    permissionGroups: {
+        type: Array,
+        required: true,
+    },
+    rolePermissions: {
+        type: Object,
+        required: true,
+    },
 });
 
 const { t } = useAdminLocale();
+
+const initialRole = props.roles[0]?.name ?? '';
 
 const form = useForm({
     full_name: '',
@@ -23,8 +35,23 @@ const form = useForm({
     country: '',
     password: '',
     password_confirmation: '',
-    role: props.roles[0]?.name ?? '',
+    role: initialRole,
+    permissions: props.rolePermissions[initialRole] ?? [],
 });
+
+const isSuperAdminRole = computed(() => form.role === 'super_admin');
+
+watch(
+    () => form.role,
+    (role) => {
+        if (role === 'super_admin') {
+            form.permissions = [];
+            return;
+        }
+
+        form.permissions = [...(props.rolePermissions[role] ?? [])];
+    },
+);
 
 const submit = () => {
     form.post(route('admin.users.store'), {
@@ -95,6 +122,13 @@ const submit = () => {
                         <InputError class="mt-2" :message="form.errors.role" />
                     </div>
 
+                    <PermissionChecklist
+                        v-model="form.permissions"
+                        :permission-groups="permissionGroups"
+                        :disabled="isSuperAdminRole"
+                        :error="form.errors.permissions"
+                    />
+
                     <div class="grid gap-6 md:grid-cols-2">
                         <div>
                             <InputLabel for="password" :value="t('Password')" />
@@ -135,6 +169,7 @@ const submit = () => {
                         <li>{{ t('Super admin remains restricted to super admin operators only.') }}</li>
                         <li>{{ t('Admin receives operational access but not settings ownership.') }}</li>
                         <li>{{ t('Team member is intended for narrower back-office access.') }}</li>
+                        <li>{{ t('Use the permission checklist to fine-tune access beyond the selected role template.') }}</li>
                     </ul>
                 </div>
             </aside>

@@ -23,4 +23,12 @@ class Permission extends Model
     {
         return $this->belongsToMany(Role::class)->withTimestamps();
     }
+
+    /**
+     * Get the users that have the permission assigned directly.
+     */
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class)->withTimestamps();
+    }
 }

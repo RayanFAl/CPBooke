@@ -2,6 +2,9 @@
 
 namespace App\Modules\Admin\Support\Queries;
 
+use App\Models\SupportTicket;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
 
 class SupportInboxQuery
@@ -61,8 +64,8 @@ class SupportInboxQuery
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\SupportTicket>  $query
-     * @return \Illuminate\Database\Eloquent\Builder<\App\Models\SupportTicket>
+     * @param  Builder<SupportTicket>  $query
+     * @return Builder<SupportTicket>
      */
     public function applyFilter($query, string $column, mixed $value)
     {
@@ -74,8 +77,8 @@ class SupportInboxQuery
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\SupportTicket>  $query
-     * @return \Illuminate\Database\Eloquent\Builder<\App\Models\SupportTicket>
+     * @param  Builder<SupportTicket>  $query
+     * @return Builder<SupportTicket>
      */
     public function applySearch($query, ?string $search)
     {
@@ -102,8 +105,8 @@ class SupportInboxQuery
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\SupportTicket>  $query
-     * @return \Illuminate\Database\Eloquent\Builder<\App\Models\SupportTicket>
+     * @param  Builder<SupportTicket>  $query
+     * @return Builder<SupportTicket>
      */
     public function applySort($query, string $sort)
     {
@@ -119,7 +122,64 @@ class SupportInboxQuery
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\SupportTicket>  $query
+     * @param  Builder<SupportTicket>  $query
+     * @return Builder<SupportTicket>
+     */
+    public function applyQueueFilter($query, ?string $queue, ?int $agentId = null)
+    {
+        if ($queue === null || $queue === '' || $queue === 'all') {
+            return $query;
+        }
+
+        return match ($queue) {
+            'unread' => $this->applyUnreadFilter($query),
+            'unassigned' => $query->whereNull('assigned_to'),
+            'mine' => $agentId ? $query->where('assigned_to', $agentId) : $query,
+            'sla_risk' => $this->applySlaRiskFilter($query),
+            default => $query,
+        };
+    }
+
+    /**
+     * @param  Builder<SupportTicket>  $query
+     * @return Builder<SupportTicket>
+     */
+    public function applyUnreadFilter($query)
+    {
+        return $query->whereHas('latestMessage', function ($messageQuery): void {
+            $messageQuery
+                ->where('is_internal', false)
+                ->whereHas('user', fn ($userQuery) => $userQuery->where('account_type', User::ACCOUNT_TYPE_CUSTOMER));
+        });
+    }
+
+    /**
+     * @param  Builder<SupportTicket>  $query
+     * @return Builder<SupportTicket>
+     */
+    public function applySlaRiskFilter($query)
+    {
+        $now = now();
+
+        return $query
+            ->whereNotIn('status', ['resolved', 'closed'])
+            ->where(function ($slaQuery) use ($now): void {
+                $slaQuery
+                    ->where(function ($overdueQuery) use ($now): void {
+                        $overdueQuery
+                            ->where('first_response_due_at', '<=', $now)
+                            ->orWhere('resolution_due_at', '<=', $now);
+                    })
+                    ->orWhere(function ($atRiskQuery) use ($now): void {
+                        $atRiskQuery
+                            ->whereBetween('first_response_due_at', [$now, $now->copy()->addHour()])
+                            ->orWhereBetween('resolution_due_at', [$now, $now->copy()->addHour()]);
+                    });
+            });
+    }
+
+    /**
+     * @param  Builder<SupportTicket>  $query
      * @return array<string, int>
      */
     public function buildCounters($query): array
@@ -129,6 +189,8 @@ class SupportInboxQuery
             'in_progress' => (clone $query)->where('status', 'in_progress')->count(),
             'waiting_customer' => (clone $query)->where('status', 'waiting_customer')->count(),
             'resolved' => (clone $query)->where('status', 'resolved')->count(),
+            'unread' => $this->applyUnreadFilter(clone $query)->count(),
+            'unassigned' => (clone $query)->whereNull('assigned_to')->count(),
         ];
     }
 
@@ -142,6 +204,8 @@ class SupportInboxQuery
             'in_progress' => 0,
             'waiting_customer' => 0,
             'resolved' => 0,
+            'unread' => 0,
+            'unassigned' => 0,
         ];
     }
 }

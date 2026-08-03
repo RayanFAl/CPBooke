@@ -1,6 +1,12 @@
 <?php
 
 return [
+    'attachments' => [
+        'disk' => 'local',
+        'directory' => 'support/attachments',
+        'max_kilobytes' => (int) env('SUPPORT_ATTACHMENT_MAX_KB', 20480),
+        'signed_url_ttl_minutes' => (int) env('SUPPORT_ATTACHMENT_SIGNED_URL_TTL', 30),
+    ],
     'auto_assignment' => [
         'overload_score' => 140.0,
         'default_response_minutes' => 240.0,

@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use Carbon\Carbon;
 use App\Models\FinancialTransaction;
 use App\Models\NotificationLog;
 use App\Models\Order;
@@ -12,6 +11,7 @@ use App\Models\SupportTicketEventLog;
 use App\Models\SupportTicketResolutionReport;
 use App\Models\User;
 use App\Modules\Support\Services\SupportService;
+use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -197,9 +197,15 @@ class SupportTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_support_agent_can_cancel_a_linked_order_and_record_audit_trail(): void
+    public function test_support_agent_cancel_on_issued_order_creates_pending_approval(): void
     {
         [$actor, $customer] = $this->supportActorAndCustomer();
+        $operationsManager = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $operationsManager->syncRolesByName(['operations_manager']);
         $order = $this->createOrderForCustomer($customer);
 
         $ticket = SupportTicket::query()->create([
@@ -219,6 +225,19 @@ class SupportTest extends TestCase
                 'reason' => 'Customer requested cancellation from support.',
             ])
             ->assertRedirect(route('admin.support.show', $ticket, absolute: false));
+
+        $approval = \App\Models\Approval::query()->firstOrFail();
+
+        $this->assertSame(\App\Models\Approval::TYPE_CANCEL, $approval->type);
+        $this->assertSame(\App\Models\Approval::STATUS_PENDING, $approval->status);
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => Order::STATUS_CONFIRMED,
+        ]);
+
+        $this->actingAs($operationsManager)
+            ->post(route('admin.approvals.approve', $approval, absolute: false))
+            ->assertRedirect(route('admin.approvals.index', ['status' => 'all'], absolute: false));
 
         $this->assertDatabaseHas('orders', [
             'id' => $order->id,
@@ -332,6 +351,74 @@ class SupportTest extends TestCase
         } finally {
             Carbon::setTestNow();
         }
+    }
+
+    public function test_support_agent_can_view_reports_dashboard(): void
+    {
+        [$actor, $customer] = $this->supportActorAndCustomer();
+        $ticket = $this->createTicketWithResolutionReport($actor, $customer, 'closed');
+
+        $this->actingAs($actor)
+            ->get(route('admin.support.reports.index', absolute: false))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/support/pages/Reports', false)
+                ->where('dashboard.available', true)
+                ->where('dashboard.summary.total_reports', 1)
+                ->has('dashboard.recent_reports', 1)
+                ->where('dashboard.recent_reports.0.ticket_id', $ticket->id));
+    }
+
+    public function test_support_agent_can_export_resolution_reports_csv(): void
+    {
+        [$actor, $customer] = $this->supportActorAndCustomer();
+        $this->createTicketWithResolutionReport($actor, $customer, 'closed');
+
+        $response = $this->actingAs($actor)
+            ->get(route('admin.support.reports.export.csv', absolute: false));
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+        $content = $response->streamedContent();
+
+        $this->assertStringContainsString('Ticket Number', $content);
+        $this->assertStringContainsString('SUP-REPORT-EXPORT', $content);
+        $this->assertStringContainsString('Provider webhook timeout isolated to one booking.', $content);
+    }
+
+    public function test_support_agent_can_print_resolution_report(): void
+    {
+        [$actor, $customer] = $this->supportActorAndCustomer();
+        $ticket = $this->createTicketWithResolutionReport($actor, $customer, 'closed');
+
+        $this->actingAs($actor)
+            ->get(route('admin.support.resolution-report.print', $ticket, absolute: false))
+            ->assertOk()
+            ->assertSee('Support Resolution Report')
+            ->assertSee('SUP-REPORT-EXPORT')
+            ->assertSee('Provider webhook timeout isolated to one booking.');
+    }
+
+    public function test_print_resolution_report_returns_not_found_without_report(): void
+    {
+        [$actor, $customer] = $this->supportActorAndCustomer();
+
+        $ticket = SupportTicket::query()->create([
+            'ticket_number' => 'SUP-REPORT-404',
+            'user_id' => $customer->id,
+            'order_id' => null,
+            'category' => 'technical_issue',
+            'priority' => 'medium',
+            'status' => 'open',
+            'assigned_to' => $actor->id,
+            'subject' => 'No report yet',
+            'description' => 'Ticket without resolution report.',
+        ]);
+
+        $this->actingAs($actor)
+            ->get(route('admin.support.resolution-report.print', $ticket, absolute: false))
+            ->assertNotFound();
     }
 
     public function test_resolution_report_is_added_to_ticket_timeline(): void
@@ -641,7 +728,7 @@ class SupportTest extends TestCase
 
         $this->assertTrue($supportProps['order_actions']['can_manage']);
         $this->assertSame(
-            ['cancel', 'full_refund', 'partial_refund', 'reverse_refund', 'compensation'],
+            ['cancel', 'full_refund', 'reverse_refund', 'compensation'],
             array_column($supportProps['order_actions']['available'], 'name'),
             'Support agents retain reverse refund access temporarily through the legacy orders.change-status fallback.',
         );
@@ -858,7 +945,7 @@ class SupportTest extends TestCase
 
     public function test_support_agent_can_reply_with_attachment(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         [$actor, $customer] = $this->supportActorAndCustomer();
 
@@ -890,7 +977,9 @@ class SupportTest extends TestCase
         $this->assertSame('support-note.pdf', $message->attachment_name);
         $this->assertSame('application/pdf', $message->attachment_mime);
 
-        Storage::disk('public')->assertExists($message->attachment_path);
+        Storage::disk('local')->assertExists($message->attachment_path);
+        $this->assertStringStartsWith('support/attachments/', $message->attachment_path);
+        $this->assertNotSame('support-note.pdf', basename((string) $message->attachment_path));
     }
 
     public function test_support_auto_assignment_uses_weighted_scoring_and_falls_back_when_all_agents_are_overloaded(): void
@@ -1028,11 +1117,10 @@ class SupportTest extends TestCase
                 ->where('ticket.order_ticket.service_type', Order::SERVICE_TYPE_FLIGHT)
                 ->has('ticket.timeline')
                 ->where('order_actions.can_manage', true)
-                ->has('order_actions.available', 4)
+                ->has('order_actions.available', 3)
                 ->where('order_actions.available.0.name', 'cancel')
                 ->where('order_actions.available.1.name', 'full_refund')
-                ->where('order_actions.available.2.name', 'partial_refund')
-                ->where('order_actions.available.3.name', 'compensation')
+                ->where('order_actions.available.2.name', 'compensation')
             );
     }
 
@@ -1444,5 +1532,43 @@ class SupportTest extends TestCase
         ]);
 
         return $order->refresh();
+    }
+
+    private function createTicketWithResolutionReport(User $actor, User $customer, string $statusAfter = 'resolved'): SupportTicket
+    {
+        $ticket = SupportTicket::query()->create([
+            'ticket_number' => 'SUP-REPORT-EXPORT',
+            'user_id' => $customer->id,
+            'order_id' => null,
+            'category' => 'payment_issue',
+            'priority' => 'high',
+            'status' => $statusAfter === 'closed' ? 'closed' : 'resolved',
+            'assigned_to' => $actor->id,
+            'subject' => 'Exportable resolution report',
+            'description' => 'Ticket prepared for support reporting exports.',
+            'resolved_at' => now(),
+            'closed_at' => $statusAfter === 'closed' ? now() : null,
+        ]);
+
+        SupportTicketResolutionReport::query()->create([
+            'ticket_id' => $ticket->id,
+            'agent_id' => $actor->id,
+            'resolution_type' => 'resolved',
+            'root_cause' => 'Provider webhook timeout isolated to one booking.',
+            'actions_taken' => 'Verified the provider state and manually re-synced the confirmation.',
+            'resolution_summary' => 'Booking confirmation was re-synced and delivered to the customer.',
+            'internal_notes' => 'Internal audit note for export coverage.',
+            'customer_visible_notes' => 'Your booking is now confirmed and visible in your account.',
+            'status_before' => 'in_progress',
+            'status_after' => $statusAfter,
+            'handling_minutes' => 45,
+            'escalated' => false,
+            'reopened_count' => 0,
+            'satisfaction_requested' => true,
+            'metadata' => ['source' => 'support_resolution_report'],
+            'resolved_at' => now(),
+        ]);
+
+        return $ticket->refresh();
     }
 }

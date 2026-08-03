@@ -3,8 +3,10 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import PermissionChecklist from '../components/PermissionChecklist.vue';
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { computed, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 
 const props = defineProps({
@@ -14,6 +16,14 @@ const props = defineProps({
     },
     roles: {
         type: Array,
+        required: true,
+    },
+    permissionGroups: {
+        type: Array,
+        required: true,
+    },
+    rolePermissions: {
+        type: Object,
         required: true,
     },
 });
@@ -26,7 +36,26 @@ const form = useForm({
     phone: props.user.phone ?? '',
     country: props.user.country ?? '',
     role: props.user.role ?? '',
+    permissions: props.user.permissions ?? [],
 });
+
+const isSuperAdminRole = computed(() => form.role === 'super_admin');
+
+watch(
+    () => form.role,
+    (role, previousRole) => {
+        if (role === previousRole) {
+            return;
+        }
+
+        if (role === 'super_admin') {
+            form.permissions = [];
+            return;
+        }
+
+        form.permissions = [...(props.rolePermissions[role] ?? [])];
+    },
+);
 
 const submit = () => {
     form.put(route('admin.users.update', props.user.id), {
@@ -120,6 +149,13 @@ const submit = () => {
                         <InputError class="mt-2" :message="form.errors.role" />
                     </div>
 
+                    <PermissionChecklist
+                        v-model="form.permissions"
+                        :permission-groups="permissionGroups"
+                        :disabled="isSuperAdminRole"
+                        :error="form.errors.permissions"
+                    />
+
                     <div class="flex flex-wrap items-center gap-3">
                         <PrimaryButton :disabled="form.processing" :class="{ 'opacity-25': form.processing }">
                             {{ t('Save changes') }}
@@ -142,6 +178,7 @@ const submit = () => {
                         <li>{{ t('Email remains unique and validated at the backend layer.') }}</li>
                         <li>{{ t('Phone and country stay optional to support incomplete customer profiles.') }}</li>
                         <li>{{ t("Role changes are validated against the current operator's RBAC scope.") }}</li>
+                        <li>{{ t('Permission changes take effect immediately after saving this form.') }}</li>
                     </ul>
                 </div>
 

@@ -19,14 +19,14 @@ class AdminUserSeeder extends Seeder
             [
                 'name' => env('ADMIN_NAME', 'Booke Admin'),
                 'full_name' => env('ADMIN_NAME', 'Booke Admin'),
-                'password' => Hash::make(env('ADMIN_PASSWORD', 'ChangeMe123!')),
+                'password' => Hash::make(env('ADMIN_PASSWORD', '
+                ')),
                 'is_admin' => true,
                 'account_type' => User::ACCOUNT_TYPE_ADMIN,
                 'is_active' => true,
                 'email_verified_at' => now(),
             ]
         );
-        
 
         // تأكيد التحديث حتى لو كان موجود مسبقاً
         $user->is_admin = true;

@@ -9,10 +9,17 @@ use App\Modules\Notifications\Channels\SmsNotificationChannel;
 use App\Modules\Notifications\Channels\WhatsAppNotificationChannel;
 use App\Modules\Notifications\Contracts\NotificationChannel;
 use App\Modules\Notifications\Support\NotificationChannels;
+use App\Modules\Settings\Services\SystemSettingsService;
 use InvalidArgumentException;
 
 class NotificationChannelManager
 {
+    public function __construct(
+        private readonly FcmHttpV1Client $fcmHttpV1Client,
+        private readonly SystemSettingsService $systemSettingsService,
+    ) {
+    }
+
     /**
      * Resolve the channel driver implementation.
      */
@@ -35,12 +42,15 @@ class NotificationChannelManager
      */
     public function statuses(): array
     {
+        $pushConfigured = $this->fcmHttpV1Client->isConfigured();
+
         return [
             [
                 'channel' => NotificationChannels::IN_APP,
                 'healthy' => true,
                 'provider' => 'database',
                 'configured' => true,
+                'enabled' => true,
             ],
             [
                 'channel' => NotificationChannels::EMAIL,
@@ -49,24 +59,28 @@ class NotificationChannelManager
                 'configured' => filled(config('mail.mailers.'.config('mail.default').'.transport'))
                     || config('mail.default') === 'log'
                     || config('mail.default') === 'array',
+                'enabled' => $this->systemSettingsService->isChannelEnabled(NotificationChannels::EMAIL),
             ],
             [
                 'channel' => NotificationChannels::PUSH,
-                'healthy' => filled(config('services.notifications.fcm_server_key')),
-                'provider' => 'fcm',
-                'configured' => filled(config('services.notifications.fcm_server_key')),
+                'healthy' => $pushConfigured,
+                'provider' => 'fcm-http-v1',
+                'configured' => $pushConfigured,
+                'enabled' => $this->systemSettingsService->isChannelEnabled(NotificationChannels::PUSH),
             ],
             [
                 'channel' => NotificationChannels::SMS,
                 'healthy' => filled(config('services.notifications.sms_endpoint')),
                 'provider' => 'sms-gateway',
                 'configured' => filled(config('services.notifications.sms_endpoint')),
+                'enabled' => $this->systemSettingsService->isChannelEnabled(NotificationChannels::SMS),
             ],
             [
                 'channel' => NotificationChannels::WHATSAPP,
                 'healthy' => filled(config('services.notifications.whatsapp_endpoint')),
                 'provider' => 'whatsapp-gateway',
                 'configured' => filled(config('services.notifications.whatsapp_endpoint')),
+                'enabled' => $this->systemSettingsService->isChannelEnabled(NotificationChannels::WHATSAPP),
             ],
         ];
     }

@@ -127,19 +127,7 @@ const normalizeAttachmentUrl = (value) => {
     return `/${value.replace(/^\/+/, '')}`;
 };
 
-const attachmentSource = (message) => {
-    const directUrl = normalizeAttachmentUrl(message?.attachment_url);
-
-    if (directUrl) {
-        return directUrl;
-    }
-
-    if (!message?.attachment_path) {
-        return null;
-    }
-
-    return `/storage/${String(message.attachment_path).replace(/^\/+/, '')}`;
-};
+const attachmentSource = (message) => normalizeAttachmentUrl(message?.attachment_url);
 
 const imageMessages = computed(() => props.ticket.messages.filter((message) => message.attachment_is_image && attachmentSource(message)));
 

@@ -130,7 +130,7 @@ class ApiSupportChatTest extends TestCase
 
     public function test_customer_can_send_chat_pdf_attachment_without_text(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $customer = User::factory()->create([
             'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
@@ -164,12 +164,12 @@ class ApiSupportChatTest extends TestCase
             ->assertJsonPath('data.message.attachment.is_image', false)
             ->assertJsonPath('data.message.attachment.is_video', false);
 
-        Storage::disk('public')->assertExists(SupportMessage::query()->latest('id')->firstOrFail()->attachment_path);
+        Storage::disk('local')->assertExists(SupportMessage::query()->latest('id')->firstOrFail()->attachment_path);
     }
 
     public function test_customer_can_send_chat_video_attachment_without_text(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $customer = User::factory()->create([
             'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
@@ -203,7 +203,7 @@ class ApiSupportChatTest extends TestCase
             ->assertJsonPath('data.message.attachment.is_image', false)
             ->assertJsonPath('data.message.attachment.is_video', true);
 
-        Storage::disk('public')->assertExists(SupportMessage::query()->latest('id')->firstOrFail()->attachment_path);
+        Storage::disk('local')->assertExists(SupportMessage::query()->latest('id')->firstOrFail()->attachment_path);
     }
 
     public function test_typing_endpoint_dispatches_transport_event_without_mutating_ticket_behavior(): void

@@ -24,10 +24,12 @@ use App\Policies\SavedAddressPolicy;
 use App\Policies\SavedPassengerPolicy;
 use App\Policies\SavedVehiclePolicy;
 use App\Support\Rbac\RbacRegistry;
+use App\Modules\Settings\Services\SystemSettingsService;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
+use Throwable;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -103,6 +105,15 @@ class AppServiceProvider extends ServiceProvider
             'finance.reverse-refund' => 'orders.change-status',
         ] as $ability => $legacyFallback) {
             Gate::define($ability, fn (User $user): bool => $user->hasPermissionTo($ability) || $user->hasPermissionTo($legacyFallback));
+        }
+
+        try {
+            $settings = app(SystemSettingsService::class);
+            config([
+                'mail.from.name' => $settings->mailFromName(),
+            ]);
+        } catch (Throwable) {
+            // Settings table may not exist during early migrate/install.
         }
     }
 }

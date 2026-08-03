@@ -89,4 +89,108 @@ class UserPermissionAssignmentTest extends TestCase
         $this->assertTrue($target->hasPermissionTo('support.view'));
         $this->assertFalse($target->hasPermissionTo('orders.view'));
     }
+
+    public function test_non_super_admin_cannot_assign_permissions_they_do_not_have(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $actor = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+        $actor->syncRolesByName([RbacRegistry::ROLE_TEAM_MEMBER]);
+        $actor->syncPermissionsByName([
+            'users.view',
+            'users.update',
+            'users.create',
+            'orders.view',
+            'support.view',
+            'search.view',
+        ]);
+
+        $target = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+        $target->syncRolesByName([RbacRegistry::ROLE_TEAM_MEMBER]);
+        $target->syncPermissionsByName([
+            'users.view',
+            'orders.view',
+            'support.view',
+            'search.view',
+        ]);
+
+        $this->actingAs($actor)
+            ->from(route('admin.users.edit', $target))
+            ->put(route('admin.users.update', $target), [
+                'full_name' => $target->full_name,
+                'email' => $target->email,
+                'phone' => $target->phone,
+                'country' => $target->country,
+                'role' => RbacRegistry::ROLE_TEAM_MEMBER,
+                'permissions' => [
+                    'users.view',
+                    'orders.view',
+                    'support.view',
+                    'search.view',
+                    'finance.view',
+                ],
+            ])
+            ->assertForbidden();
+
+        $target->refresh();
+        $this->assertFalse($target->hasPermissionTo('finance.view'));
+    }
+
+    public function test_non_super_admin_cannot_assign_settings_manage(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $actor = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+        $actor->syncRolesByName([RbacRegistry::ROLE_ADMIN]);
+        $actor->syncPermissionsByName([
+            'users.view',
+            'users.update',
+            'users.create',
+            'settings.manage',
+            'orders.view',
+            'support.view',
+        ]);
+
+        $target = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+        $target->syncRolesByName([RbacRegistry::ROLE_TEAM_MEMBER]);
+        $target->syncPermissionsByName([
+            'users.view',
+            'orders.view',
+            'support.view',
+            'search.view',
+        ]);
+
+        $this->actingAs($actor)
+            ->from(route('admin.users.edit', $target))
+            ->put(route('admin.users.update', $target), [
+                'full_name' => $target->full_name,
+                'email' => $target->email,
+                'phone' => $target->phone,
+                'country' => $target->country,
+                'role' => RbacRegistry::ROLE_TEAM_MEMBER,
+                'permissions' => [
+                    'users.view',
+                    'orders.view',
+                    'support.view',
+                    'search.view',
+                    'settings.manage',
+                ],
+            ])
+            ->assertForbidden();
+
+        $target->refresh();
+        $this->assertFalse($target->hasPermissionTo('settings.manage'));
+    }
 }

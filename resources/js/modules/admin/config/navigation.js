@@ -16,13 +16,6 @@ export const navigationItems = [
         icon: 'orders',
         children: [
             {
-                label: 'Global Search',
-                route: 'admin.search.index',
-                startsWith: '/admin/search',
-                permission: 'search.view',
-                icon: 'orders',
-            },
-            {
                 label: 'Orders',
                 route: 'admin.orders.index',
                 startsWith: '/admin/orders',
@@ -44,7 +37,7 @@ export const navigationItems = [
                 icon: 'airports',
             },
             {
-                label: 'Home Content',
+                label: 'Products',
                 route: 'admin.home.index',
                 startsWith: '/admin/home',
                 permission: 'settings.manage',
@@ -53,11 +46,11 @@ export const navigationItems = [
         ],
     },
     {
-        label: 'Suppliers',
+        label: 'Providers',
         icon: 'suppliers',
         children: [
             {
-                label: 'Supplier profiles',
+                label: 'Provider profiles',
                 route: 'admin.suppliers.index',
                 startsWith: '/admin/suppliers',
                 permission: 'suppliers.view',
@@ -69,13 +62,6 @@ export const navigationItems = [
                 startsWith: '/admin/provider-wallets',
                 permission: 'provider-wallets.view',
                 icon: 'finance',
-            },
-            {
-                label: 'Provider Health',
-                route: 'admin.provider-health.index',
-                startsWith: '/admin/provider-health',
-                permission: 'provider-health.view',
-                icon: 'governance',
             },
             {
                 label: 'Settlements',
@@ -104,13 +90,6 @@ export const navigationItems = [
                 permission: 'approvals.view',
                 icon: 'governance',
             },
-            {
-                label: 'Governance',
-                route: 'admin.governance.dashboard',
-                startsWith: '/admin/governance',
-                permission: 'governance.view',
-                icon: 'governance',
-            },
         ],
     },
     {
@@ -118,7 +97,7 @@ export const navigationItems = [
         icon: 'users',
         children: [
             {
-                label: 'Users',
+                label: 'Customers',
                 route: 'admin.users.index',
                 startsWith: '/admin/users',
                 permission: 'users.view',
@@ -139,17 +118,17 @@ export const navigationItems = [
                 icon: 'notifications',
             },
             {
-                label: 'Monitoring',
-                route: 'admin.monitoring.index',
-                startsWith: '/admin/monitoring',
-                permission: 'monitoring.view',
-                icon: 'governance',
-            },
-            {
                 label: 'Audit Center',
                 route: 'admin.audit.index',
                 startsWith: '/admin/audit',
                 permission: 'audit.view',
+                icon: 'governance',
+            },
+            {
+                label: 'Settings',
+                route: 'admin.settings.index',
+                startsWith: '/admin/settings',
+                permission: 'settings.manage',
                 icon: 'governance',
             },
         ],

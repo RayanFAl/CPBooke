@@ -20,11 +20,27 @@ CPBooke is treated as an operations platform. Phase A hardens the system before 
 | Security | API auth / orders / support writes throttled |
 | Security | Airports admin behind `settings.manage` |
 | Security | `WALLET_ALLOW_NEGATIVE` default `false` |
+| Security | Support attachments on private disk + signed download URLs |
+| Security | `users.update` cannot escalate beyond actor permissions / settings.manage |
+| Ops | Admin Settings singleton (company, currency, margins, channels, flags) |
+| Ops | SMS/WhatsApp/Push: no fake “delivered” in production when unconfigured |
+| Debt | Removed legacy Blade `booknow_airports` + unused admin Blade layout |
 | Performance | Production indexes on orders, support SLA, audit, events |
 | Performance | Order/global search no longer scans JSON payloads |
 | Performance | Wallet alert count uses SQL, not collection filter |
 | Ops | `php artisan backup:database` + daily schedule 01:15 |
 | Ops | Audit log retention via `CleanupMonitoringDataJob` |
+
+## V1 internal Definition of Done (checklist)
+
+- [ ] `php artisan migrate` including `system_settings`
+- [ ] `php artisan db:seed --class=SystemSettingsSeeder` (or full DatabaseSeeder)
+- [ ] `php artisan support:migrate-attachments-to-private` if legacy public files exist
+- [ ] Env: `SMS_*`, `WHATSAPP_*`, `FIREBASE_CREDENTIALS`, attachment TTL vars documented in `.env.example`
+- [ ] RBAC: `settings.manage` assigned only where intended; no public `/register`
+- [ ] Queue workers: `notifications-*`, default, Reverb if realtime chat is enabled
+- [ ] `APP_DEBUG=false` in production
+- [ ] Smoke: Airports Inertia CRUD, Settings save, support attachment signed download
 
 ## Documents in this folder
 

@@ -56,7 +56,7 @@ const openSettlement = (row) => {
 
             <form class="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:flex-row" @submit.prevent="applyFilters">
                 <select v-model="filterForm.provider_id" class="rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
-                    <option value="">{{ t('All suppliers') }}</option>
+                    <option value="">{{ t('All providers') }}</option>
                     <option v-for="provider in providers" :key="provider.id" :value="provider.id">
                         {{ provider.name }}
                     </option>
@@ -76,7 +76,7 @@ const openSettlement = (row) => {
                 <table class="min-w-full divide-y divide-slate-200 text-sm">
                     <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                         <tr>
-                            <th class="px-4 py-3">{{ t('Supplier') }}</th>
+                            <th class="px-4 py-3">{{ t('Provider') }}</th>
                             <th class="px-4 py-3">{{ t('Period') }}</th>
                             <th class="px-4 py-3">{{ t('Expected') }}</th>
                             <th class="px-4 py-3">{{ t('Invoice') }}</th>

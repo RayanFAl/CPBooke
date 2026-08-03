@@ -27,8 +27,6 @@ class SupportEventLoggerListener
             'payload' => $this->payloadFor($event),
             'created_at' => now(),
         ]);
-
-        // Placeholder: dispatch support notifications here when the notification layer is introduced.
     }
 
     /**

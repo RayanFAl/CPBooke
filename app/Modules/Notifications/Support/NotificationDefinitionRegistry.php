@@ -8,6 +8,7 @@ use App\Modules\Admin\Finance\Events\CriticalFinanceAnomaliesDetected;
 use App\Modules\Admin\Support\Events\SupportTicketAssigned;
 use App\Modules\Admin\Support\Events\SupportTicketCreated;
 use App\Modules\Admin\Support\Events\SupportTicketReplied;
+use App\Modules\Admin\Support\Events\SupportTicketStatusChanged;
 use App\Modules\Loyalty\Events\LoyaltyTierChanged;
 use App\Modules\Orders\Events\OrderConfirmed;
 use App\Modules\Orders\Events\OrderCreated;
@@ -31,6 +32,7 @@ class NotificationDefinitionRegistry
             $event instanceof SupportTicketCreated => $this->supportTicketCreatedDefinitions($event),
             $event instanceof SupportTicketReplied => $this->supportTicketRepliedDefinitions($event),
             $event instanceof SupportTicketAssigned => $this->supportTicketAssignedDefinitions($event),
+            $event instanceof SupportTicketStatusChanged => $this->supportTicketStatusChangedDefinitions($event),
             $event instanceof LoyaltyTierChanged => $this->loyaltyTierChangedDefinitions($event),
             $event instanceof CriticalFinanceAnomaliesDetected => $this->criticalFinanceAnomalyDefinitions($event),
             default => [],
@@ -274,6 +276,34 @@ class NotificationDefinitionRegistry
             'payload' => [
                 'ticket_number' => $event->ticket->ticket_number,
                 'ticket_priority' => $event->ticket->priority,
+            ],
+        ]];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function supportTicketStatusChangedDefinitions(SupportTicketStatusChanged $event): array
+    {
+        if (! in_array($event->newStatus, ['resolved', 'closed'], true)) {
+            return [];
+        }
+
+        return [[
+            'code' => 'SUPPORT_TICKET_CLOSED',
+            'name' => 'Support Ticket Closed',
+            'subject' => 'Ticket {ticket_number} is now {ticket_status}',
+            'body' => 'Hello {user_name}, ticket {ticket_number} was marked as {ticket_status}.',
+            'channels' => [NotificationChannels::IN_APP, NotificationChannels::PUSH],
+            'variables' => ['user_name', 'ticket_number', 'ticket_status'],
+            'notification_type' => 'support',
+            'related_type' => 'support_ticket',
+            'related_id' => $event->ticket->id,
+            'users' => array_filter([$event->ticket->user]),
+            'payload' => [
+                'user_name' => $event->ticket->user?->full_name ?: $event->ticket->user?->name ?: 'Customer',
+                'ticket_number' => $event->ticket->ticket_number,
+                'ticket_status' => $event->newStatus,
             ],
         ]];
     }

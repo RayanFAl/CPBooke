@@ -2,11 +2,20 @@
 
 namespace App\Modules\Support\Storage;
 
+use App\Models\SupportMessage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SupportAttachmentStorage
 {
+    public const DISK = 'local';
+
+    public const DIRECTORY = 'support/attachments';
+
     /**
      * @return array<string, int|string|null>
      */
@@ -16,12 +25,79 @@ class SupportAttachmentStorage
             return [];
         }
 
+        $originalName = SupportAttachmentRules::sanitizeOriginalName(
+            (string) $attachment->getClientOriginalName()
+        );
+
+        if (SupportAttachmentRules::isBlockedExtension($originalName)) {
+            return [];
+        }
+
+        $extension = strtolower((string) $attachment->getClientOriginalExtension());
+        $safeExtension = in_array($extension, SupportAttachmentRules::ALLOWED_EXTENSIONS, true)
+            ? $extension
+            : 'bin';
+
+        $storedName = Str::uuid()->toString().'.'.$safeExtension;
+        $path = $attachment->storeAs(self::DIRECTORY, $storedName, self::DISK);
+
+        if (! is_string($path) || $path === '') {
+            return [];
+        }
+
         return [
-            'attachment_path' => $attachment->store('support/attachments', 'public'),
-            'attachment_name' => $attachment->getClientOriginalName(),
+            'attachment_path' => $path,
+            'attachment_name' => $originalName,
             'attachment_mime' => $this->resolveMime($attachment),
             'attachment_size' => $attachment->getSize(),
         ];
+    }
+
+    public function temporaryUrl(SupportMessage $message): ?string
+    {
+        if ($message->attachment_path === null || $message->attachment_path === '') {
+            return null;
+        }
+
+        $ttl = (int) config('support.attachments.signed_url_ttl_minutes', 30);
+
+        return URL::temporarySignedRoute(
+            'support.attachments.download',
+            now()->addMinutes(max(1, $ttl)),
+            ['message' => $message->id],
+        );
+    }
+
+    public function exists(SupportMessage $message): bool
+    {
+        if ($message->attachment_path === null || $message->attachment_path === '') {
+            return false;
+        }
+
+        return Storage::disk(self::DISK)->exists($message->attachment_path);
+    }
+
+    public function stream(SupportMessage $message): StreamedResponse
+    {
+        $disk = Storage::disk(self::DISK);
+        $path = (string) $message->attachment_path;
+        $downloadName = SupportAttachmentRules::sanitizeOriginalName(
+            (string) ($message->attachment_name ?: basename($path))
+        );
+        $mime = is_string($message->attachment_mime) && $message->attachment_mime !== ''
+            ? $message->attachment_mime
+            : 'application/octet-stream';
+
+        return $disk->response(
+            $path,
+            $downloadName,
+            [
+                'Content-Type' => $mime,
+                'X-Content-Type-Options' => 'nosniff',
+                'Cache-Control' => 'private, no-store',
+            ],
+            'inline',
+        );
     }
 
     public function supportsMessageAttachments(): bool

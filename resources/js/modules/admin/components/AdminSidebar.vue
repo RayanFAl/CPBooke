@@ -18,6 +18,7 @@ const { t, isArabic } = useAdminLocale();
 
 const user = computed(() => page.props.auth.user);
 const permissions = computed(() => user.value?.permissions ?? []);
+const companyName = computed(() => page.props.platform?.company_name || t('Booke'));
 
 const displayName = computed(() => user.value?.full_name ?? user.value?.name ?? '');
 
@@ -140,7 +141,7 @@ const handleNavigate = () => {
         >
             <div class="min-w-0 flex-1" :class="collapsed ? 'sr-only' : ''">
                 <p class="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-400">
-                    {{ t('Booke') }}
+                    {{ companyName }}
                 </p>
                 <h1 class="mt-2 text-lg font-semibold">{{ t('Control Panel') }}</h1>
             </div>

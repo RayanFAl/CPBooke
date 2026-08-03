@@ -145,13 +145,13 @@ Global gate registration
 
 ### `settings.manage`
 
-- Status: `UNUSED`
+- Status: `USED`
+- Registry: `App\Support\Rbac\RbacRegistry` (`admin` / `manage_settings`)
+- Assignment: only super admins may assign this permission to others (`AccessControlService`)
 - Usage:
-  - The settings module exists, but access is controlled by `role:super_admin` in `routes/admin/settings.php`
-  - The settings navigation item in `resources/js/modules/admin/config/navigation.js` also uses `role`, not this permission
-  - The permission string itself has no real enforcement or UI check
-- Cleanup:
-  - Removed from `app/Support/Rbac/RbacRegistry.php`
+  - Routes: `routes/admin/settings.php` (`admin.settings.index`, `admin.settings.update`)
+  - Also gates Airports and Home Content admin modules
+  - Sidebar: Platform → Settings in `resources/js/modules/admin/config/navigation.js`
 
 ## Partial Usage Findings
 
@@ -159,9 +159,8 @@ Global gate registration
 
 ## Admin Navigation Alignment Audit
 
-- `Users`, `Orders`, `Finance`, and `Support` sidebar items are aligned to live permissions in `resources/js/modules/admin/config/navigation.js` and filtered from `resources/js/modules/admin/components/AdminSidebar.vue` using the authenticated user's shared `permissions` array.
+- `Users`, `Orders`, `Finance`, `Support`, and `Settings` sidebar items are aligned to live permissions in `resources/js/modules/admin/config/navigation.js` and filtered from `resources/js/modules/admin/components/AdminSidebar.vue` using the authenticated user's shared `permissions` array.
 - `Dashboard` remains visible in the sidebar without a permission mapping because `routes/admin/dashboard.php` does not enforce a dedicated permission. No frontend role check is used for it.
-- `Settings` was removed from the sidebar because its backend access still depends on `role:super_admin` in `routes/admin/settings.php` and there is no live permission in `App\Support\Rbac\RbacRegistry` that can represent it without reintroducing stale RBAC state.
 
 ## Final Registry State
 

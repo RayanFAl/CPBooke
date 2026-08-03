@@ -34,7 +34,7 @@ const formatMoney = (amount, currency) => {
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <Link :href="route('admin.suppliers.index')" class="text-sm font-medium text-cyan-700">← {{ t('Back to suppliers') }}</Link>
+                        <Link :href="route('admin.suppliers.index')" class="text-sm font-medium text-cyan-700">← {{ t('Back to providers') }}</Link>
                         <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ supplier.name }}</h2>
                         <p class="mt-1 text-sm text-slate-500">{{ supplier.key }} · {{ supplier.status }} · {{ supplier.integration_status }}</p>
                     </div>

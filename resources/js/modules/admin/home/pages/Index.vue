@@ -35,15 +35,17 @@ const destroyOffer = (offer) => {
 };
 
 const prettyAction = (item) => {
+    const label = t(`home.action.${item.action_type}`);
+
     if (item.action_type === 'none') {
-        return t('Display only');
+        return label;
     }
 
     if (item.action_value) {
-        return `${item.action_type}: ${item.action_value}`;
+        return `${label}: ${item.action_value}`;
     }
 
-    return item.action_type;
+    return label;
 };
 </script>
 

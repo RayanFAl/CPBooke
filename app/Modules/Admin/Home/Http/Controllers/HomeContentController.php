@@ -9,6 +9,7 @@ use App\Modules\Admin\Home\Http\Requests\StoreHomeOfferRequest;
 use App\Modules\Admin\Home\Http\Requests\UpdateHomeBannerRequest;
 use App\Modules\Admin\Home\Http\Requests\UpdateHomeOfferRequest;
 use App\Modules\Admin\Home\Services\HomeAdminService;
+use App\Support\Home\HomeContentSchedule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -148,7 +149,7 @@ class HomeContentController
     }
 
     /**
-     * @return array{action_types: list<string>, categories: list<string>, platforms: list<string>}
+     * @return array{action_types: list<string>, categories: list<string>, platforms: list<string>, schedule_timezone: string}
      */
     private function formOptions(): array
     {
@@ -156,6 +157,7 @@ class HomeContentController
             'action_types' => HomeBanner::ACTION_TYPES,
             'categories' => HomeOffer::CATEGORIES,
             'platforms' => ['ios', 'android'],
+            'schedule_timezone' => HomeContentSchedule::timezone(),
         ];
     }
 }

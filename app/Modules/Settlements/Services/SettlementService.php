@@ -29,7 +29,7 @@ class SettlementService
     public function createPeriod(array $data, User $actor): Settlement
     {
         $provider = Provider::query()->findOrFail($data['provider_id']);
-        $currency = strtoupper((string) ($data['currency'] ?? $provider->default_currency ?? config('settlements.default_currency', 'LYD')));
+        $currency = strtoupper((string) ($data['currency'] ?? $provider->default_currency ?? app(\App\Modules\Settings\Services\SystemSettingsService::class)->defaultCurrency()));
         $periodStart = $data['period_start'];
         $periodEnd = $data['period_end'];
 

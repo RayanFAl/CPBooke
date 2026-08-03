@@ -10,6 +10,7 @@ use App\Modules\Admin\Settlements\Http\Requests\ResolveSettlementItemRequest;
 use App\Modules\Admin\Settlements\Http\Requests\StoreSettlementRequest;
 use App\Modules\Audit\Services\EntityTimelineService;
 use App\Modules\Settlements\Services\SettlementService;
+use App\Modules\Settings\Services\SystemSettingsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -21,6 +22,7 @@ class SettlementController
     public function __construct(
         private readonly SettlementService $settlementService,
         private readonly EntityTimelineService $entityTimelineService,
+        private readonly SystemSettingsService $systemSettingsService,
     ) {
     }
 
@@ -57,7 +59,7 @@ class SettlementController
 
         return Inertia::render('admin/settlements/pages/Create', [
             'providers' => Provider::query()->orderBy('name')->get(['id', 'name', 'key', 'default_currency']),
-            'default_currency' => config('settlements.default_currency', 'LYD'),
+            'default_currency' => $this->systemSettingsService->defaultCurrency(),
         ]);
     }
 

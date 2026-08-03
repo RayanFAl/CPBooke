@@ -5,11 +5,16 @@ namespace App\Modules\Support\Presenters;
 use App\Models\SupportMessage;
 use App\Models\SupportTicket;
 use App\Models\User;
+use App\Modules\Support\Storage\SupportAttachmentStorage;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 
 class SupportChatPayloadBuilder
 {
+    public function __construct(
+        private readonly SupportAttachmentStorage $attachmentStorage,
+    ) {
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -188,11 +193,10 @@ class SupportChatPayloadBuilder
         }
 
         return [
-            'path' => $message->attachment_path,
             'name' => $message->attachment_name,
             'mime' => $message->attachment_mime,
             'size' => $message->attachment_size,
-            'url' => Storage::disk('public')->url($message->attachment_path),
+            'url' => $this->attachmentStorage->temporaryUrl($message),
             'is_image' => str_starts_with((string) $message->attachment_mime, 'image/'),
             'is_video' => str_starts_with((string) $message->attachment_mime, 'video/'),
         ];

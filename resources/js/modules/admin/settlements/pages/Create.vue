@@ -40,7 +40,7 @@ const submit = () => {
 
             <form class="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm" @submit.prevent="submit">
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-slate-700">{{ t('Supplier') }}</label>
+                    <label class="mb-1 block text-sm font-medium text-slate-700">{{ t('Provider') }}</label>
                     <select v-model="form.provider_id" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
                         <option v-for="provider in providers" :key="provider.id" :value="provider.id">
                             {{ provider.name }} ({{ provider.key }})

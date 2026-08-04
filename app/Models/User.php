@@ -138,6 +138,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Customer wallet accounts owned by the user.
+     */
+    public function customerWallets(): HasMany
+    {
+        return $this->hasMany(CustomerWallet::class);
+    }
+
+    /**
      * Get the support tickets assigned to the user.
      */
     public function assignedSupportTickets(): HasMany

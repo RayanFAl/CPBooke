@@ -57,4 +57,18 @@ class ProviderWallet extends Model
 
         return (float) $this->balance <= (float) $this->low_balance_threshold;
     }
+
+    public function availableBalance(): float
+    {
+        $creditLimit = $this->allow_negative
+            ? (float) ($this->provider?->credit_limit ?? 0)
+            : 0.0;
+
+        return round((float) $this->balance + max($creditLimit, 0.0), 2);
+    }
+
+    public function canCoverAmount(float $amount): bool
+    {
+        return $this->availableBalance() >= $amount;
+    }
 }

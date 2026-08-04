@@ -12,10 +12,12 @@ use App\Modules\Orders\Events\OrderConfirmed as OrderConfirmedEvent;
 use App\Modules\Orders\Events\OrderCreated as OrderCreatedEvent;
 use App\Modules\Orders\Services\OrderCostService;
 use App\Modules\ProviderHealth\Services\ProviderApiEventRecorder;
+use App\Modules\Providers\Services\ProviderApiLogService;
 use App\Modules\Wallets\Services\WalletService;
 use App\Support\Orders\BooknowOrderStatusMapper;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -27,6 +29,7 @@ class BooknowOrderSyncService
         private readonly WalletService $walletService,
         private readonly OrderCostService $orderCostService,
         private readonly ProviderApiEventRecorder $apiEventRecorder,
+        private readonly ProviderApiLogService $providerApiLogService,
     ) {
     }
 
@@ -39,16 +42,52 @@ class BooknowOrderSyncService
     {
         $started = microtime(true);
         $provider = $this->resolveProvider($data);
+        $correlationId = $this->buildCorrelationId($data->externalBookingId());
 
         try {
             $result = $this->upsertOrder($authenticatedUser, $data, $provider);
             $latencyMs = (int) max(0, round((microtime(true) - $started) * 1000));
             $this->apiEventRecorder->recordSyncSuccess($provider, $latencyMs, $result['order']->id);
+            $this->providerApiLogService->record(
+                provider: $provider,
+                endpointKey: $this->syncEndpointKey($data),
+                statusCode: 200,
+                success: true,
+                responseTimeMs: $latencyMs,
+                requestBody: $data->rawPayload,
+                responseBody: is_array($result['order']->response_payload) ? $result['order']->response_payload : null,
+                correlationId: $correlationId,
+                referenceType: 'order',
+                referenceId: (string) $result['order']->id,
+                context: [
+                    'provider_key' => $provider->key,
+                    'product_type' => $data->productType,
+                    'booking_id' => $data->externalBookingId(),
+                ],
+            );
 
             return $result;
         } catch (Throwable $exception) {
             $latencyMs = (int) max(0, round((microtime(true) - $started) * 1000));
             $this->apiEventRecorder->recordSyncFailure($provider, $latencyMs, $exception);
+            $this->providerApiLogService->record(
+                provider: $provider,
+                endpointKey: $this->syncEndpointKey($data),
+                statusCode: null,
+                success: false,
+                responseTimeMs: $latencyMs,
+                requestBody: $data->rawPayload,
+                responseBody: null,
+                errorMessage: $exception->getMessage(),
+                correlationId: $correlationId,
+                referenceType: 'booking',
+                referenceId: $data->externalBookingId(),
+                context: [
+                    'provider_key' => $provider->key,
+                    'product_type' => $data->productType,
+                    'booking_id' => $data->externalBookingId(),
+                ],
+            );
 
             throw $exception;
         }
@@ -563,5 +602,26 @@ class BooknowOrderSyncService
     private function dispatchAfterCommit(callable $callback): void
     {
         DB::afterCommit($callback);
+    }
+
+    private function syncEndpointKey(SyncBooknowOrderDTO $data): string
+    {
+        if ($data->isBundle()) {
+            return 'sync.bundle';
+        }
+
+        return match ($data->productType) {
+            'hotel' => 'sync.hotel',
+            'insurance' => 'sync.insurance',
+            'esim' => 'sync.esim',
+            default => 'sync.flight',
+        };
+    }
+
+    private function buildCorrelationId(string $seed): string
+    {
+        $prefix = strtoupper(Str::substr(preg_replace('/[^A-Za-z0-9]+/', '', $seed) ?: 'SYNC', 0, 6));
+
+        return 'CP-'.$prefix.'-'.strtoupper(Str::random(5));
     }
 }

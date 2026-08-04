@@ -6,6 +6,7 @@ use App\Models\FinancialTransaction;
 use App\Models\Order;
 use App\Models\SupportTicket;
 use App\Models\User;
+use App\Modules\CustomerWallets\Services\CustomerWalletService;
 use App\Modules\Support\Services\SupportService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +32,7 @@ class OrderActionService
     public function __construct(
         private readonly OrderService $orderService,
         private readonly SupportService $supportService,
+        private readonly CustomerWalletService $customerWalletService,
     ) {
     }
 
@@ -190,6 +192,8 @@ class OrderActionService
                 ],
             );
 
+            $this->creditWalletRefundIfApplicable($order, $amount, $actor, $reason, 'ticket:'.$ticket->id.':full');
+
             $this->orderService->syncDerivedPaymentStatus($order, $actor, Order::PAYMENT_STATUS_REFUNDED, $originalPaymentStatus);
 
             $updatedOrder = $order->refresh()->load(['customer', 'transactions']);
@@ -273,6 +277,8 @@ class OrderActionService
                     ]),
                 ],
             );
+
+            $this->creditWalletRefundIfApplicable($order, $amount, $actor, $reason, 'ticket:'.$ticket->id.':partial:'.number_format($amount, 2, '.', ''));
 
             $this->orderService->syncDerivedPaymentStatus($order, $actor, Order::PAYMENT_STATUS_PARTIALLY_REFUNDED, $originalPaymentStatus);
 
@@ -538,5 +544,27 @@ class OrderActionService
         }
 
         return $ticket->order;
+    }
+
+    private function creditWalletRefundIfApplicable(
+        Order $order,
+        float $amount,
+        User $actor,
+        string $reason,
+        string $referenceSuffix,
+    ): void {
+        if ($order->payment_method !== Order::PAYMENT_METHOD_WALLET) {
+            return;
+        }
+
+        $this->customerWalletService->refundForOrder(
+            $order,
+            $amount,
+            $actor,
+            [
+                'description' => trim($reason),
+                'reference_id' => 'refund:'.$referenceSuffix,
+            ],
+        );
     }
 }

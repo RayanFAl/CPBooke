@@ -64,6 +64,8 @@ class FinancialTransaction extends Model
 
     public const SOURCE_PAYMENT_STATUS_REFUNDED = 'payment_status_refunded';
 
+    public const SOURCE_CUSTOMER_WALLET = 'customer_wallet';
+
     public const TYPE_COMMISSION = 'commission';
 
     public const TYPE_PAYOUT = 'payout';

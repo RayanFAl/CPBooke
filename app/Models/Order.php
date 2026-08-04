@@ -37,6 +37,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'request_payload',
     'response_payload',
     'error_message',
+    'payment_method',
 ])]
 class Order extends Model
 {
@@ -69,6 +70,10 @@ class Order extends Model
     public const PAYMENT_STATUS_PARTIALLY_REFUNDED = 'partially_refunded';
 
     public const PAYMENT_STATUS_REFUNDED = 'refunded';
+
+    public const PAYMENT_METHOD_WALLET = 'wallet';
+
+    public const PAYMENT_METHOD_CARD = 'card';
 
     public const SERVICE_TYPE_FLIGHT = 'flight';
 

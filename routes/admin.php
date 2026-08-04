@@ -13,6 +13,7 @@ Route::prefix('admin')
         require base_path('routes/admin/orders.php');
         require base_path('routes/admin/finance.php');
         require base_path('routes/admin/provider-wallets.php');
+        require base_path('routes/admin/customer-wallets.php');
         require base_path('routes/admin/suppliers.php');
         require base_path('routes/admin/approvals.php');
         require base_path('routes/admin/settlements.php');

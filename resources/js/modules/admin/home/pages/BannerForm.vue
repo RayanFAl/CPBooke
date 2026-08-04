@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import HomeActionPayloadEditor from '../components/HomeActionPayloadEditor.vue';
 import HomeImagePicker from '../components/HomeImagePicker.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
@@ -48,24 +49,6 @@ const actionValuePlaceholder = computed(() => (
         ? 'https://example.com/offer'
         : '/offers'
 ));
-
-const payloadPlaceholder = computed(() => {
-    if (form.action_type === 'search_hotels') {
-        return '{"city":"Istanbul","check_in":"2026-09-15","nights":3}';
-    }
-
-    if (form.action_type === 'search_insurance') {
-        return '{"destination":"TR","start_date":"2026-09-15","days":7}';
-    }
-
-    return '{"origin":"TIP","destination":"IST","depart_date":"2026-09-15","adults":1}';
-});
-
-const fillPayloadExample = () => {
-    if (!form.action_payload) {
-        form.action_payload = payloadPlaceholder.value;
-    }
-};
 
 const fillActionValueExample = () => {
     if (!form.action_value) {
@@ -166,27 +149,12 @@ const submit = () => {
                         </p>
                     </div>
 
-                    <div v-if="needsPayload">
-                        <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                            <label class="block text-sm font-medium">{{ t('Pre-fill search fields (optional)') }}</label>
-                            <button
-                                type="button"
-                                class="text-xs font-medium text-cyan-700 hover:underline"
-                                @click="fillPayloadExample"
-                            >
-                                {{ t('Insert example') }}
-                            </button>
-                        </div>
-                        <textarea
-                            v-model="form.action_payload"
-                            rows="4"
-                            class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 font-mono text-sm"
-                            :placeholder="payloadPlaceholder"
-                        />
-                        <p class="mt-1 text-xs leading-5 text-slate-500">
-                            {{ t('Leave empty to only open the search screen. Fill only if you want origin/destination/dates pre-filled. Ask mobile team for supported keys.') }}
-                        </p>
-                    </div>
+                    <HomeActionPayloadEditor
+                        v-if="needsPayload"
+                        v-model="form.action_payload"
+                        :action-type="form.action_type"
+                        :error="form.errors.action_payload || ''"
+                    />
                 </div>
 
                 <div class="grid gap-4 md:grid-cols-3">

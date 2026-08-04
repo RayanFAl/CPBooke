@@ -82,6 +82,21 @@ class Provider extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function apiConfigs(): HasMany
+    {
+        return $this->hasMany(ProviderApiConfig::class);
+    }
+
+    public function providerServices(): HasMany
+    {
+        return $this->hasMany(ProviderService::class);
+    }
+
+    public function apiLogs(): HasMany
+    {
+        return $this->hasMany(ProviderApiLog::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE;

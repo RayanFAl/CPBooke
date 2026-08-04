@@ -98,7 +98,11 @@ class WalletService
             $actor,
         ): ProviderWalletTransaction {
             $wallet = $this->resolveWallet($providerId, $currency, $environment, $createIfMissing);
-            $locked = ProviderWallet::query()->whereKey($wallet->id)->lockForUpdate()->firstOrFail();
+            $locked = ProviderWallet::query()
+                ->with('provider:id,credit_limit')
+                ->whereKey($wallet->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
             $existing = ProviderWalletTransaction::query()
                 ->where('provider_wallet_id', $locked->id)
@@ -116,10 +120,19 @@ class WalletService
                 ]);
             }
 
-            $available = (float) $locked->balance;
-            $balanceAfter = number_format($available - $amount, 2, '.', '');
+            $balanceValue = (float) $locked->balance;
+            $creditLimit = $this->effectiveCreditLimit($locked);
+            $available = $balanceValue + $creditLimit;
+            if ($available < $amount) {
+                throw new InsufficientWalletBalanceException(
+                    $locked,
+                    number_format($amount, 2, '.', ''),
+                    number_format($available, 2, '.', ''),
+                );
+            }
 
-            if (! $locked->allow_negative && $available < $amount) {
+            $nextBalanceValue = $balanceValue - $amount;
+            if ($nextBalanceValue < (-1 * $creditLimit)) {
                 throw new InsufficientWalletBalanceException(
                     $locked,
                     number_format($amount, 2, '.', ''),
@@ -128,14 +141,14 @@ class WalletService
             }
 
             $locked->forceFill([
-                'balance' => $balanceAfter,
+                'balance' => number_format($nextBalanceValue, 2, '.', ''),
             ])->save();
 
             $transaction = ProviderWalletTransaction::query()->create([
                 'provider_wallet_id' => $locked->id,
                 'type' => ProviderWalletTransaction::TYPE_DEBIT,
                 'amount' => number_format($amount, 2, '.', ''),
-                'balance_after' => $balanceAfter,
+                'balance_after' => number_format($nextBalanceValue, 2, '.', ''),
                 'currency' => $locked->currency,
                 'reference_type' => $referenceType,
                 'reference_id' => $referenceId,
@@ -143,7 +156,9 @@ class WalletService
                 'order_id' => $options['order_id'] ?? null,
                 'created_by' => $actor?->id,
                 'metadata' => array_merge($options['metadata'] ?? [], [
-                    'low_balance' => (float) $balanceAfter < 0,
+                    'available_before' => number_format($available, 2, '.', ''),
+                    'credit_limit' => number_format($creditLimit, 2, '.', ''),
+                    'low_balance' => (float) $nextBalanceValue < 0,
                     'allow_negative' => (bool) $locked->allow_negative,
                 ]),
             ]);
@@ -155,8 +170,8 @@ class WalletService
                 AuditLog::ENTITY_PROVIDER_WALLET,
                 $locked->id,
                 $actor instanceof User ? $actor : null,
-                ['balance' => number_format($available, 2, '.', '')],
-                ['balance' => $balanceAfter, 'amount' => number_format($amount, 2, '.', '')],
+                ['balance' => number_format($balanceValue, 2, '.', ''), 'available' => number_format($available, 2, '.', '')],
+                ['balance' => number_format($nextBalanceValue, 2, '.', ''), 'amount' => number_format($amount, 2, '.', '')],
                 [
                     'transaction_id' => $transaction->id,
                     'order_id' => $options['order_id'] ?? null,
@@ -166,6 +181,84 @@ class WalletService
             );
 
             return $transaction;
+        });
+    }
+
+    /**
+     * Reverse a prior debit with idempotency protection.
+     *
+     * @param  array{description?: string|null, metadata?: array<string, mixed>|null, actor?: User|null}  $options
+     */
+    public function reverseDebit(
+        ProviderWalletTransaction $debitTransaction,
+        string $referenceType,
+        string|int $referenceId,
+        array $options = [],
+    ): ProviderWalletTransaction {
+        if ($debitTransaction->type !== ProviderWalletTransaction::TYPE_DEBIT) {
+            throw ValidationException::withMessages([
+                'transaction' => 'Only debit transactions can be reversed.',
+            ]);
+        }
+
+        $actor = $options['actor'] ?? null;
+
+        return DB::transaction(function () use ($debitTransaction, $referenceType, $referenceId, $options, $actor): ProviderWalletTransaction {
+            $locked = ProviderWallet::query()
+                ->with('provider:id,credit_limit')
+                ->whereKey($debitTransaction->provider_wallet_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $existing = ProviderWalletTransaction::query()
+                ->where('provider_wallet_id', $locked->id)
+                ->where('reference_type', $referenceType)
+                ->where('reference_id', (string) $referenceId)
+                ->first();
+
+            if ($existing) {
+                return $existing;
+            }
+
+            $balanceBefore = (float) $locked->balance;
+            $creditAmount = (float) $debitTransaction->amount;
+            $balanceAfter = number_format($balanceBefore + $creditAmount, 2, '.', '');
+
+            $locked->forceFill([
+                'balance' => $balanceAfter,
+            ])->save();
+
+            $reversal = ProviderWalletTransaction::query()->create([
+                'provider_wallet_id' => $locked->id,
+                'type' => ProviderWalletTransaction::TYPE_REVERSAL,
+                'amount' => number_format($creditAmount, 2, '.', ''),
+                'balance_after' => $balanceAfter,
+                'currency' => $locked->currency,
+                'reference_type' => $referenceType,
+                'reference_id' => (string) $referenceId,
+                'description' => $options['description'] ?? 'Automatic reversal after failed provider operation.',
+                'order_id' => $debitTransaction->order_id,
+                'created_by' => $actor?->id,
+                'metadata' => array_merge($options['metadata'] ?? [], [
+                    'source_transaction_id' => $debitTransaction->id,
+                    'source_reference_type' => $debitTransaction->reference_type,
+                    'source_reference_id' => $debitTransaction->reference_id,
+                ]),
+            ]);
+
+            $this->auditRecorder->success(
+                AuditLog::MODULE_WALLETS,
+                'wallet.debit_reversed',
+                'Wallet #'.$locked->id.' reversed debit '.$creditAmount.' '.$locked->currency,
+                AuditLog::ENTITY_PROVIDER_WALLET,
+                $locked->id,
+                $actor instanceof User ? $actor : null,
+                ['balance' => number_format($balanceBefore, 2, '.', '')],
+                ['balance' => $balanceAfter, 'amount' => number_format($creditAmount, 2, '.', '')],
+                ['transaction_id' => $reversal->id, 'source_transaction_id' => $debitTransaction->id],
+            );
+
+            return $reversal;
         });
     }
 
@@ -240,16 +333,21 @@ class WalletService
         }
 
         return DB::transaction(function () use ($wallet, $amount, $actor, $options): ProviderWalletTransaction {
-            $locked = ProviderWallet::query()->whereKey($wallet->id)->lockForUpdate()->firstOrFail();
+            $locked = ProviderWallet::query()
+                ->with('provider:id,credit_limit')
+                ->whereKey($wallet->id)
+                ->lockForUpdate()
+                ->firstOrFail();
             $available = (float) $locked->balance;
             $previousBalance = number_format($available, 2, '.', '');
             $balanceAfterValue = $available + $amount;
 
-            if (! $locked->allow_negative && $balanceAfterValue < 0) {
+            $creditLimit = $this->effectiveCreditLimit($locked);
+            if ($balanceAfterValue < (-1 * $creditLimit)) {
                 throw new InsufficientWalletBalanceException(
                     $locked,
                     number_format(abs($amount), 2, '.', ''),
-                    number_format($available, 2, '.', ''),
+                    number_format($available + $creditLimit, 2, '.', ''),
                 );
             }
 
@@ -411,5 +509,14 @@ class WalletService
         }
 
         return round((float) $amount, 2);
+    }
+
+    private function effectiveCreditLimit(ProviderWallet $wallet): float
+    {
+        if (! $wallet->allow_negative) {
+            return 0.0;
+        }
+
+        return max((float) ($wallet->provider?->credit_limit ?? 0), 0.0);
     }
 }

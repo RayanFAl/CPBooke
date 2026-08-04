@@ -30,7 +30,7 @@ class ProviderWalletController
         $search = trim((string) $request->input('search', ''));
 
         $wallets = ProviderWallet::query()
-            ->with('provider:id,name,key,status')
+            ->with('provider:id,name,key,status,credit_limit')
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($inner) use ($search): void {
                     $inner->where('currency', 'like', "%{$search}%")
@@ -90,7 +90,7 @@ class ProviderWalletController
 
     public function show(Request $request, ProviderWallet $providerWallet): Response
     {
-        $providerWallet->loadMissing('provider:id,name,key,status');
+        $providerWallet->loadMissing('provider:id,name,key,status,credit_limit');
 
         $transactions = $providerWallet->transactions()
             ->with(['order:id,booking_reference,external_booking_id', 'creator:id,name,full_name'])
@@ -192,6 +192,8 @@ class ProviderWalletController
             'currency' => $wallet->currency,
             'environment' => $wallet->environment,
             'balance' => $wallet->balance,
+            'available_balance' => $wallet->availableBalance(),
+            'credit_limit' => (float) ($wallet->provider?->credit_limit ?? 0),
             'low_balance_threshold' => $wallet->low_balance_threshold,
             'allow_negative' => (bool) $wallet->allow_negative,
             'is_active' => $wallet->is_active,

@@ -84,6 +84,13 @@ export const navigationItems = [
                 icon: 'finance',
             },
             {
+                label: 'Customer Wallets',
+                route: 'admin.customer-wallets.index',
+                startsWith: '/admin/customer-wallets',
+                permission: 'customer-wallets.view',
+                icon: 'finance',
+            },
+            {
                 label: 'Approvals',
                 route: 'admin.approvals.index',
                 startsWith: '/admin/approvals',

@@ -175,6 +175,24 @@ class ProviderWalletTest extends TestCase
             'is_admin' => false,
         ]);
 
+        Provider::query()->create([
+            'name' => 'BookNow',
+            'key' => Provider::KEY_BOOKNOW,
+            'status' => Provider::STATUS_ACTIVE,
+            'credit_limit' => 1000,
+            'default_currency' => 'LYD',
+            'integration_status' => Provider::INTEGRATION_LIVE,
+        ]);
+
+        ProviderWallet::query()->create([
+            'provider_id' => Provider::query()->where('key', Provider::KEY_BOOKNOW)->firstOrFail()->id,
+            'currency' => 'LYD',
+            'environment' => 'production',
+            'balance' => 0,
+            'allow_negative' => true,
+            'is_active' => true,
+        ]);
+
         Sanctum::actingAs($customer);
 
         $this->postJson('/api/v1/orders/sync-flight', $this->booknowOrderPayload())
@@ -186,9 +204,223 @@ class ProviderWalletTest extends TestCase
             ->where('currency', 'LYD')
             ->firstOrFail();
 
-        $this->assertSame('-590.00', (string) $wallet->balance);
+        $this->assertSame('-531.00', (string) $wallet->balance);
         $this->assertTrue($wallet->allow_negative);
         $this->assertTrue($wallet->isLowBalance());
+    }
+
+    public function test_zero_balance_without_credit_limit_rejects_booking_before_debit(): void
+    {
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $provider = Provider::query()->create([
+            'name' => 'BookNow',
+            'key' => Provider::KEY_BOOKNOW,
+            'status' => Provider::STATUS_ACTIVE,
+            'credit_limit' => 0,
+            'default_currency' => 'LYD',
+            'integration_status' => Provider::INTEGRATION_LIVE,
+        ]);
+
+        ProviderWallet::query()->create([
+            'provider_id' => $provider->id,
+            'currency' => 'LYD',
+            'environment' => 'production',
+            'balance' => 0,
+            'allow_negative' => false,
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->postJson('/api/v1/orders/sync-flight', $this->booknowOrderPayload('zero-balance-test'))
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'insufficient_provider_balance');
+
+        $this->assertDatabaseMissing('orders', [
+            'external_booking_id' => 'zero-balance-test',
+        ]);
+        $this->assertDatabaseCount('provider_wallet_transactions', 0);
+        $this->assertSame('0.00', (string) ProviderWallet::query()->whereKey($provider->wallets()->first()->id)->firstOrFail()->balance);
+    }
+
+    public function test_credit_limit_allows_and_limits_negative_balance(): void
+    {
+        $provider = Provider::query()->create([
+            'name' => 'BookNow',
+            'key' => 'booknow-credit',
+            'status' => Provider::STATUS_ACTIVE,
+            'credit_limit' => 500,
+            'default_currency' => 'LYD',
+            'integration_status' => Provider::INTEGRATION_LIVE,
+        ]);
+
+        ProviderWallet::query()->create([
+            'provider_id' => $provider->id,
+            'currency' => 'LYD',
+            'environment' => 'production',
+            'balance' => 100,
+            'allow_negative' => true,
+            'is_active' => true,
+        ]);
+
+        $service = app(WalletService::class);
+
+        $first = $service->debit(
+            providerId: $provider->id,
+            amount: 550,
+            currency: 'LYD',
+            referenceType: ProviderWalletTransaction::REFERENCE_FLIGHT_BOOKING,
+            referenceId: 'credit-limit-1',
+            options: ['create_wallet_if_missing' => false],
+        );
+        $this->assertSame('-450.00', (string) $first->wallet->refresh()->balance);
+
+        $second = $service->debit(
+            providerId: $provider->id,
+            amount: 50,
+            currency: 'LYD',
+            referenceType: ProviderWalletTransaction::REFERENCE_FLIGHT_BOOKING,
+            referenceId: 'credit-limit-2',
+            options: ['create_wallet_if_missing' => false],
+        );
+        $this->assertSame('-500.00', (string) $second->wallet->refresh()->balance);
+
+        $this->expectException(InsufficientWalletBalanceException::class);
+        $service->debit(
+            providerId: $provider->id,
+            amount: 1,
+            currency: 'LYD',
+            referenceType: ProviderWalletTransaction::REFERENCE_FLIGHT_BOOKING,
+            referenceId: 'credit-limit-3',
+            options: ['create_wallet_if_missing' => false],
+        );
+    }
+
+    public function test_inactive_wallet_rejects_debit_requests(): void
+    {
+        $provider = Provider::query()->create([
+            'name' => 'Suspended Provider',
+            'key' => 'suspended-provider',
+            'status' => Provider::STATUS_ACTIVE,
+        ]);
+
+        ProviderWallet::query()->create([
+            'provider_id' => $provider->id,
+            'currency' => 'USD',
+            'environment' => 'production',
+            'balance' => 1000,
+            'allow_negative' => false,
+            'is_active' => false,
+        ]);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+
+        app(WalletService::class)->debit(
+            providerId: $provider->id,
+            amount: 100,
+            currency: 'USD',
+            referenceType: ProviderWalletTransaction::REFERENCE_FLIGHT_BOOKING,
+            referenceId: 'inactive-wallet',
+            options: ['create_wallet_if_missing' => false],
+        );
+    }
+
+    public function test_failed_provider_operation_can_reverse_debit_and_restore_balance(): void
+    {
+        $provider = Provider::query()->create([
+            'name' => 'BookNow',
+            'key' => 'booknow-reversal',
+            'status' => Provider::STATUS_ACTIVE,
+            'credit_limit' => 0,
+            'default_currency' => 'LYD',
+            'integration_status' => Provider::INTEGRATION_LIVE,
+        ]);
+
+        $wallet = ProviderWallet::query()->create([
+            'provider_id' => $provider->id,
+            'currency' => 'LYD',
+            'environment' => 'production',
+            'balance' => 1000,
+            'allow_negative' => false,
+            'is_active' => true,
+        ]);
+
+        $service = app(WalletService::class);
+
+        $debit = $service->debit(
+            providerId: $provider->id,
+            amount: 500,
+            currency: 'LYD',
+            referenceType: ProviderWalletTransaction::REFERENCE_FLIGHT_BOOKING,
+            referenceId: 'order-123',
+            options: ['create_wallet_if_missing' => false],
+        );
+
+        $this->assertSame('500.00', (string) $wallet->refresh()->balance);
+
+        $reversal = $service->reverseDebit(
+            $debit,
+            ProviderWalletTransaction::REFERENCE_ORDER,
+            'order-123:reversal',
+        );
+
+        $this->assertSame(ProviderWalletTransaction::TYPE_REVERSAL, $reversal->type);
+        $this->assertSame('1000.00', (string) $wallet->refresh()->balance);
+
+        $again = $service->reverseDebit(
+            $debit,
+            ProviderWalletTransaction::REFERENCE_ORDER,
+            'order-123:reversal',
+        );
+        $this->assertSame($reversal->id, $again->id);
+    }
+
+    public function test_two_booking_debits_only_available_capacity_succeeds(): void
+    {
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $provider = Provider::query()->create([
+            'name' => 'BookNow',
+            'key' => Provider::KEY_BOOKNOW,
+            'status' => Provider::STATUS_ACTIVE,
+            'credit_limit' => 0,
+            'default_currency' => 'LYD',
+            'integration_status' => Provider::INTEGRATION_LIVE,
+            'commission_rate' => 10,
+        ]);
+
+        ProviderWallet::query()->create([
+            'provider_id' => $provider->id,
+            'currency' => 'LYD',
+            'environment' => 'production',
+            'balance' => 500,
+            'allow_negative' => false,
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->postJson('/api/v1/orders/sync-flight', $this->booknowOrderPayload('cap-1', 400))
+            ->assertCreated();
+
+        $this->postJson('/api/v1/orders/sync-flight', $this->booknowOrderPayload('cap-2', 400))
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'insufficient_provider_balance');
+
+        $wallet = ProviderWallet::query()
+            ->where('provider_id', $provider->id)
+            ->where('currency', 'LYD')
+            ->firstOrFail();
+
+        $this->assertSame('140.00', (string) $wallet->balance);
+        $this->assertSame(1, ProviderWalletTransaction::query()->where('type', ProviderWalletTransaction::TYPE_DEBIT)->count());
     }
 
     public function test_debit_rejects_when_allow_negative_is_false(): void
@@ -274,16 +506,18 @@ class ProviderWalletTest extends TestCase
     /**
      * @return array<string, mixed>
      */
-    private function booknowOrderPayload(): array
+    private function booknowOrderPayload(string $bookingId = '01ktgspkyr6ma0fjqjc7vexyry', float $grandTotal = 590.00): array
     {
+        $supplierCost = round($grandTotal * 0.9, 2);
+
         return [
             'source' => 'mobile_app',
             'product_type' => 'flight',
             'status' => 'confirmed',
             'currency' => 'LYD',
-            'grand_total' => 590.00,
+            'grand_total' => $grandTotal,
             'provider_booking' => [
-                'booking_id' => '01ktgspkyr6ma0fjqjc7vexyry',
+                'booking_id' => $bookingId,
                 'order_number' => 'WFQ0001OZ',
                 'pnr' => 'AAXKDO',
                 'provider_id' => 12,
@@ -316,7 +550,7 @@ class ProviderWalletTest extends TestCase
                     'product_type' => 'ticket',
                     'product_subtype' => 'oneway',
                     'provider_reference' => 'AAXKDO',
-                    'total' => 590.00,
+                    'total' => $grandTotal,
                     'currency' => 'LYD',
                     'item_details' => [
                         'pnr' => 'AAXKDO',
@@ -342,7 +576,7 @@ class ProviderWalletTest extends TestCase
                 'status' => 'paid',
                 'method' => 'wallet',
                 'method_code' => 1,
-                'amount' => 590.00,
+                'amount' => $grandTotal,
                 'currency' => 'LYD',
                 'transaction_id' => 'txn_123',
                 'paid_at' => '2026-06-07T10:22:50Z',
@@ -357,6 +591,7 @@ class ProviderWalletTest extends TestCase
                 'departure_time' => '2026-06-20 10:25:00',
                 'segments' => [],
             ],
+            'base_amount' => $supplierCost,
         ];
     }
 }

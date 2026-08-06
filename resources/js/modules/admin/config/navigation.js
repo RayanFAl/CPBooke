@@ -43,6 +43,13 @@ export const navigationItems = [
                 permission: 'settings.manage',
                 icon: 'dashboard',
             },
+            {
+                label: 'Content Pages',
+                route: 'admin.content.index',
+                startsWith: '/admin/content',
+                permission: 'settings.manage',
+                icon: 'governance',
+            },
         ],
     },
     {

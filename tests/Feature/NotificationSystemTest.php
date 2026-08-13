@@ -109,25 +109,25 @@ class NotificationSystemTest extends TestCase
         $this->assertDatabaseHas('notification_logs', [
             'user_id' => $customer->id,
             'channel' => NotificationChannels::IN_APP,
-            'template_code' => 'ORDER_CONFIRMED',
+            'template_code' => 'HOTEL_BOOKING_CONFIRMED',
             'status' => NotificationLog::STATUS_PENDING,
         ]);
         $this->assertDatabaseHas('notification_logs', [
             'user_id' => $customer->id,
             'channel' => NotificationChannels::EMAIL,
-            'template_code' => 'ORDER_CONFIRMED',
+            'template_code' => 'HOTEL_BOOKING_CONFIRMED',
             'status' => NotificationLog::STATUS_PENDING,
         ]);
         $this->assertDatabaseHas('notification_logs', [
             'user_id' => $customer->id,
             'channel' => NotificationChannels::PUSH,
-            'template_code' => 'ORDER_CONFIRMED',
+            'template_code' => 'HOTEL_BOOKING_CONFIRMED',
             'status' => NotificationLog::STATUS_PENDING,
         ]);
 
         Queue::assertPushed(SendNotificationChannelJob::class, 3);
 
-        $template = NotificationTemplate::query()->where('code', 'ORDER_CONFIRMED')->firstOrFail();
+        $template = NotificationTemplate::query()->where('code', 'HOTEL_BOOKING_CONFIRMED')->firstOrFail();
 
         $this->assertSame(
             [NotificationChannels::EMAIL, NotificationChannels::PUSH, NotificationChannels::IN_APP],
@@ -334,18 +334,18 @@ class NotificationSystemTest extends TestCase
         $this->assertDatabaseMissing('notification_logs', [
             'user_id' => $customer->id,
             'channel' => NotificationChannels::EMAIL,
-            'template_code' => 'ORDER_CONFIRMED',
+            'template_code' => 'HOTEL_BOOKING_CONFIRMED',
         ]);
         $this->assertDatabaseHas('notification_logs', [
             'user_id' => $customer->id,
             'channel' => NotificationChannels::IN_APP,
-            'template_code' => 'ORDER_CONFIRMED',
+            'template_code' => 'HOTEL_BOOKING_CONFIRMED',
             'template_version' => 1,
         ]);
         $this->assertDatabaseHas('notification_logs', [
             'user_id' => $customer->id,
             'channel' => NotificationChannels::PUSH,
-            'template_code' => 'ORDER_CONFIRMED',
+            'template_code' => 'HOTEL_BOOKING_CONFIRMED',
         ]);
     }
 

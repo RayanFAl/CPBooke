@@ -145,6 +145,20 @@ export const navigationItems = [
                 permission: 'settings.manage',
                 icon: 'governance',
             },
+            {
+                label: 'AI Assistant',
+                route: 'admin.ai.settings.index',
+                startsWith: '/admin/ai/settings',
+                permission: 'settings.manage',
+                icon: 'governance',
+            },
+            {
+                label: 'AI Request Logs',
+                route: 'admin.ai.logs.index',
+                startsWith: '/admin/ai/logs',
+                permission: 'settings.manage',
+                icon: 'governance',
+            },
         ],
     },
 ];

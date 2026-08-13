@@ -8,8 +8,10 @@ use App\Models\Provider;
 use App\Models\User;
 use App\Modules\Admin\ProviderWallets\Services\ProviderWalletService;
 use App\Modules\Api\DTO\SyncBooknowOrderDTO;
+use App\Modules\Orders\Events\FlightStatusUpdated as FlightStatusUpdatedEvent;
 use App\Modules\Orders\Events\OrderConfirmed as OrderConfirmedEvent;
 use App\Modules\Orders\Events\OrderCreated as OrderCreatedEvent;
+use App\Modules\Orders\Events\PaymentFailed as PaymentFailedEvent;
 use App\Modules\Orders\Services\OrderCostService;
 use App\Modules\ProviderHealth\Services\ProviderApiEventRecorder;
 use App\Modules\Providers\Services\ProviderApiLogService;
@@ -129,6 +131,7 @@ class BooknowOrderSyncService
 
             $created = ! $order->exists;
             $previousStatus = $order->exists ? $order->status : null;
+            $previousDetails = $order->exists && is_array($order->details) ? $order->details : [];
 
             if ($order->exists) {
                 $this->assertSameCustomer($order, $customer);
@@ -181,6 +184,31 @@ class BooknowOrderSyncService
                 && ! in_array($previousStatus, [Order::STATUS_CONFIRMED, Order::STATUS_TICKETED, Order::STATUS_COMPLETED], true)
             ) {
                 $this->dispatchAfterCommit(fn () => event(new OrderConfirmedEvent($order->fresh()->load('customer'))));
+            }
+
+            if (
+                $order->status === Order::STATUS_FAILED
+                && $previousStatus !== Order::STATUS_FAILED
+            ) {
+                $reason = $order->error_message ?: 'Payment or booking failed.';
+                $this->dispatchAfterCommit(fn () => event(new PaymentFailedEvent($order->fresh()->load('customer'), $reason)));
+            }
+
+            if (
+                ! $created
+                && $order->service_type === Order::SERVICE_TYPE_FLIGHT
+                && in_array($order->status, [Order::STATUS_CONFIRMED, Order::STATUS_TICKETED, Order::STATUS_COMPLETED], true)
+            ) {
+                $flightChanges = $this->detectFlightDetailChanges($previousDetails, is_array($order->details) ? $order->details : []);
+
+                if ($flightChanges !== []) {
+                    $summary = $this->summarizeFlightChanges($flightChanges);
+                    $this->dispatchAfterCommit(fn () => event(new FlightStatusUpdatedEvent(
+                        $order->fresh()->load('customer'),
+                        $flightChanges,
+                        $summary,
+                    )));
+                }
             }
 
             return [
@@ -597,6 +625,63 @@ class BooknowOrderSyncService
         ])->save();
 
         return $order->refresh();
+    }
+
+    /**
+     * @param  array<string, mixed>  $previous
+     * @param  array<string, mixed>  $current
+     * @return array<string, array{from: mixed, to: mixed}>
+     */
+    private function detectFlightDetailChanges(array $previous, array $current): array
+    {
+        $keys = ['departure_time', 'arrival_time', 'origin', 'destination', 'pnr', 'gate', 'flight_status', 'status'];
+        $changes = [];
+
+        foreach ($keys as $key) {
+            $from = $previous[$key] ?? null;
+            $to = $current[$key] ?? null;
+
+            if ($from === $to) {
+                continue;
+            }
+
+            if ($from === null && $to === null) {
+                continue;
+            }
+
+            // Ignore first-time population of fields that were empty on create/update noise.
+            if (($from === null || $from === '') && $to !== null && $to !== '') {
+                continue;
+            }
+
+            $changes[$key] = ['from' => $from, 'to' => $to];
+        }
+
+        return $changes;
+    }
+
+    /**
+     * @param  array<string, array{from: mixed, to: mixed}>  $changes
+     */
+    private function summarizeFlightChanges(array $changes): string
+    {
+        if (isset($changes['departure_time'])) {
+            return 'Your departure time was updated.';
+        }
+
+        if (isset($changes['gate'])) {
+            return 'Your gate information was updated.';
+        }
+
+        if (isset($changes['flight_status']) || isset($changes['status'])) {
+            return 'Your flight status was updated.';
+        }
+
+        if (isset($changes['origin']) || isset($changes['destination'])) {
+            return 'Your flight route was updated.';
+        }
+
+        return 'There is an update on your flight.';
     }
 
     private function dispatchAfterCommit(callable $callback): void

@@ -9,9 +9,11 @@ Route::prefix('v1')
 		require __DIR__.'/api/v1/airports.php';
 		require __DIR__.'/api/v1/admin-loyalty.php';
 		require __DIR__.'/api/v1/auth.php';
+		require __DIR__.'/api/v1/ai.php';
 		require __DIR__.'/api/v1/favorites.php';
 		require __DIR__.'/api/v1/home.php';
 		require __DIR__.'/api/v1/content.php';
+		require __DIR__.'/api/v1/hotel-reviews.php';
 		require __DIR__.'/api/v1/notifications.php';
 		require __DIR__.'/api/v1/orders.php';
 		require __DIR__.'/api/v1/pricing.php';

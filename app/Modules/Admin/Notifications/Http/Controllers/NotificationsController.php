@@ -10,6 +10,8 @@ use App\Modules\Admin\Notifications\Http\Requests\SendTestPushRequest;
 use App\Modules\Admin\Notifications\Http\Requests\UpdateNotificationTemplateRequest;
 use App\Modules\Notifications\Services\NotificationChannelManager;
 use App\Modules\Notifications\Services\NotificationService;
+use App\Modules\Notifications\Services\NotificationTemplateSyncService;
+use App\Modules\Notifications\Support\NotificationChannels;
 use App\Support\Rbac\RbacAuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +25,7 @@ class NotificationsController
     public function __construct(
         private readonly NotificationService $notificationService,
         private readonly NotificationChannelManager $channelManager,
+        private readonly NotificationTemplateSyncService $templateSyncService,
         private readonly RbacAuditLogger $rbacAuditLogger,
     ) {
     }
@@ -45,6 +48,7 @@ class NotificationsController
                     'logs' => [],
                     'failed_logs' => [],
                     'templates' => [],
+                    'available_channels' => NotificationChannels::all(),
                     'push_targets' => $this->pushTargets(),
                 ],
             ]);
@@ -92,9 +96,30 @@ class NotificationsController
                     'version' => $template->version,
                     'is_active' => $template->is_active,
                 ])->values()->all(),
+                'available_channels' => NotificationChannels::all(),
                 'push_targets' => $this->pushTargets(),
             ],
         ]);
+    }
+
+    public function syncTemplates(): RedirectResponse
+    {
+        Gate::authorize('notifications.manage-templates');
+
+        $result = $this->templateSyncService->syncMissing();
+
+        $this->rbacAuditLogger->log(
+            'notifications.templates.synced',
+            'notifications.manage-templates',
+            auth()->user(),
+            'notification_template',
+            null,
+            $result,
+        );
+
+        return redirect()
+            ->route('admin.notifications.index')
+            ->with('success', "Templates synced — created {$result['created']}, already present {$result['existing']}.");
     }
 
     public function sendTestPush(SendTestPushRequest $request): RedirectResponse

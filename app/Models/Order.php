@@ -135,6 +135,11 @@ class Order extends Model
             ->orderByDesc('id');
     }
 
+    public function hotelReview(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(HotelReview::class);
+    }
+
     /**
      * Get the financial transactions linked to the order.
      */

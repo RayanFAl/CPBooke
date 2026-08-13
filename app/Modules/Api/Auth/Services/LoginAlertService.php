@@ -42,6 +42,7 @@ class LoginAlertService
                     'topic' => NotificationTopics::LOGIN_ALERTS,
                     'device_name' => $deviceName,
                     'ip' => $ip,
+                    'deep_link' => '/login',
                 ],
             );
 
@@ -51,7 +52,7 @@ class LoginAlertService
                     $title,
                     $body,
                     [
-                        'deep_link' => '/security/sessions',
+                        'deep_link' => '/login',
                         'topic' => NotificationTopics::LOGIN_ALERTS,
                     ],
                 );

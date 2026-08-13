@@ -15,6 +15,10 @@ Route::post('/notifications/logs/{notificationLog}/retry', [NotificationsControl
     ->middleware('permission:notifications.retry-failed')
     ->name('notifications.retry');
 
+Route::post('/notifications/templates/sync', [NotificationsController::class, 'syncTemplates'])
+    ->middleware('permission:notifications.manage-templates')
+    ->name('notifications.templates.sync');
+
 Route::put('/notifications/templates/{notificationTemplate}', [NotificationsController::class, 'updateTemplate'])
     ->middleware('permission:notifications.manage-templates')
     ->name('notifications.templates.update');

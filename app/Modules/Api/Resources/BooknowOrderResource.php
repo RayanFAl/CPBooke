@@ -81,6 +81,9 @@ class BooknowOrderResource extends JsonResource
             'seats' => $this->resolveSeats($details, $items),
             'hotel' => $hotels[0] ?? null,
             'hotels' => $hotels,
+            'user_review' => $order->service_type === Order::SERVICE_TYPE_HOTEL
+                ? $this->resolveUserReview($order)
+                : null,
             'esim' => $esims[0] ?? null,
             'esims' => $esims,
             'insurance' => $insurances[0] ?? null,
@@ -456,5 +459,21 @@ class BooknowOrderResource extends JsonResource
         }
 
         return $resolved;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolveUserReview(Order $order): ?array
+    {
+        $review = $order->relationLoaded('hotelReview')
+            ? $order->hotelReview
+            : $order->hotelReview()->first();
+
+        if ($review === null) {
+            return null;
+        }
+
+        return HotelReviewResource::make($review)->resolve(request());
     }
 }

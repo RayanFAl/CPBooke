@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             ProviderSeeder::class,
             HomeContentSeeder::class,
             ContentPageSeeder::class,
+            NotificationTemplateSeeder::class,
         ]);
     }
 }

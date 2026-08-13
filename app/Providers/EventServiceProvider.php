@@ -12,9 +12,12 @@ use App\Modules\Admin\Support\Listeners\SupportEventLoggerListener;
 use App\Modules\Loyalty\Listeners\InitializeUserLoyaltyOnRegistrationListener;
 use App\Modules\Loyalty\Listeners\RecalculateUserLoyaltyListener;
 use App\Modules\Notifications\Listeners\DispatchSystemNotificationListener;
+use App\Modules\Orders\Events\BookingReminderDue;
+use App\Modules\Orders\Events\FlightStatusUpdated;
 use App\Modules\Orders\Events\OrderCompleted;
 use App\Modules\Orders\Events\OrderConfirmed;
 use App\Modules\Orders\Events\OrderCreated;
+use App\Modules\Orders\Events\PaymentFailed;
 use App\Modules\Orders\Events\PaymentSucceeded;
 use App\Modules\Orders\Events\RefundIssued;
 use Illuminate\Auth\Events\Registered;
@@ -60,6 +63,15 @@ class EventServiceProvider extends ServiceProvider
         PaymentSucceeded::class => [
             DispatchSystemNotificationListener::class,
             RecalculateUserLoyaltyListener::class,
+        ],
+        PaymentFailed::class => [
+            DispatchSystemNotificationListener::class,
+        ],
+        FlightStatusUpdated::class => [
+            DispatchSystemNotificationListener::class,
+        ],
+        BookingReminderDue::class => [
+            DispatchSystemNotificationListener::class,
         ],
         RefundIssued::class => [
             DispatchSystemNotificationListener::class,

@@ -45,9 +45,9 @@ class NotificationPreferenceResolver
             [
                 'email_enabled' => true,
                 'in_app_enabled' => true,
-                'sms_enabled' => true,
+                'sms_enabled' => false,
                 'push_enabled' => true,
-                'whatsapp_enabled' => true,
+                'whatsapp_enabled' => false,
                 'disabled_categories' => [],
                 'topics' => NotificationTopics::defaults(),
             ],

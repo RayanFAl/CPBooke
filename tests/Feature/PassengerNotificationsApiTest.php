@@ -54,7 +54,7 @@ class PassengerNotificationsApiTest extends TestCase
             ->assertJsonPath('meta.unread_count', 1)
             ->assertJsonPath('data.0.id', (string) $unread->id)
             ->assertJsonPath('data.0.body', 'Your flight booking has been confirmed')
-            ->assertJsonPath('data.0.deep_link', '/orders/99')
+            ->assertJsonPath('data.0.deep_link', '/my-orders')
             ->assertJsonPath('data.0.meta.product_type', 'flight')
             ->assertJsonPath('data.0.is_read', false);
 

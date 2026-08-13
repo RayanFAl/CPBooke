@@ -53,7 +53,7 @@ class PassengerNotificationResource extends JsonResource
         }
 
         return match ($notification->related_type) {
-            'order' => '/orders/'.$notification->related_id,
+            'order' => '/my-orders',
             'support_ticket', 'support' => '/support/'.$notification->related_id,
             default => null,
         };
@@ -65,9 +65,11 @@ class PassengerNotificationResource extends JsonResource
 
         return match ($normalized) {
             'success', 'flight', 'payment', 'tag', 'order', 'system' => $normalized,
+            'promo', 'promotional', 'marketing' => 'tag',
             'hotel', 'insurance', 'esim', 'bundle' => 'order',
             'refund', 'finance' => 'payment',
-            'loyalty' => 'tag',
+            'loyalty' => 'success',
+            'support', 'login', 'security' => 'system',
             default => $normalized !== '' ? $normalized : 'system',
         };
     }

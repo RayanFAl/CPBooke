@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\Favorite;
 use App\Models\FinancialTransaction;
+use App\Models\HotelReview;
 use App\Models\LoyaltyHistory;
 use App\Models\Order;
 use App\Models\SavedAddress;
@@ -19,6 +20,7 @@ use App\Modules\Pricing\Services\PricingVersionService;
 use App\Observers\FinancialTransactionObserver;
 use App\Observers\LoyaltyHistoryObserver;
 use App\Policies\FavoritePolicy;
+use App\Policies\HotelReviewPolicy;
 use App\Policies\OrderPolicy;
 use App\Policies\SavedAddressPolicy;
 use App\Policies\SavedPassengerPolicy;
@@ -79,6 +81,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(SavedPassenger::class, SavedPassengerPolicy::class);
         Gate::policy(SavedVehicle::class, SavedVehiclePolicy::class);
         Gate::policy(SavedAddress::class, SavedAddressPolicy::class);
+        Gate::policy(HotelReview::class, HotelReviewPolicy::class);
         FinancialTransaction::observe(FinancialTransactionObserver::class);
         LoyaltyHistory::observe(LoyaltyHistoryObserver::class);
 

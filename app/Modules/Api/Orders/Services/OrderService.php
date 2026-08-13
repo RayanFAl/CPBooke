@@ -12,6 +12,7 @@ use App\Modules\Api\DTO\CreateOrderDTO;
 use App\Modules\Orders\Events\OrderCompleted as OrderCompletedEvent;
 use App\Modules\Orders\Events\OrderConfirmed as OrderConfirmedEvent;
 use App\Modules\Orders\Events\OrderCreated as OrderCreatedEvent;
+use App\Modules\Orders\Events\PaymentFailed as PaymentFailedEvent;
 use App\Modules\Orders\Events\PaymentSucceeded as PaymentSucceededEvent;
 use App\Modules\Orders\Events\RefundIssued as RefundIssuedEvent;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -108,6 +109,7 @@ class OrderService
     {
         return Order::query()
             ->whereBelongsTo($customer, 'customer')
+            ->with('hotelReview')
             ->when(
                 $productType !== null && $productType !== '',
                 fn ($query) => $query->where('service_type', $productType),
@@ -121,7 +123,7 @@ class OrderService
      */
     public function get(Order $order): Order
     {
-        return $order->loadMissing('customer');
+        return $order->loadMissing(['customer', 'hotelReview']);
     }
 
     /**
@@ -189,18 +191,26 @@ class OrderService
     {
         $originalStatus = $order->status;
 
-        DB::transaction(function () use ($order, $status, $actor): void {
+        DB::transaction(function () use ($order, $status, $actor, $originalStatus): void {
             $this->transitionOrder($order, $status, $actor, [
                 'error_message' => $status === Order::STATUS_FAILED
                     ? ($order->error_message ?: 'Marked as failed by the operations team.')
                     : null,
             ]);
 
-            if ($status === Order::STATUS_CONFIRMED) {
+            if (
+                in_array($status, [Order::STATUS_CONFIRMED, Order::STATUS_TICKETED], true)
+                && $originalStatus !== $status
+            ) {
                 $this->dispatchAfterCommit(fn () => event(new OrderConfirmedEvent($order->fresh()->load('customer'))));
             }
 
-            if ($status === Order::STATUS_COMPLETED) {
+            if ($status === Order::STATUS_FAILED && $originalStatus !== Order::STATUS_FAILED) {
+                $reason = $order->error_message ?: 'Marked as failed by the operations team.';
+                $this->dispatchAfterCommit(fn () => event(new PaymentFailedEvent($order->fresh()->load('customer'), $reason)));
+            }
+
+            if ($status === Order::STATUS_COMPLETED && $originalStatus !== Order::STATUS_COMPLETED) {
                 $this->dispatchAfterCommit(fn () => event(new OrderCompletedEvent($order->fresh()->load('customer'))));
             }
         });

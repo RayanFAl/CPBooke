@@ -9,6 +9,8 @@ use App\Models\User;
 use App\Modules\Admin\ProviderWallets\Services\ProviderWalletService;
 use App\Modules\Api\DTO\SyncBooknowOrderDTO;
 use App\Modules\Orders\Events\FlightStatusUpdated as FlightStatusUpdatedEvent;
+use App\Modules\Orders\Events\HotelStatusUpdated as HotelStatusUpdatedEvent;
+use App\Modules\Orders\Events\OrderCancelled as OrderCancelledEvent;
 use App\Modules\Orders\Events\OrderConfirmed as OrderConfirmedEvent;
 use App\Modules\Orders\Events\OrderCreated as OrderCreatedEvent;
 use App\Modules\Orders\Events\PaymentFailed as PaymentFailedEvent;
@@ -32,8 +34,7 @@ class BooknowOrderSyncService
         private readonly OrderCostService $orderCostService,
         private readonly ProviderApiEventRecorder $apiEventRecorder,
         private readonly ProviderApiLogService $providerApiLogService,
-    ) {
-    }
+    ) {}
 
     /**
      * Idempotent upsert keyed by provider booking id. Customer is always taken from the auth token.
@@ -195,8 +196,20 @@ class BooknowOrderSyncService
             }
 
             if (
+                $order->status === Order::STATUS_CANCELLED
+                && $previousStatus !== Order::STATUS_CANCELLED
+            ) {
+                $this->dispatchAfterCommit(fn () => event(new OrderCancelledEvent(
+                    $order->fresh()->load('customer'),
+                    OrderCancelledEvent::SOURCE_AIRLINE,
+                    $order->error_message,
+                )));
+            }
+
+            if (
                 ! $created
                 && $order->service_type === Order::SERVICE_TYPE_FLIGHT
+                && $order->status !== Order::STATUS_CANCELLED
                 && in_array($order->status, [Order::STATUS_CONFIRMED, Order::STATUS_TICKETED, Order::STATUS_COMPLETED], true)
             ) {
                 $flightChanges = $this->detectFlightDetailChanges($previousDetails, is_array($order->details) ? $order->details : []);
@@ -207,6 +220,23 @@ class BooknowOrderSyncService
                         $order->fresh()->load('customer'),
                         $flightChanges,
                         $summary,
+                    )));
+                }
+            }
+
+            if (
+                ! $created
+                && $order->service_type === Order::SERVICE_TYPE_HOTEL
+                && $order->status !== Order::STATUS_CANCELLED
+                && in_array($order->status, [Order::STATUS_CONFIRMED, Order::STATUS_COMPLETED], true)
+            ) {
+                $hotelChanges = $this->detectHotelDetailChanges($previousDetails, is_array($order->details) ? $order->details : []);
+
+                if ($hotelChanges !== []) {
+                    $this->dispatchAfterCommit(fn () => event(new HotelStatusUpdatedEvent(
+                        $order->fresh()->load('customer'),
+                        $hotelChanges,
+                        'Your hotel booking was updated.',
                     )));
                 }
             }
@@ -634,7 +664,12 @@ class BooknowOrderSyncService
      */
     private function detectFlightDetailChanges(array $previous, array $current): array
     {
-        $keys = ['departure_time', 'arrival_time', 'origin', 'destination', 'pnr', 'gate', 'flight_status', 'status'];
+        $keys = [
+            'departure_time', 'arrival_time', 'origin', 'destination', 'pnr',
+            'gate', 'terminal', 'seat', 'cabin_class', 'class', 'flight_number',
+            'flight_status', 'status', 'boarding_status', 'boarding_pass_url',
+        ];
+        $notifyOnFirstFill = ['gate', 'terminal', 'seat', 'boarding_status', 'boarding_pass_url'];
         $changes = [];
 
         foreach ($keys as $key) {
@@ -649,8 +684,8 @@ class BooknowOrderSyncService
                 continue;
             }
 
-            // Ignore first-time population of fields that were empty on create/update noise.
-            if (($from === null || $from === '') && $to !== null && $to !== '') {
+            // Ignore first-time population except operational fields the traveler must act on.
+            if (($from === null || $from === '') && $to !== null && $to !== '' && ! in_array($key, $notifyOnFirstFill, true)) {
                 continue;
             }
 
@@ -673,6 +708,18 @@ class BooknowOrderSyncService
             return 'Your gate information was updated.';
         }
 
+        if (isset($changes['seat'])) {
+            return 'Your seat was updated.';
+        }
+
+        if (isset($changes['boarding_status'])) {
+            return 'Boarding status was updated.';
+        }
+
+        if (isset($changes['boarding_pass_url'])) {
+            return 'Your boarding pass is ready.';
+        }
+
         if (isset($changes['flight_status']) || isset($changes['status'])) {
             return 'Your flight status was updated.';
         }
@@ -682,6 +729,30 @@ class BooknowOrderSyncService
         }
 
         return 'There is an update on your flight.';
+    }
+
+    /**
+     * @param  array<string, mixed>  $previous
+     * @param  array<string, mixed>  $current
+     * @return array<string, array{from: mixed, to: mixed}>
+     */
+    private function detectHotelDetailChanges(array $previous, array $current): array
+    {
+        $keys = ['check_in', 'check_out', 'hotel_name', 'room_name', 'board', 'cancellation_deadline'];
+        $changes = [];
+
+        foreach ($keys as $key) {
+            $from = $previous[$key] ?? data_get($previous, 'item_details.'.$key);
+            $to = $current[$key] ?? data_get($current, 'item_details.'.$key);
+
+            if ($from === $to || (($from === null || $from === '') && $to !== null && $to !== '')) {
+                continue;
+            }
+
+            $changes[$key] = ['from' => $from, 'to' => $to];
+        }
+
+        return $changes;
     }
 
     private function dispatchAfterCommit(callable $callback): void

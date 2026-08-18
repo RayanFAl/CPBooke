@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Modules\Content\Support\ContentPageCatalog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,10 +13,13 @@ class ContentPage extends Model
 
     protected $fillable = [
         'slug',
+        'category',
+        'product',
         'title_en',
         'title_ar',
         'body_en',
         'body_ar',
+        'url',
         'sort_order',
         'is_active',
     ];
@@ -28,6 +32,10 @@ class ContentPage extends Model
         ];
     }
 
+    protected $attributes = [
+        'category' => ContentPageCatalog::CATEGORY_LEGAL,
+    ];
+
     /**
      * @param  Builder<static>  $query
      * @return Builder<static>
@@ -35,6 +43,33 @@ class ContentPage extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeForCategory(Builder $query, ?string $category): Builder
+    {
+        if ($category === null || $category === '') {
+            return $query;
+        }
+
+        return $query->where('category', $category);
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeForProduct(Builder $query, ?string $product): Builder
+    {
+        if ($product === null || $product === '') {
+            return $query;
+        }
+
+        return $query->where('product', $product)
+            ->where('category', ContentPageCatalog::CATEGORY_PRODUCT_POLICY);
     }
 
     public function localizedTitle(string $locale): string
@@ -45,6 +80,18 @@ class ContentPage extends Model
     public function localizedBody(string $locale): string
     {
         return $this->localizedField('body', $locale) ?? '';
+    }
+
+    public function publicUrl(): ?string
+    {
+        $url = is_string($this->url) ? trim($this->url) : '';
+
+        return $url === '' ? null : $url;
+    }
+
+    public function publishedAt(): ?string
+    {
+        return $this->updated_at?->utc()->format('Y-m-d\TH:i:s\Z');
     }
 
     private function localizedField(string $field, string $locale): ?string

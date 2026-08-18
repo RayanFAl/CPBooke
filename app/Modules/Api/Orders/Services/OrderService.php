@@ -7,15 +7,19 @@ use App\Models\FinancialTransaction;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\User;
-use App\Modules\Audit\Services\AuditRecorder;
 use App\Modules\Api\DTO\CreateOrderDTO;
+use App\Modules\Audit\Services\AuditRecorder;
+use App\Modules\Orders\Events\OrderCancelled as OrderCancelledEvent;
 use App\Modules\Orders\Events\OrderCompleted as OrderCompletedEvent;
 use App\Modules\Orders\Events\OrderConfirmed as OrderConfirmedEvent;
 use App\Modules\Orders\Events\OrderCreated as OrderCreatedEvent;
 use App\Modules\Orders\Events\PaymentFailed as PaymentFailedEvent;
 use App\Modules\Orders\Events\PaymentSucceeded as PaymentSucceededEvent;
+use App\Modules\Orders\Events\RefundFailed as RefundFailedEvent;
+use App\Modules\Orders\Events\RefundInitiated as RefundInitiatedEvent;
 use App\Modules\Orders\Events\RefundIssued as RefundIssuedEvent;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -29,8 +33,7 @@ class OrderService
     public function __construct(
         private readonly BookingProviderService $bookingProviderService,
         private readonly AuditRecorder $auditRecorder,
-    ) {
-    }
+    ) {}
 
     /**
      * Create a new order for the supplied customer.
@@ -145,8 +148,8 @@ class OrderService
     /**
      * Apply admin order list search filters.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<Order>  $query
-     * @return \Illuminate\Database\Eloquent\Builder<Order>
+     * @param  Builder<Order>  $query
+     * @return Builder<Order>
      */
     private function applyAdminSearch($query, ?string $search)
     {
@@ -208,6 +211,14 @@ class OrderService
             if ($status === Order::STATUS_FAILED && $originalStatus !== Order::STATUS_FAILED) {
                 $reason = $order->error_message ?: 'Marked as failed by the operations team.';
                 $this->dispatchAfterCommit(fn () => event(new PaymentFailedEvent($order->fresh()->load('customer'), $reason)));
+            }
+
+            if ($status === Order::STATUS_CANCELLED && $originalStatus !== Order::STATUS_CANCELLED) {
+                $source = $actor ? OrderCancelledEvent::SOURCE_ADMIN : OrderCancelledEvent::SOURCE_CUSTOMER;
+                $this->dispatchAfterCommit(fn () => event(new OrderCancelledEvent(
+                    $order->fresh()->load('customer'),
+                    $source,
+                )));
             }
 
             if ($status === Order::STATUS_COMPLETED && $originalStatus !== Order::STATUS_COMPLETED) {
@@ -593,6 +604,24 @@ class OrderService
 
     private function dispatchFinancialTransactionEvent(Order $order, FinancialTransaction $transaction, string $source): void
     {
+        if ($transaction->type === FinancialTransaction::TYPE_REFUND) {
+            if (in_array($transaction->status, [FinancialTransaction::STATUS_REQUESTED, FinancialTransaction::STATUS_APPROVED], true)) {
+                $this->dispatchAfterCommit(fn () => event(new RefundInitiatedEvent($order->fresh()->load('customer'), $transaction->fresh())));
+
+                return;
+            }
+
+            if ($transaction->status === FinancialTransaction::STATUS_FAILED) {
+                $this->dispatchAfterCommit(fn () => event(new RefundFailedEvent(
+                    $order->fresh()->load('customer'),
+                    $transaction->fresh(),
+                    $transaction->reason,
+                )));
+
+                return;
+            }
+        }
+
         if ($transaction->status !== FinancialTransaction::STATUS_EXECUTED) {
             return;
         }

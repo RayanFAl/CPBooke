@@ -17,8 +17,7 @@ class PushNotificationChannel implements NotificationChannel
     public function __construct(
         private readonly FcmHttpV1Client $fcmHttpV1Client,
         private readonly SystemSettingsService $systemSettingsService,
-    ) {
-    }
+    ) {}
 
     public function channel(): string
     {
@@ -56,16 +55,24 @@ class PushNotificationChannel implements NotificationChannel
         $title = $log->subject ?: $this->systemSettingsService->companyName();
         $body = (string) $log->body;
 
+        $productType = isset($variables['product_type'])
+            ? (string) $variables['product_type']
+            : (isset($variables['service_type']) ? (string) $variables['service_type'] : null);
+
         $data = array_filter([
+            'title' => $title,
+            'body' => $body,
             'related_type' => $log->related_type,
             'related_id' => (string) ($log->related_id ?? ''),
             'event_class' => $log->event_class,
             'type' => isset($variables['notification_type'])
                 ? (string) $variables['notification_type']
                 : (string) ($log->notification_type ?? 'system'),
+            'template_code' => $template->code,
             'order_id' => $log->related_type === 'order' && $log->related_id
                 ? (string) $log->related_id
                 : (isset($variables['order_id']) ? (string) $variables['order_id'] : null),
+            'product_type' => $productType,
             'deep_link' => isset($variables['deep_link']) ? (string) $variables['deep_link'] : (
                 $log->related_type === 'order' && $log->related_id
                     ? '/my-orders'

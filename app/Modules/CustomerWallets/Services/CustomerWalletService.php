@@ -9,8 +9,10 @@ use App\Models\CustomerWalletTransaction;
 use App\Models\FinancialTransaction;
 use App\Models\Order;
 use App\Models\User;
+use App\Models\UserNotification;
 use App\Modules\Api\Orders\Services\OrderService;
 use App\Modules\Audit\Services\AuditRecorder;
+use App\Modules\Notifications\Events\PassengerActionDue;
 use App\Modules\Orders\Events\PaymentSucceeded as PaymentSucceededEvent;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -21,12 +23,11 @@ class CustomerWalletService
     public function __construct(
         private readonly AuditRecorder $auditRecorder,
         private readonly OrderService $orderService,
-    ) {
-    }
+    ) {}
 
     public function resolveWallet(
         User $user,
-        string $currency = null,
+        ?string $currency = null,
         bool $createIfMissing = true,
     ): CustomerWallet {
         $currency = strtoupper($currency ?? (string) config('customer_wallets.default_currency', 'LYD'));
@@ -447,6 +448,8 @@ class CustomerWalletService
                 ],
             );
 
+            $this->queueWalletNotifications($locked, $transaction);
+
             return $transaction;
         });
     }
@@ -532,6 +535,8 @@ class CustomerWalletService
                     'reference_id' => $referenceId,
                 ],
             );
+
+            $this->queueWalletNotifications($locked, $transaction);
 
             return $transaction;
         });
@@ -624,5 +629,78 @@ class CustomerWalletService
         }
 
         $callback();
+    }
+
+    private function queueWalletNotifications(CustomerWallet $wallet, CustomerWalletTransaction $transaction): void
+    {
+        if (! $transaction->wasRecentlyCreated) {
+            return;
+        }
+
+        $user = User::query()->find($wallet->user_id);
+
+        if (! $user instanceof User) {
+            return;
+        }
+
+        $code = match ($transaction->type) {
+            CustomerWalletTransaction::TYPE_REFUND => 'WALLET_REFUND',
+            CustomerWalletTransaction::TYPE_BOOKING,
+            CustomerWalletTransaction::TYPE_DEBIT,
+            CustomerWalletTransaction::TYPE_ADMIN_DEBIT => 'WALLET_DEBIT',
+            default => 'WALLET_TOPUP_SUCCESS',
+        };
+
+        $payload = [
+            'amount' => number_format(abs((float) $transaction->amount), 2, '.', ''),
+            'currency' => $transaction->currency,
+            'order_id' => $transaction->order_id,
+            'deep_link' => '/wallet',
+            'balance' => $transaction->balance_after,
+        ];
+
+        $this->dispatchAfterCommit(function () use ($user, $code, $payload, $transaction, $wallet): void {
+            event(new PassengerActionDue(
+                $user,
+                $code,
+                $payload,
+                'wallet_transaction',
+                $transaction->id,
+            ));
+
+            $isDebit = in_array($transaction->type, [
+                CustomerWalletTransaction::TYPE_BOOKING,
+                CustomerWalletTransaction::TYPE_DEBIT,
+                CustomerWalletTransaction::TYPE_ADMIN_DEBIT,
+            ], true);
+
+            if (! $isDebit || (float) $transaction->balance_after >= 50) {
+                return;
+            }
+
+            $already = UserNotification::query()
+                ->where('user_id', $user->id)
+                ->where('template_code', 'WALLET_LOW_BALANCE')
+                ->where('related_type', 'customer_wallet')
+                ->where('related_id', $wallet->id)
+                ->where('created_at', '>=', now()->subDay())
+                ->exists();
+
+            if ($already) {
+                return;
+            }
+
+            event(new PassengerActionDue(
+                $user,
+                'WALLET_LOW_BALANCE',
+                [
+                    'amount' => $transaction->balance_after,
+                    'currency' => $transaction->currency,
+                    'deep_link' => '/wallet',
+                ],
+                'customer_wallet',
+                $wallet->id,
+            ));
+        });
     }
 }

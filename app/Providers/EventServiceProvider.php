@@ -7,18 +7,25 @@ use App\Modules\Admin\Support\Events\SupportTicketAssigned;
 use App\Modules\Admin\Support\Events\SupportTicketCreated;
 use App\Modules\Admin\Support\Events\SupportTicketReplied;
 use App\Modules\Admin\Support\Events\SupportTicketStatusChanged;
-use App\Modules\Loyalty\Events\LoyaltyTierChanged;
 use App\Modules\Admin\Support\Listeners\SupportEventLoggerListener;
+use App\Modules\Loyalty\Events\LoyaltyTierChanged;
 use App\Modules\Loyalty\Listeners\InitializeUserLoyaltyOnRegistrationListener;
 use App\Modules\Loyalty\Listeners\RecalculateUserLoyaltyListener;
+use App\Modules\Notifications\Events\AbandonedFlightSearchDue;
+use App\Modules\Notifications\Events\PassengerActionDue;
+use App\Modules\Notifications\Events\PriceAlertHit;
 use App\Modules\Notifications\Listeners\DispatchSystemNotificationListener;
 use App\Modules\Orders\Events\BookingReminderDue;
 use App\Modules\Orders\Events\FlightStatusUpdated;
+use App\Modules\Orders\Events\HotelStatusUpdated;
+use App\Modules\Orders\Events\OrderCancelled;
 use App\Modules\Orders\Events\OrderCompleted;
 use App\Modules\Orders\Events\OrderConfirmed;
 use App\Modules\Orders\Events\OrderCreated;
 use App\Modules\Orders\Events\PaymentFailed;
 use App\Modules\Orders\Events\PaymentSucceeded;
+use App\Modules\Orders\Events\RefundFailed;
+use App\Modules\Orders\Events\RefundInitiated;
 use App\Modules\Orders\Events\RefundIssued;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
@@ -70,12 +77,33 @@ class EventServiceProvider extends ServiceProvider
         FlightStatusUpdated::class => [
             DispatchSystemNotificationListener::class,
         ],
+        HotelStatusUpdated::class => [
+            DispatchSystemNotificationListener::class,
+        ],
+        OrderCancelled::class => [
+            DispatchSystemNotificationListener::class,
+        ],
         BookingReminderDue::class => [
+            DispatchSystemNotificationListener::class,
+        ],
+        AbandonedFlightSearchDue::class => [
+            DispatchSystemNotificationListener::class,
+        ],
+        PriceAlertHit::class => [
+            DispatchSystemNotificationListener::class,
+        ],
+        PassengerActionDue::class => [
             DispatchSystemNotificationListener::class,
         ],
         RefundIssued::class => [
             DispatchSystemNotificationListener::class,
             RecalculateUserLoyaltyListener::class,
+        ],
+        RefundInitiated::class => [
+            DispatchSystemNotificationListener::class,
+        ],
+        RefundFailed::class => [
+            DispatchSystemNotificationListener::class,
         ],
         LoyaltyTierChanged::class => [
             DispatchSystemNotificationListener::class,

@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Content\Services;
 
 use App\Models\ContentPage;
+use App\Modules\Content\Support\ContentPageCatalog;
 use Illuminate\Support\Str;
 
 class ContentPageAdminService
@@ -39,10 +40,17 @@ class ContentPageAdminService
         return [
             'id' => $page->id,
             'slug' => $page->slug,
+            'category' => $page->category,
+            'product' => $page->product,
+            'category_label' => ContentPageCatalog::categoryLabel((string) $page->category),
+            'category_label_ar' => ContentPageCatalog::categoryLabel((string) $page->category, 'ar'),
+            'product_label' => ContentPageCatalog::productLabel($page->product),
+            'product_label_ar' => ContentPageCatalog::productLabel($page->product, 'ar'),
             'title_en' => $page->title_en,
             'title_ar' => $page->title_ar,
             'body_en' => $page->body_en,
             'body_ar' => $page->body_ar,
+            'url' => $page->url,
             'sort_order' => $page->sort_order,
             'is_active' => $page->is_active,
             'updated_at' => optional($page->updated_at)?->toIso8601String(),
@@ -57,12 +65,24 @@ class ContentPageAdminService
     {
         $slug = Str::slug((string) ($data['slug'] ?? ''));
 
+        $category = (string) ($data['category'] ?? ContentPageCatalog::CATEGORY_LEGAL);
+        $product = $category === ContentPageCatalog::CATEGORY_PRODUCT_POLICY
+            ? $this->nullableString($data['product'] ?? null)
+            : null;
+
+        if ($product !== null) {
+            $slug = ContentPageCatalog::slugForProduct($product) ?? $slug;
+        }
+
         return [
             'slug' => $slug,
+            'category' => $category,
+            'product' => $product,
             'title_en' => trim((string) ($data['title_en'] ?? '')),
-            'title_ar' => $this->nullableString($data['title_ar'] ?? null),
+            'title_ar' => trim((string) ($data['title_ar'] ?? '')),
             'body_en' => (string) ($data['body_en'] ?? ''),
-            'body_ar' => $this->nullableString($data['body_ar'] ?? null),
+            'body_ar' => (string) ($data['body_ar'] ?? ''),
+            'url' => $this->nullableString($data['url'] ?? null),
             'sort_order' => (int) ($data['sort_order'] ?? 0),
             'is_active' => (bool) ($data['is_active'] ?? true),
         ];

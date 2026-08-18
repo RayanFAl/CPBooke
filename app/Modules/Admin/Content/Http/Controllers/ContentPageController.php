@@ -6,6 +6,7 @@ use App\Models\ContentPage;
 use App\Modules\Admin\Content\Http\Requests\StoreContentPageRequest;
 use App\Modules\Admin\Content\Http\Requests\UpdateContentPageRequest;
 use App\Modules\Admin\Content\Services\ContentPageAdminService;
+use App\Modules\Content\Support\ContentPageCatalog;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -14,8 +15,7 @@ class ContentPageController
 {
     public function __construct(
         private readonly ContentPageAdminService $contentPageAdminService,
-    ) {
-    }
+    ) {}
 
     public function index(): Response
     {
@@ -35,6 +35,7 @@ class ContentPageController
     {
         return Inertia::render('admin/content/pages/Form', [
             'page' => null,
+            'options' => $this->formOptions(),
         ]);
     }
 
@@ -51,6 +52,7 @@ class ContentPageController
     {
         return Inertia::render('admin/content/pages/Form', [
             'page' => $this->contentPageAdminService->serialize($page),
+            'options' => $this->formOptions(),
         ]);
     }
 
@@ -70,5 +72,16 @@ class ContentPageController
         return redirect()
             ->route('admin.content.index')
             ->with('success', 'Page deleted successfully.');
+    }
+
+    /**
+     * @return array{categories: list<array<string, string>>, products: list<array<string, string>>}
+     */
+    private function formOptions(): array
+    {
+        return [
+            'categories' => ContentPageCatalog::categoryOptions(),
+            'products' => ContentPageCatalog::productOptions(),
+        ];
     }
 }

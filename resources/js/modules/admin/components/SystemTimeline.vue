@@ -5,6 +5,7 @@ import { useAdminLocale } from '../composables/useAdminLocale';
 const props = defineProps({
     events: { type: Array, default: () => [] },
     title: { type: String, default: 'System Timeline' },
+    description: { type: String, default: 'Lifecycle events across approvals, wallets, settlements, and audit changes.' },
     emptyText: { type: String, default: 'No timeline events yet.' },
 });
 
@@ -33,7 +34,7 @@ const filtered = computed(() => {
     }
 
     return list.filter((event) => {
-        const blob = `${event.label || ''} ${event.description || ''} ${event.actor || ''} ${event.source || ''}`.toLowerCase();
+        const blob = `${event.label || ''} ${event.description || ''} ${event.actor || ''} ${event.source || ''} ${event.category || ''}`.toLowerCase();
         return blob.includes(needle);
     });
 });
@@ -57,7 +58,7 @@ const formatTime = (value) => {
             <div>
                 <h3 class="text-sm font-semibold text-slate-950">{{ t(title) }}</h3>
                 <p class="mt-1 text-sm text-slate-600">
-                    {{ t('Lifecycle events across approvals, wallets, settlements, and audit changes.') }}
+                    {{ t(description) }}
                 </p>
             </div>
             <label class="block w-full max-w-sm">
@@ -85,6 +86,9 @@ const formatTime = (value) => {
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="rounded-lg px-2 py-1 text-xs font-semibold" :class="toneClass(event.tone)">
                             {{ t(event.label) }}
+                        </span>
+                        <span v-if="event.category" class="rounded-lg bg-white px-2 py-1 text-xs font-medium capitalize text-slate-500">
+                            {{ t(event.category) }}
                         </span>
                         <span class="text-xs text-slate-500">{{ formatTime(event.occurred_at) }}</span>
                     </div>

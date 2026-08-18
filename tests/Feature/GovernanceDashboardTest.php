@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\FinancialTransaction;
 use App\Models\LoyaltyHistory;
+use App\Models\LoyaltyTier;
 use App\Models\NotificationLog;
 use App\Models\Order;
 use App\Models\RbacAuditLog;
@@ -54,7 +55,7 @@ class GovernanceDashboardTest extends TestCase
             'source' => 'governance_payment',
         ]);
 
-        $tierFrom = \App\Models\LoyaltyTier::query()->create([
+        $tierFrom = LoyaltyTier::query()->create([
             'code' => 'gov_1',
             'name' => 'Gov Tier 1',
             'level' => 81,
@@ -62,7 +63,7 @@ class GovernanceDashboardTest extends TestCase
             'is_active' => true,
             'is_default' => false,
         ]);
-        $tierTo = \App\Models\LoyaltyTier::query()->create([
+        $tierTo = LoyaltyTier::query()->create([
             'code' => 'gov_2',
             'name' => 'Gov Tier 2',
             'level' => 82,
@@ -71,13 +72,15 @@ class GovernanceDashboardTest extends TestCase
             'is_default' => false,
         ]);
 
-        LoyaltyHistory::query()->create([
-            'user_id' => $customer->id,
-            'from_tier_id' => $tierFrom->id,
-            'to_tier_id' => $tierTo->id,
-            'action' => LoyaltyHistory::ACTION_UPGRADED,
-            'changed_at' => now(),
-        ]);
+        LoyaltyHistory::withoutEvents(function () use ($customer, $tierFrom, $tierTo): void {
+            LoyaltyHistory::query()->create([
+                'user_id' => $customer->id,
+                'from_tier_id' => $tierFrom->id,
+                'to_tier_id' => $tierTo->id,
+                'action' => LoyaltyHistory::ACTION_UPGRADED,
+                'changed_at' => now(),
+            ]);
+        });
 
         NotificationLog::query()->create([
             'user_id' => $customer->id,

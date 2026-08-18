@@ -11,6 +11,10 @@ Route::post('/notifications/push-test', [NotificationsController::class, 'sendTe
     ->middleware('permission:notifications.view')
     ->name('notifications.push-test');
 
+Route::post('/notifications/template-test', [NotificationsController::class, 'sendTestTemplate'])
+    ->middleware('permission:notifications.view')
+    ->name('notifications.template-test');
+
 Route::post('/notifications/logs/{notificationLog}/retry', [NotificationsController::class, 'retry'])
     ->middleware('permission:notifications.retry-failed')
     ->name('notifications.retry');

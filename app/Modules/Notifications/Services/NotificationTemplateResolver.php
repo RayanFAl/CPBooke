@@ -17,8 +17,11 @@ class NotificationTemplateResolver
             ['code' => $definition['code']],
             [
                 'name' => $definition['name'],
+                'category' => $definition['category'] ?? 'general',
+                'description' => $definition['description'] ?? null,
                 'subject' => $definition['subject'] ?? null,
                 'body' => $definition['body'],
+                'translations' => $definition['translations'] ?? null,
                 'channels' => $definition['channels'],
                 'variables' => $definition['variables'] ?? [],
                 'version' => 1,

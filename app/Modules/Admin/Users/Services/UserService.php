@@ -20,6 +20,7 @@ class UserService
     public function __construct(
         private readonly AccessControlService $accessControlService,
         private readonly CustomerLoyaltyService $loyaltyService,
+        private readonly CustomerCrmActivityService $crmActivityService,
     ) {}
 
     /**
@@ -227,9 +228,12 @@ class UserService
             'role' => $this->rolePayload($user),
             'permissions' => $user->permissionNames(),
             'last_login_at' => $user->last_login_at?->toIso8601String(),
+            'preferred_locale' => $user->preferred_locale,
+            'phone_verified_at' => $user->phone_verified_at?->toIso8601String(),
             'email_verified_at' => $user->email_verified_at?->toIso8601String(),
             'created_at' => $user->created_at?->toIso8601String(),
             'updated_at' => $user->updated_at?->toIso8601String(),
+            'crm' => $this->crmActivityService->payload($user),
             'recent_orders' => $recentOrders,
             'financial_summary' => [
                 'wallet_balance' => $walletBalance !== null ? number_format($walletBalance, 2, '.', '') : null,

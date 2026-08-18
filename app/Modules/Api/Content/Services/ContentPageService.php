@@ -10,16 +10,18 @@ class ContentPageService
     /**
      * @return list<array<string, mixed>>
      */
-    public function list(?string $locale = null): array
+    public function list(?string $locale = null, ?string $category = null, ?string $product = null): array
     {
         $locale ??= 'en';
 
         return ContentPage::query()
             ->active()
+            ->forCategory($category)
+            ->forProduct($product)
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
-            ->map(fn (ContentPage $page): array => $this->mapSummary($page, $locale))
+            ->map(fn (ContentPage $page): array => $this->mapPage($page, $locale))
             ->values()
             ->all();
     }
@@ -40,7 +42,28 @@ class ContentPageService
             return null;
         }
 
-        return $this->mapDetail($page, $locale);
+        return $this->mapPage($page, $locale);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function findByProduct(string $product, ?string $locale = null): ?array
+    {
+        $locale ??= 'en';
+
+        $page = ContentPage::query()
+            ->active()
+            ->forProduct($product)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->first();
+
+        if ($page === null) {
+            return null;
+        }
+
+        return $this->mapPage($page, $locale);
     }
 
     public function resolveLocale(Request $request): string
@@ -71,25 +94,16 @@ class ContentPageService
     /**
      * @return array<string, mixed>
      */
-    private function mapSummary(ContentPage $page, string $locale): array
+    private function mapPage(ContentPage $page, string $locale): array
     {
         return [
-            'slug' => $page->slug,
-            'title' => $page->localizedTitle($locale),
-            'updated_at' => optional($page->updated_at)?->toIso8601String(),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function mapDetail(ContentPage $page, string $locale): array
-    {
-        return [
-            'slug' => $page->slug,
             'title' => $page->localizedTitle($locale),
             'body' => $page->localizedBody($locale),
-            'updated_at' => optional($page->updated_at)?->toIso8601String(),
+            'category' => $page->category,
+            'product' => $page->product,
+            'slug' => $page->slug,
+            'url' => $page->publicUrl(),
+            'updated_at' => $page->publishedAt(),
         ];
     }
 }

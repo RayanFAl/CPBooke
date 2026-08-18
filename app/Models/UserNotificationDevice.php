@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'user_id',
     'channel',
     'platform',
+    'app_version',
     'device_token',
     'is_active',
     'last_seen_at',

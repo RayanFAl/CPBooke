@@ -3,20 +3,27 @@
 namespace Tests\Feature;
 
 use App\Models\FinancialTransaction;
+use App\Models\LoyaltyBenefit;
+use App\Models\LoyaltyHistory;
+use App\Models\LoyaltyTier;
 use App\Models\NotificationLog;
 use App\Models\NotificationTemplate;
 use App\Models\Order;
+use App\Models\SupportMessage;
+use App\Models\SupportTicket;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Models\UserNotificationPreference;
-use App\Modules\Api\DTO\CreateOrderDTO;
 use App\Modules\Admin\Finance\Events\CriticalFinanceAnomaliesDetected;
 use App\Modules\Admin\Finance\Services\FinancialConsistencyService;
+use App\Modules\Admin\Support\Events\SupportTicketReplied;
+use App\Modules\Api\DTO\CreateOrderDTO;
 use App\Modules\Api\Orders\Services\OrderService;
+use App\Modules\Loyalty\Events\LoyaltyTierChanged;
 use App\Modules\Notifications\Jobs\SendNotificationChannelJob;
 use App\Modules\Notifications\Services\NotificationService;
+use App\Modules\Notifications\Services\NotificationTemplateSyncService;
 use App\Modules\Notifications\Support\NotificationChannels;
-use App\Modules\Loyalty\Events\LoyaltyTierChanged;
 use App\Modules\Orders\Events\OrderConfirmed;
 use App\Modules\Orders\Events\OrderCreated;
 use App\Modules\Orders\Events\RefundIssued;
@@ -269,8 +276,16 @@ class NotificationSystemTest extends TestCase
         $this->actingAs($admin)
             ->put(route('admin.notifications.templates.update', $template, absolute: false), [
                 'name' => 'Refund issued updated',
+                'category' => 'payments',
+                'description' => 'Refund notification',
                 'subject' => 'Refund update',
                 'body' => 'Updated refund body for {user_name}',
+                'translations' => [
+                    'ar' => [
+                        'subject' => 'تحديث الاسترداد',
+                        'body' => 'تم تحديث استرداد {user_name}',
+                    ],
+                ],
                 'channels' => [NotificationChannels::EMAIL],
                 'variables' => ['user_name'],
                 'is_active' => false,
@@ -359,7 +374,7 @@ class NotificationSystemTest extends TestCase
             'email' => 'loyalty@example.test',
         ]);
 
-        $fromTier = \App\Models\LoyaltyTier::query()->create([
+        $fromTier = LoyaltyTier::query()->create([
             'code' => 'genius_1',
             'name' => 'Genius 1',
             'level' => 11,
@@ -368,7 +383,7 @@ class NotificationSystemTest extends TestCase
             'is_default' => true,
         ]);
 
-        $toTier = \App\Models\LoyaltyTier::query()->create([
+        $toTier = LoyaltyTier::query()->create([
             'code' => 'genius_2',
             'name' => 'Genius 2',
             'level' => 12,
@@ -377,7 +392,7 @@ class NotificationSystemTest extends TestCase
             'is_default' => false,
         ]);
 
-        \App\Models\LoyaltyBenefit::query()->create([
+        LoyaltyBenefit::query()->create([
             'tier_id' => $toTier->id,
             'code' => 'priority_support',
             'name' => 'Priority Support',
@@ -389,11 +404,11 @@ class NotificationSystemTest extends TestCase
             'is_active' => true,
         ]);
 
-        $history = \App\Models\LoyaltyHistory::query()->create([
+        $history = LoyaltyHistory::query()->create([
             'user_id' => $customer->id,
             'from_tier_id' => $fromTier->id,
             'to_tier_id' => $toTier->id,
-            'action' => \App\Models\LoyaltyHistory::ACTION_UPGRADED,
+            'action' => LoyaltyHistory::ACTION_UPGRADED,
             'changed_at' => now(),
         ])->fresh()->load(['user', 'fromTier', 'toTier.benefits']);
 
@@ -460,7 +475,7 @@ class NotificationSystemTest extends TestCase
             'is_admin' => true,
         ]);
 
-        $ticket = \App\Models\SupportTicket::query()->create([
+        $ticket = SupportTicket::query()->create([
             'ticket_number' => 'SUP-NOTIFY-0001',
             'user_id' => $customer->id,
             'order_id' => null,
@@ -472,7 +487,7 @@ class NotificationSystemTest extends TestCase
             'description' => 'Please assist.',
         ]);
 
-        $message = \App\Models\SupportMessage::query()->create([
+        $message = SupportMessage::query()->create([
             'support_ticket_id' => $ticket->id,
             'user_id' => $agent->id,
             'message' => 'We are looking into this.',
@@ -480,7 +495,7 @@ class NotificationSystemTest extends TestCase
         ]);
 
         app(NotificationService::class)->dispatchForEvent(
-            new \App\Modules\Admin\Support\Events\SupportTicketReplied($ticket->load('user'), $message->load('user'))
+            new SupportTicketReplied($ticket->load('user'), $message->load('user'))
         );
 
         $this->assertDatabaseHas('notification_logs', [
@@ -491,5 +506,60 @@ class NotificationSystemTest extends TestCase
         ]);
 
         Queue::assertPushed(SendNotificationChannelJob::class);
+    }
+
+    public function test_admin_can_send_existing_templates_to_a_user(): void
+    {
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+            'preferred_locale' => 'ar',
+        ]);
+
+        $admin = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $admin->refresh()->syncRolesByName(['super_admin']);
+
+        app(NotificationTemplateSyncService::class)->syncMissing();
+
+        $this->actingAs($admin)
+            ->post(route('admin.notifications.template-test', absolute: false), [
+                'user_id' => $customer->id,
+                'template_code' => 'PAYMENT_SUCCEEDED',
+            ])
+            ->assertRedirect(route('admin.notifications.index', ['tab' => 'tools'], absolute: false));
+
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $customer->id,
+            'template_code' => 'PAYMENT_SUCCEEDED',
+        ]);
+
+        $inbox = UserNotification::query()
+            ->where('user_id', $customer->id)
+            ->where('template_code', 'PAYMENT_SUCCEEDED')
+            ->first();
+
+        $this->assertNotNull($inbox);
+        $this->assertNotSame('', (string) $inbox->title);
+        $this->assertNotSame('', (string) $inbox->message);
+
+        $before = UserNotification::query()->where('user_id', $customer->id)->count();
+        $activeCount = NotificationTemplate::query()->where('is_active', true)->count();
+
+        $this->actingAs($admin)
+            ->post(route('admin.notifications.template-test', absolute: false), [
+                'user_id' => $customer->id,
+                'template_code' => 'ALL',
+            ])
+            ->assertRedirect(route('admin.notifications.index', ['tab' => 'tools'], absolute: false));
+
+        $this->assertSame(
+            $before + $activeCount,
+            UserNotification::query()->where('user_id', $customer->id)->count(),
+        );
     }
 }

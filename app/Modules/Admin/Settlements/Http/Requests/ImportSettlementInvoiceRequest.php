@@ -22,6 +22,8 @@ class ImportSettlementInvoiceRequest extends FormRequest
             'lines.*.order_id' => ['nullable', 'integer', 'exists:orders,id'],
             'lines.*.amount' => ['required_with:lines', 'numeric', 'min:0'],
             'csv_text' => ['nullable', 'string'],
+            'invoice_file' => ['nullable', 'file', 'max:10240', 'mimes:csv,txt,xlsx,xlsm'],
+            'attachment' => ['nullable', 'file', 'max:10240', 'mimes:pdf,csv,txt,xlsx,xlsm'],
         ];
     }
 
@@ -30,9 +32,10 @@ class ImportSettlementInvoiceRequest extends FormRequest
         $validator->after(function ($validator): void {
             $lines = $this->input('lines', []);
             $csv = trim((string) $this->input('csv_text', ''));
+            $hasFile = $this->hasFile('invoice_file');
 
-            if ((! is_array($lines) || $lines === []) && $csv === '') {
-                $validator->errors()->add('lines', 'Provide invoice lines or CSV text.');
+            if ((! is_array($lines) || $lines === []) && $csv === '' && ! $hasFile) {
+                $validator->errors()->add('lines', 'Provide invoice lines, CSV text, or a CSV/XLSX file.');
             }
         });
     }

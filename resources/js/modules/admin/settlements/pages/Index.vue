@@ -65,7 +65,10 @@ const openSettlement = (row) => {
                     <option value="">{{ t('All statuses') }}</option>
                     <option value="draft">draft</option>
                     <option value="open">open</option>
+                    <option value="pending_review">pending_review</option>
+                    <option value="approved">approved</option>
                     <option value="closed">closed</option>
+                    <option value="reopened">reopened</option>
                 </select>
                 <button type="submit" class="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800">
                     {{ t('Filter') }}

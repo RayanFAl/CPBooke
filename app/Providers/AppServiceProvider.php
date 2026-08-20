@@ -28,6 +28,7 @@ use App\Policies\SavedVehiclePolicy;
 use App\Support\Rbac\RbacRegistry;
 use App\Modules\Settings\Services\SystemSettingsService;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
@@ -115,6 +116,11 @@ class AppServiceProvider extends ServiceProvider
             config([
                 'mail.from.name' => $settings->mailFromName(),
             ]);
+
+            $support = $settings->supportEmail();
+            if ($support !== '') {
+                Mail::alwaysReplyTo($support, $settings->companyName());
+            }
         } catch (Throwable) {
             // Settings table may not exist during early migrate/install.
         }

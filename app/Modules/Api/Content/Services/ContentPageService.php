@@ -3,6 +3,7 @@
 namespace App\Modules\Api\Content\Services;
 
 use App\Models\ContentPage;
+use App\Modules\Content\Support\ContentPageCatalog;
 use Illuminate\Http\Request;
 
 class ContentPageService
@@ -66,6 +67,45 @@ class ContentPageService
         return $this->mapPage($page, $locale);
     }
 
+    /**
+     * @return array{legal: array<string, array<string, mixed>>, products: array<string, array<string, mixed>>}
+     */
+    public function workspace(?string $locale = null): array
+    {
+        $locale ??= 'en';
+
+        $legal = [];
+        foreach (ContentPageCatalog::legalSlugs() as $slug) {
+            $page = ContentPage::query()
+                ->active()
+                ->where('slug', $slug)
+                ->first();
+
+            if ($page !== null) {
+                $legal[$slug] = $this->mapPage($page, $locale);
+            }
+        }
+
+        $products = [];
+        foreach (ContentPageCatalog::products() as $product) {
+            $page = ContentPage::query()
+                ->active()
+                ->forProduct($product)
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->first();
+
+            if ($page !== null) {
+                $products[$product] = $this->mapPage($page, $locale);
+            }
+        }
+
+        return [
+            'legal' => $legal,
+            'products' => $products,
+        ];
+    }
+
     public function resolveLocale(Request $request): string
     {
         $locale = strtolower(trim($request->string('locale')->toString()));
@@ -102,7 +142,7 @@ class ContentPageService
             'category' => $page->category,
             'product' => $page->product,
             'slug' => $page->slug,
-            'url' => $page->publicUrl(),
+            'url' => $page->publicUrl($locale),
             'updated_at' => $page->publishedAt(),
         ];
     }

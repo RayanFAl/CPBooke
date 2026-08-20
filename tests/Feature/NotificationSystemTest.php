@@ -562,4 +562,39 @@ class NotificationSystemTest extends TestCase
             UserNotification::query()->where('user_id', $customer->id)->count(),
         );
     }
+
+    public function test_admin_can_send_whatsapp_sandbox_with_a_template_test(): void
+    {
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+            'phone' => '+218910000001',
+            'preferred_locale' => 'ar',
+        ]);
+
+        $admin = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $admin->refresh()->syncRolesByName(['super_admin']);
+
+        app(NotificationTemplateSyncService::class)->syncMissing();
+
+        $this->actingAs($admin)
+            ->post(route('admin.notifications.template-test', absolute: false), [
+                'user_id' => $customer->id,
+                'template_code' => 'PAYMENT_SUCCEEDED',
+                'include_whatsapp' => true,
+            ])
+            ->assertRedirect(route('admin.notifications.index', ['tab' => 'tools'], absolute: false));
+
+        $this->assertDatabaseHas('notification_logs', [
+            'user_id' => $customer->id,
+            'template_code' => 'PAYMENT_SUCCEEDED',
+            'channel' => NotificationChannels::WHATSAPP,
+            'status' => NotificationLog::STATUS_SENT,
+        ]);
+    }
 }

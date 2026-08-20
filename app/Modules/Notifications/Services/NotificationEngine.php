@@ -72,10 +72,12 @@ class NotificationEngine
             static fn (mixed $channel): bool => is_string($channel) && in_array($channel, NotificationChannels::all(), true),
         ));
 
-        $requested = array_values(array_diff($requested, [
-            NotificationChannels::SMS,
-            NotificationChannels::WHATSAPP,
-        ]));
+        if ($channels === []) {
+            $requested = array_values(array_diff($requested, [
+                NotificationChannels::SMS,
+                NotificationChannels::WHATSAPP,
+            ]));
+        }
 
         if (! in_array(NotificationChannels::IN_APP, $requested, true)) {
             $requested[] = NotificationChannels::IN_APP;

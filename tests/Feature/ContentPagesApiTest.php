@@ -41,7 +41,7 @@ class ContentPagesApiTest extends TestCase
             ->assertJsonPath('data.0.body', '<p>EN privacy body</p>')
             ->assertJsonPath('data.0.category', ContentPageCatalog::CATEGORY_LEGAL)
             ->assertJsonPath('data.0.product', null)
-            ->assertJsonPath('data.0.url', null)
+            ->assertJsonPath('data.0.url', ContentPageCatalog::publicWebUrl('en', 'privacy-policy'))
             ->assertHeader('ETag');
 
         $this->assertCount(1, $response->json('data'));
@@ -67,7 +67,7 @@ class ContentPagesApiTest extends TestCase
             ->assertJsonPath('data.title', 'شروط الاستخدام')
             ->assertJsonPath('data.body', '<p>AR terms body</p>')
             ->assertJsonPath('data.category', ContentPageCatalog::CATEGORY_LEGAL)
-            ->assertJsonPath('data.url', null);
+            ->assertJsonPath('data.url', ContentPageCatalog::publicWebUrl('ar', 'terms-of-service'));
     }
 
     public function test_locale_can_be_resolved_from_accept_language(): void
@@ -152,7 +152,7 @@ class ContentPagesApiTest extends TestCase
             ->assertJsonPath('data.product', 'flight')
             ->assertJsonPath('data.category', 'product_policy')
             ->assertJsonPath('data.body', '<p>نص سياسة الطيران</p>')
-            ->assertJsonPath('data.url', null);
+            ->assertJsonPath('data.url', ContentPageCatalog::publicWebUrl('ar', 'flight-policy'));
     }
 
     public function test_page_url_is_returned_when_set(): void
@@ -180,6 +180,24 @@ class ContentPagesApiTest extends TestCase
 
         $this->getJson('/api/v1/pages/product/cars')
             ->assertNotFound();
+    }
+
+    public function test_workspace_endpoint_returns_grouped_legal_and_product_policies(): void
+    {
+        $this->createLegalPage();
+        $this->createProductPolicy(ContentPageCatalog::PRODUCT_FLIGHT, '<p>Flight body EN</p>');
+        $this->createProductPolicy(ContentPageCatalog::PRODUCT_HOTEL, '<p>Hotel body EN</p>');
+
+        $this->getJson('/api/v1/pages/workspace?locale=en')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.legal.privacy-policy.slug', 'privacy-policy')
+            ->assertJsonPath('data.legal.privacy-policy.url', ContentPageCatalog::publicWebUrl('en', 'privacy-policy'))
+            ->assertJsonPath('data.products.flight.slug', 'flight-policy')
+            ->assertJsonPath('data.products.flight.product', 'flight')
+            ->assertJsonPath('data.products.hotel.slug', 'hotel-policy')
+            ->assertJsonMissingPath('data.products.insurance')
+            ->assertHeader('ETag');
     }
 
     private function createLegalPage(): ContentPage

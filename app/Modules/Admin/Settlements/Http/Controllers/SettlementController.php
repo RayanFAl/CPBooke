@@ -4,23 +4,35 @@ namespace App\Modules\Admin\Settlements\Http\Controllers;
 
 use App\Models\Provider;
 use App\Models\Settlement;
+use App\Models\SettlementAttachment;
 use App\Models\SettlementItem;
 use App\Modules\Admin\Settlements\Http\Requests\ImportSettlementInvoiceRequest;
+use App\Modules\Admin\Settlements\Http\Requests\ReopenSettlementRequest;
 use App\Modules\Admin\Settlements\Http\Requests\ResolveSettlementItemRequest;
+use App\Modules\Admin\Settlements\Http\Requests\StoreSettlementAttachmentRequest;
 use App\Modules\Admin\Settlements\Http\Requests\StoreSettlementRequest;
 use App\Modules\Audit\Services\EntityTimelineService;
+use App\Modules\Finance\Support\FinancialContract;
+use App\Modules\Settlements\Services\SettlementAttachmentService;
+use App\Modules\Settlements\Services\SettlementResolutionService;
 use App\Modules\Settlements\Services\SettlementService;
+use App\Modules\Settlements\Support\SettlementInvoiceParser;
 use App\Modules\Settings\Services\SystemSettingsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SettlementController
 {
     public function __construct(
         private readonly SettlementService $settlementService,
+        private readonly SettlementResolutionService $settlementResolutionService,
+        private readonly SettlementAttachmentService $settlementAttachmentService,
+        private readonly SettlementInvoiceParser $settlementInvoiceParser,
         private readonly EntityTimelineService $entityTimelineService,
         private readonly SystemSettingsService $systemSettingsService,
     ) {
@@ -80,6 +92,11 @@ class SettlementController
             'provider:id,name,key,settlement_cycle',
             'creator:id,name,full_name',
             'closer:id,name,full_name',
+            'approver:id,name,full_name',
+            'reopener:id,name,full_name',
+            'attachments.uploader:id,name,full_name',
+            'invoiceImports.uploader:id,name,full_name',
+            'currentInvoiceImport',
         ]);
 
         $itemStatus = trim((string) $request->input('item_status', ''));
@@ -101,11 +118,21 @@ class SettlementController
         return Inertia::render('admin/settlements/pages/Show', [
             'settlement' => $this->serializeSettlement($settlement, detailed: true),
             'items' => $items,
+            'attachments' => $settlement->attachments
+                ->map(fn (SettlementAttachment $attachment): array => $this->serializeAttachment($attachment))
+                ->values(),
+            'invoice_imports' => $settlement->invoiceImports
+                ->sortByDesc('sequence')
+                ->values()
+                ->map(fn ($import): array => $this->serializeInvoiceImport($import))
+                ->values(),
             'system_timeline' => $this->entityTimelineService->forSettlement($settlement),
             'filters' => [
                 'item_status' => $itemStatus,
             ],
             'can_manage' => $request->user()?->can('settlements.manage') ?? false,
+            'can_reopen' => $request->user()?->can('settlements.reopen') ?? false,
+            'resolution_reasons' => FinancialContract::adjustmentReasons(),
             'item_statuses' => [
                 SettlementItem::STATUS_MATCHED,
                 SettlementItem::STATUS_MISSING,
@@ -124,21 +151,98 @@ class SettlementController
         ));
 
         if ($lines === [] && $request->filled('csv_text')) {
-            $lines = $this->parseCsvText($request->string('csv_text')->value());
+            $csvText = $request->string('csv_text')->value();
+            $lines = $this->settlementInvoiceParser->parseCsvText($csvText);
         }
 
-        $this->settlementService->importInvoice($settlement, $lines);
+        if ($request->hasFile('invoice_file')) {
+            $lines = $this->settlementInvoiceParser->parseUploadedFile($request->file('invoice_file'));
+        }
+
+        $prepared = $this->settlementService->prepareInvoiceLines($lines);
+
+        if ($prepared['accepted'] === []) {
+            return redirect()
+                ->route('admin.settlements.show', $settlement)
+                ->withErrors(['lines' => $prepared['errors'][0]['message'] ?? 'Invoice import has invalid rows.']);
+        }
+
+        $attachment = null;
+
+        if ($request->filled('csv_text') && ! $request->hasFile('invoice_file')) {
+            $attachment = $this->settlementAttachmentService->storePastedCsv(
+                $settlement,
+                $request->string('csv_text')->value(),
+                $request->user(),
+            );
+        }
+
+        if ($request->hasFile('invoice_file')) {
+            $file = $request->file('invoice_file');
+            $attachment = $this->settlementAttachmentService->storeUploadedFile(
+                $settlement,
+                $file,
+                $request->user(),
+                $this->settlementInvoiceParser->kindForFile($file),
+            );
+        }
+
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $this->settlementAttachmentService->storeUploadedFile(
+                $settlement,
+                $file,
+                $request->user(),
+                $this->settlementInvoiceParser->kindForFile($file),
+            );
+        }
+
+        $this->settlementService->importInvoice($settlement, $lines, $request->user(), $attachment);
 
         return redirect()
             ->route('admin.settlements.show', $settlement)
             ->with('success', 'Invoice imported and comparison refreshed.');
     }
 
+    public function storeAttachment(StoreSettlementAttachmentRequest $request, Settlement $settlement): RedirectResponse
+    {
+        Gate::authorize('settlements.manage');
+
+        if (! $settlement->canMutate()) {
+            abort(422, 'Closed or approved settlements cannot be modified.');
+        }
+
+        $file = $request->file('file');
+        $this->settlementAttachmentService->storeUploadedFile(
+            $settlement,
+            $file,
+            $request->user(),
+            $this->settlementInvoiceParser->kindForFile($file),
+        );
+
+        return redirect()
+            ->route('admin.settlements.show', $settlement)
+            ->with('success', 'Attachment stored on this settlement period.');
+    }
+
+    public function downloadAttachment(Request $request, Settlement $settlement, SettlementAttachment $attachment): StreamedResponse
+    {
+        Gate::authorize('settlements.view');
+
+        if ((int) $attachment->settlement_id !== (int) $settlement->id) {
+            abort(404);
+        }
+
+        abort_unless(Storage::disk($attachment->disk)->exists($attachment->path), 404);
+
+        return Storage::disk($attachment->disk)->download($attachment->path, $attachment->original_name);
+    }
+
     public function compare(Request $request, Settlement $settlement): RedirectResponse
     {
         Gate::authorize('settlements.manage');
 
-        $this->settlementService->compare($settlement);
+        $this->settlementService->compare($settlement, $request->user());
 
         return redirect()
             ->route('admin.settlements.show', $settlement)
@@ -154,15 +258,30 @@ class SettlementController
             abort(404);
         }
 
-        $this->settlementService->resolveItem(
+        $result = $this->settlementResolutionService->resolve(
             $item,
             $request->user(),
-            $request->string('resolution_note')->value(),
+            $request->validated(),
         );
+
+        $message = $result['executed']
+            ? 'Settlement item resolution applied.'
+            : 'Adjustment submitted for approval.';
 
         return redirect()
             ->route('admin.settlements.show', $settlement)
-            ->with('success', 'Settlement item resolved.');
+            ->with('success', $message);
+    }
+
+    public function approve(Request $request, Settlement $settlement): RedirectResponse
+    {
+        Gate::authorize('settlements.manage');
+
+        $this->settlementService->approvePeriod($settlement, $request->user());
+
+        return redirect()
+            ->route('admin.settlements.show', $settlement)
+            ->with('success', 'Settlement period approved.');
     }
 
     public function close(Request $request, Settlement $settlement): RedirectResponse
@@ -174,6 +293,19 @@ class SettlementController
         return redirect()
             ->route('admin.settlements.show', $settlement)
             ->with('success', 'Settlement period closed.');
+    }
+
+    public function reopen(ReopenSettlementRequest $request, Settlement $settlement): RedirectResponse
+    {
+        $this->settlementService->reopenPeriod(
+            $settlement,
+            $request->user(),
+            $request->string('reason')->value(),
+        );
+
+        return redirect()
+            ->route('admin.settlements.show', $settlement)
+            ->with('success', 'Settlement period reopened.');
     }
 
     /**
@@ -197,6 +329,7 @@ class SettlementController
             'orders_count' => $settlement->orders_count,
             'matched_count' => $settlement->matched_count,
             'review_count' => $settlement->review_count,
+            'pending_approvals' => $detailed ? $this->settlementService->pendingAdjustmentApprovalsCount($settlement) : null,
             'created_by' => $settlement->creator?->full_name ?: $settlement->creator?->name,
             'created_at' => optional($settlement->created_at)?->toIso8601String(),
         ];
@@ -205,8 +338,15 @@ class SettlementController
             $data['notes'] = $settlement->notes;
             $data['settlement_cycle'] = $settlement->provider?->settlement_cycle;
             $data['compared_at'] = optional($settlement->compared_at)?->toIso8601String();
+            $data['approved_at'] = optional($settlement->approved_at)?->toIso8601String();
+            $data['approved_by'] = $settlement->approver?->full_name ?: $settlement->approver?->name;
             $data['closed_at'] = optional($settlement->closed_at)?->toIso8601String();
             $data['closed_by'] = $settlement->closer?->full_name ?: $settlement->closer?->name;
+            $data['reopened_at'] = optional($settlement->reopened_at)?->toIso8601String();
+            $data['reopened_by'] = $settlement->reopener?->full_name ?: $settlement->reopener?->name;
+            $data['reopen_reason'] = $settlement->reopen_reason;
+            $data['close_history'] = $settlement->close_history ?? [];
+            $data['can_mutate'] = $settlement->canMutate();
         }
 
         return $data;
@@ -223,11 +363,17 @@ class SettlementController
             'booking_reference' => $item->booking_reference,
             'external_booking_id' => $item->external_booking_id,
             'supplier_cost' => $item->supplier_cost,
+            'expected_cost_source' => $item->expected_cost_source,
             'wallet_debit' => $item->wallet_debit,
             'supplier_invoice_cost' => $item->supplier_invoice_cost,
             'difference' => $item->difference,
             'status' => $item->status,
+            'resolution_type' => $item->resolution_type,
+            'resolution_reason' => $item->resolution_reason,
+            'resolution_amount' => $item->resolution_amount,
             'resolution_note' => $item->resolution_note,
+            'pending_approval_id' => $item->pending_approval_id,
+            'financial_transaction_id' => $item->financial_transaction_id,
             'needs_review' => $item->needsReview(),
             'order_status' => $item->order?->status,
             'payment_status' => $item->order?->payment_status,
@@ -235,45 +381,19 @@ class SettlementController
     }
 
     /**
-     * Parse CSV: booking_reference,amount (optional header).
-     *
-     * @return array<int, array{booking_reference: string, amount: float}>
+     * @return array<string, mixed>
      */
-    private function parseCsvText(string $csvText): array
+    private function serializeAttachment(SettlementAttachment $attachment): array
     {
-        $lines = preg_split('/\r\n|\r|\n/', trim($csvText)) ?: [];
-        $result = [];
-
-        foreach ($lines as $index => $line) {
-            $line = trim($line);
-
-            if ($line === '') {
-                continue;
-            }
-
-            $parts = str_getcsv($line);
-
-            if (count($parts) < 2) {
-                continue;
-            }
-
-            $ref = trim((string) $parts[0]);
-            $amount = trim((string) $parts[1]);
-
-            if ($index === 0 && ! is_numeric($amount)) {
-                continue;
-            }
-
-            if (! is_numeric($amount)) {
-                continue;
-            }
-
-            $result[] = [
-                'booking_reference' => $ref,
-                'amount' => (float) $amount,
-            ];
-        }
-
-        return $result;
+        return [
+            'id' => $attachment->id,
+            'kind' => $attachment->kind,
+            'original_name' => $attachment->original_name,
+            'mime' => $attachment->mime,
+            'size' => $attachment->size,
+            'source' => $attachment->source,
+            'uploaded_by' => $attachment->uploader?->full_name ?: $attachment->uploader?->name,
+            'created_at' => optional($attachment->created_at)?->toIso8601String(),
+        ];
     }
 }

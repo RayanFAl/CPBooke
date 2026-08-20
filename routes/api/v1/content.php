@@ -10,6 +10,7 @@ Route::prefix('pages')
     ->controller(ContentPageController::class)
     ->group(function (): void {
         Route::get('/', 'index')->name('index');
+        Route::get('/workspace', 'workspace')->name('workspace');
         Route::get('/product/{product}', 'showForProduct')
             ->name('product')
             ->whereIn('product', ContentPageCatalog::products());

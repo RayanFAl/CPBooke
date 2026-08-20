@@ -44,7 +44,7 @@ export const navigationItems = [
                 icon: 'dashboard',
             },
             {
-                label: 'Content Pages',
+                label: 'Policies & Terms',
                 route: 'admin.content.index',
                 startsWith: '/admin/content',
                 permission: 'settings.manage',

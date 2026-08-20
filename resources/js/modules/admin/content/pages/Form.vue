@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import RichTextEditor from '../../components/RichTextEditor.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
@@ -166,30 +167,13 @@ const submit = () => {
 
                 <div>
                     <label class="mb-1.5 block text-sm font-medium">{{ t('Body (EN)') }}</label>
-                    <textarea
-                        v-model="form.body_en"
-                        rows="12"
-                        class="w-full rounded-xl border border-slate-300 px-3 py-2.5 font-mono text-sm leading-6"
-                        required
-                    />
-                    <p class="mt-1 text-xs text-slate-500">
-                        {{ t('HTML shown in the app (headings, lists, links).') }}
-                    </p>
+                    <RichTextEditor v-model="form.body_en" dir="ltr" />
                     <p v-if="form.errors.body_en" class="mt-1 text-sm text-rose-600">{{ form.errors.body_en }}</p>
                 </div>
 
                 <div>
                     <label class="mb-1.5 block text-sm font-medium">{{ t('Body (AR)') }}</label>
-                    <textarea
-                        v-model="form.body_ar"
-                        rows="12"
-                        dir="rtl"
-                        class="w-full rounded-xl border border-slate-300 px-3 py-2.5 font-mono text-sm leading-6"
-                        required
-                    />
-                    <p class="mt-1 text-xs text-slate-500">
-                        {{ t('HTML shown in the app (headings, lists, links).') }}
-                    </p>
+                    <RichTextEditor v-model="form.body_ar" dir="rtl" />
                     <p v-if="form.errors.body_ar" class="mt-1 text-sm text-rose-600">{{ form.errors.body_ar }}</p>
                 </div>
 

@@ -5,6 +5,7 @@ namespace App\Modules\Approvals\Services;
 use App\Jobs\ExecuteApprovalActionJob;
 use App\Models\Approval;
 use App\Models\AuditLog;
+use App\Models\SettlementItem;
 use App\Models\User;
 use App\Modules\Audit\Services\AuditRecorder;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -143,6 +144,14 @@ class ApprovalService
             'rejected_at' => now(),
             'rejection_reason' => trim($reason),
         ])->save();
+
+        if ($approval->type === Approval::TYPE_SETTLEMENT_ADJUSTMENT) {
+            SettlementItem::query()
+                ->where('pending_approval_id', $approval->id)
+                ->update([
+                    'pending_approval_id' => null,
+                ]);
+        }
 
         $this->auditRecorder->success(
             AuditLog::MODULE_APPROVALS,

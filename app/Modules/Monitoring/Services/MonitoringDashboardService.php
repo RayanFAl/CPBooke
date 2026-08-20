@@ -100,7 +100,12 @@ class MonitoringDashboardService
             ->count();
 
         $settlementAlerts = Settlement::query()
-            ->whereIn('status', [Settlement::STATUS_DRAFT, Settlement::STATUS_OPEN])
+            ->whereIn('status', [
+                Settlement::STATUS_DRAFT,
+                Settlement::STATUS_OPEN,
+                Settlement::STATUS_PENDING_REVIEW,
+                Settlement::STATUS_REOPENED,
+            ])
             ->whereDate('period_end', '<', now()->startOfMonth()->toDateString())
             ->count();
 

@@ -119,6 +119,22 @@ class ContentPagesAdminTest extends TestCase
             ->assertSessionHasErrors('url');
     }
 
+    public function test_admin_workspace_index_returns_all_tabs(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->get(route('admin.content.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('admin/content/pages/Index', false)
+                ->has('tabs', 6)
+                ->where('tabs.0.tab_id', ContentPageCatalog::SLUG_PRIVACY_POLICY)
+                ->where('tabs.2.tab_id', ContentPageCatalog::PRODUCT_FLIGHT)
+                ->where('tabs.2.group', 'product')
+            );
+    }
+
     private function admin(): User
     {
         $this->seed(RolesAndPermissionsSeeder::class);

@@ -19,24 +19,14 @@ class ContentPageController
 
     public function index(): Response
     {
-        $pages = ContentPage::query()
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->map(fn (ContentPage $page) => $this->contentPageAdminService->serialize($page))
-            ->values();
-
         return Inertia::render('admin/content/pages/Index', [
-            'pages' => $pages,
+            'tabs' => $this->contentPageAdminService->workspaceTabs(),
         ]);
     }
 
-    public function create(): Response
+    public function create(): RedirectResponse
     {
-        return Inertia::render('admin/content/pages/Form', [
-            'page' => null,
-            'options' => $this->formOptions(),
-        ]);
+        return redirect()->route('admin.content.index');
     }
 
     public function store(StoreContentPageRequest $request): RedirectResponse
@@ -48,20 +38,25 @@ class ContentPageController
             ->with('success', 'Page created successfully.');
     }
 
-    public function edit(ContentPage $page): Response
+    public function edit(ContentPage $page): RedirectResponse
     {
-        return Inertia::render('admin/content/pages/Form', [
-            'page' => $this->contentPageAdminService->serialize($page),
-            'options' => $this->formOptions(),
-        ]);
+        $tabId = $page->category === ContentPageCatalog::CATEGORY_PRODUCT_POLICY && $page->product
+            ? (string) $page->product
+            : (string) $page->slug;
+
+        return redirect()->route('admin.content.index', ['tab' => $tabId]);
     }
 
     public function update(UpdateContentPageRequest $request, ContentPage $page): RedirectResponse
     {
         $this->contentPageAdminService->update($page, $request->validated());
 
+        $tabId = $page->category === ContentPageCatalog::CATEGORY_PRODUCT_POLICY && $page->product
+            ? (string) $page->product
+            : (string) $page->slug;
+
         return redirect()
-            ->route('admin.content.index')
+            ->route('admin.content.index', ['tab' => $tabId])
             ->with('success', 'Page updated successfully.');
     }
 
@@ -72,16 +67,5 @@ class ContentPageController
         return redirect()
             ->route('admin.content.index')
             ->with('success', 'Page deleted successfully.');
-    }
-
-    /**
-     * @return array{categories: list<array<string, string>>, products: list<array<string, string>>}
-     */
-    private function formOptions(): array
-    {
-        return [
-            'categories' => ContentPageCatalog::categoryOptions(),
-            'products' => ContentPageCatalog::productOptions(),
-        ];
     }
 }

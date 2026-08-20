@@ -8,7 +8,9 @@ use App\Models\User;
 use App\Modules\Notifications\Contracts\NotificationChannel;
 use App\Modules\Notifications\Mail\TemplateNotificationMail;
 use App\Modules\Notifications\Support\NotificationChannels;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Throwable;
 
 class EmailNotificationChannel implements NotificationChannel
 {
@@ -31,7 +33,23 @@ class EmailNotificationChannel implements NotificationChannel
             ];
         }
 
-        Mail::to($user->email)->send(new TemplateNotificationMail($log->subject, $log->body));
+        try {
+            Mail::to($user->email)->send(new TemplateNotificationMail($log->subject, $log->body));
+        } catch (Throwable $exception) {
+            Log::warning('Notification email delivery failed', [
+                'user_id' => $user->id,
+                'template_code' => $template->code,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return [
+                'provider' => config('mail.default', 'mail'),
+                'delivered' => false,
+                'reason' => 'smtp_failed',
+                'error' => $exception->getMessage(),
+                'recipient' => $user->email,
+            ];
+        }
 
         return [
             'provider' => config('mail.default', 'mail'),

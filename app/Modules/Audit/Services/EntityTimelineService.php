@@ -234,6 +234,8 @@ class EntityTimelineService
      */
     public function forSettlement(Settlement $settlement): array
     {
+        $settlement->loadMissing(['creator', 'closer', 'approver', 'reopener']);
+
         $events = collect();
 
         $events->push($this->event(
@@ -276,6 +278,18 @@ class EntityTimelineService
                 ));
             });
 
+        if ($settlement->approved_at) {
+            $events->push($this->event(
+                key: 'settlement.approved',
+                label: 'Settlement Approved',
+                description: 'Period approved for close.',
+                occurredAt: $settlement->approved_at->toIso8601String(),
+                actor: $settlement->approver?->full_name ?: $settlement->approver?->name ?: 'Finance',
+                tone: 'cyan',
+                source: 'settlement',
+            ));
+        }
+
         if ($settlement->isClosed()) {
             $events->push($this->event(
                 key: 'settlement.closed',
@@ -284,6 +298,18 @@ class EntityTimelineService
                 occurredAt: $settlement->closed_at?->toIso8601String(),
                 actor: $settlement->closer?->full_name ?: $settlement->closer?->name ?: 'System',
                 tone: 'emerald',
+                source: 'settlement',
+            ));
+        }
+
+        if ($settlement->reopened_at) {
+            $events->push($this->event(
+                key: 'settlement.reopened',
+                label: 'Settlement Reopened',
+                description: $settlement->reopen_reason ?: 'Period reopened with audit.',
+                occurredAt: $settlement->reopened_at->toIso8601String(),
+                actor: $settlement->reopener?->full_name ?: $settlement->reopener?->name ?: 'Finance',
+                tone: 'amber',
                 source: 'settlement',
             ));
         }

@@ -106,6 +106,132 @@ final class ContentPageCatalog
         ];
     }
 
+    public static function publicWebUrl(string $locale = 'en', ?string $slug = null): string
+    {
+        $locale = in_array($locale, ['ar', 'en'], true) ? $locale : 'en';
+
+        if ($slug === self::SLUG_TERMS_OF_SERVICE) {
+            return route('content.pages.show', [
+                'slug' => self::SLUG_TERMS_OF_SERVICE,
+                'locale' => $locale,
+            ]);
+        }
+
+        return route('content.pages.index', ['locale' => $locale]);
+    }
+
+    /**
+     * Fixed admin/mobile workspace tabs (legal + product policies).
+     *
+     * @return list<array{
+     *     tab_id: string,
+     *     slug: string,
+     *     category: string,
+     *     product: string|null,
+     *     sort_order: int,
+     *     label: string,
+     *     label_ar: string,
+     *     title_en: string,
+     *     title_ar: string,
+     *     body_en: string,
+     *     body_ar: string
+     * }>
+     */
+    public static function workspaceDefinitions(): array
+    {
+        return [
+            [
+                'tab_id' => self::SLUG_PRIVACY_POLICY,
+                'slug' => self::SLUG_PRIVACY_POLICY,
+                'category' => self::CATEGORY_LEGAL,
+                'product' => null,
+                'sort_order' => 1,
+                'label' => 'Privacy Policy',
+                'label_ar' => 'سياسة الخصوصية',
+                'title_en' => 'Privacy Policy',
+                'title_ar' => 'سياسة الخصوصية',
+                'body_en' => ContentPageCopy::privacyEn(),
+                'body_ar' => ContentPageCopy::privacyAr(),
+            ],
+            [
+                'tab_id' => self::SLUG_TERMS_OF_SERVICE,
+                'slug' => self::SLUG_TERMS_OF_SERVICE,
+                'category' => self::CATEGORY_LEGAL,
+                'product' => null,
+                'sort_order' => 2,
+                'label' => 'Terms and Conditions',
+                'label_ar' => 'الشروط والأحكام',
+                'title_en' => 'Terms and Conditions',
+                'title_ar' => 'الشروط والأحكام',
+                'body_en' => ContentPageCopy::termsEn(),
+                'body_ar' => ContentPageCopy::termsAr(),
+            ],
+            [
+                'tab_id' => self::PRODUCT_FLIGHT,
+                'slug' => self::productSlugs()[self::PRODUCT_FLIGHT],
+                'category' => self::CATEGORY_PRODUCT_POLICY,
+                'product' => self::PRODUCT_FLIGHT,
+                'sort_order' => 10,
+                'label' => self::productLabels()[self::PRODUCT_FLIGHT],
+                'label_ar' => self::productLabelsAr()[self::PRODUCT_FLIGHT],
+                'title_en' => 'Flight booking policy',
+                'title_ar' => 'سياسة حجز الطيران',
+                'body_en' => ContentPageCopy::flightEn(),
+                'body_ar' => ContentPageCopy::flightAr(),
+            ],
+            [
+                'tab_id' => self::PRODUCT_HOTEL,
+                'slug' => self::productSlugs()[self::PRODUCT_HOTEL],
+                'category' => self::CATEGORY_PRODUCT_POLICY,
+                'product' => self::PRODUCT_HOTEL,
+                'sort_order' => 11,
+                'label' => self::productLabels()[self::PRODUCT_HOTEL],
+                'label_ar' => self::productLabelsAr()[self::PRODUCT_HOTEL],
+                'title_en' => 'Hotel booking policy',
+                'title_ar' => 'سياسة حجز الفنادق',
+                'body_en' => ContentPageCopy::hotelEn(),
+                'body_ar' => ContentPageCopy::hotelAr(),
+            ],
+            [
+                'tab_id' => self::PRODUCT_INSURANCE,
+                'slug' => self::productSlugs()[self::PRODUCT_INSURANCE],
+                'category' => self::CATEGORY_PRODUCT_POLICY,
+                'product' => self::PRODUCT_INSURANCE,
+                'sort_order' => 12,
+                'label' => self::productLabels()[self::PRODUCT_INSURANCE],
+                'label_ar' => self::productLabelsAr()[self::PRODUCT_INSURANCE],
+                'title_en' => 'Insurance policy',
+                'title_ar' => 'سياسة التأمين',
+                'body_en' => ContentPageCopy::insuranceEn(),
+                'body_ar' => ContentPageCopy::insuranceAr(),
+            ],
+            [
+                'tab_id' => self::PRODUCT_ESIM,
+                'slug' => self::productSlugs()[self::PRODUCT_ESIM],
+                'category' => self::CATEGORY_PRODUCT_POLICY,
+                'product' => self::PRODUCT_ESIM,
+                'sort_order' => 13,
+                'label' => self::productLabels()[self::PRODUCT_ESIM],
+                'label_ar' => self::productLabelsAr()[self::PRODUCT_ESIM],
+                'title_en' => 'eSIM policy',
+                'title_ar' => 'سياسة eSIM',
+                'body_en' => ContentPageCopy::esimEn(),
+                'body_ar' => ContentPageCopy::esimAr(),
+            ],
+        ];
+    }
+
+    public static function isWorkspaceTabId(string $tabId): bool
+    {
+        foreach (self::workspaceDefinitions() as $definition) {
+            if ($definition['tab_id'] === $tabId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * @return array<string, string>
      */

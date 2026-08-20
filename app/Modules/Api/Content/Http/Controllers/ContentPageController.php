@@ -34,6 +34,14 @@ class ContentPageController extends Controller
         return $this->cachedList($data, 'Content pages fetched successfully.');
     }
 
+    public function workspace(Request $request): JsonResponse
+    {
+        $locale = $this->contentPageService->resolveLocale($request);
+        $data = $this->contentPageService->workspace($locale);
+
+        return $this->cachedDetail($data, 'Content workspace fetched successfully.');
+    }
+
     public function show(Request $request, string $slug): JsonResponse
     {
         $locale = $this->contentPageService->resolveLocale($request);

@@ -15,7 +15,12 @@ class RemindOpenSettlementsJob implements ShouldQueue
     {
         $open = Settlement::query()
             ->with('provider:id,name,key')
-            ->whereIn('status', [Settlement::STATUS_DRAFT, Settlement::STATUS_OPEN])
+            ->whereIn('status', [
+                Settlement::STATUS_DRAFT,
+                Settlement::STATUS_OPEN,
+                Settlement::STATUS_PENDING_REVIEW,
+                Settlement::STATUS_REOPENED,
+            ])
             ->whereDate('period_end', '<', now()->startOfMonth()->toDateString())
             ->get();
 

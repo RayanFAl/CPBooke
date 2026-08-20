@@ -51,6 +51,7 @@ const templateTestForm = useForm({
     user_id: testTargets.value[0]?.id ?? '',
     template_code: 'ALL',
     include_email: false,
+    include_whatsapp: true,
 });
 
 const selectedTemplate = computed(() => {
@@ -370,6 +371,7 @@ const categoryLabel = (template) => {
                                     :value="target.id"
                                 >
                                     #{{ target.id }} · {{ target.name || target.email }}
+                                    <template v-if="target.phone"> · {{ target.phone }}</template>
                                     <template v-if="target.devices"> · {{ target.devices }} {{ t('devices') }}</template>
                                 </option>
                             </select>
@@ -406,10 +408,20 @@ const categoryLabel = (template) => {
                         </div>
                     </form>
 
-                    <label class="mt-4 inline-flex items-center gap-2 text-sm text-slate-700">
-                        <input v-model="templateTestForm.include_email" type="checkbox" class="rounded border-slate-300">
-                        {{ t('Also send email') }}
-                    </label>
+                    <div class="mt-4 flex flex-wrap gap-4">
+                        <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                            <input v-model="templateTestForm.include_email" type="checkbox" class="rounded border-slate-300">
+                            {{ t('Also send email') }}
+                        </label>
+                        <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                            <input v-model="templateTestForm.include_whatsapp" type="checkbox" class="rounded border-slate-300">
+                            {{ t('Also send WhatsApp (local sandbox)') }}
+                        </label>
+                    </div>
+
+                    <p class="mt-2 text-xs text-slate-500">
+                        {{ t('WhatsApp does not go to a real phone in local mode. Messages appear in the sandbox below.') }}
+                    </p>
 
                     <div v-if="selectedTemplate" class="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-700">
                         <p class="font-medium text-slate-950">{{ staffLabel(selectedTemplate) }}</p>
@@ -421,6 +433,28 @@ const categoryLabel = (template) => {
                     <p v-if="activeTemplates.length === 0" class="mt-3 text-sm text-amber-800">
                         {{ t('No templates yet. Open the Templates tab and click Sync templates first.') }}
                     </p>
+                </article>
+
+                <article class="rounded-3xl border border-emerald-200 bg-emerald-50/60 p-6 shadow-sm">
+                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">{{ t('WhatsApp sandbox') }}</p>
+                    <h3 class="mt-1 text-lg font-semibold text-slate-950">{{ t('Local inbox') }}</h3>
+                    <p class="mt-1 text-sm text-slate-600">
+                        {{ t('These are simulated WhatsApp messages. They do not appear on a real phone.') }}
+                    </p>
+                    <div v-if="(dashboard.whatsapp_sandbox ?? []).length === 0" class="mt-4 rounded-2xl bg-white px-4 py-4 text-sm text-slate-600">
+                        {{ t('No WhatsApp sandbox messages yet. Send a template test with WhatsApp enabled.') }}
+                    </div>
+                    <div v-else class="mt-4 space-y-3">
+                        <div
+                            v-for="(item, index) in dashboard.whatsapp_sandbox"
+                            :key="`${item.recorded_at}-${index}`"
+                            class="rounded-2xl border border-emerald-100 bg-white px-4 py-4 text-sm"
+                        >
+                            <p class="font-medium text-slate-950">{{ item.to }} · {{ item.template_code }}</p>
+                            <p class="mt-1 text-xs text-slate-500">{{ item.recorded_at }}</p>
+                            <p class="mt-2 whitespace-pre-wrap text-slate-700">{{ item.body }}</p>
+                        </div>
+                    </div>
                 </article>
 
                 <article class="rounded-3xl border border-amber-200 bg-amber-50/70 p-6 shadow-sm">

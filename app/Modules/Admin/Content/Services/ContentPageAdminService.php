@@ -8,6 +8,72 @@ use Illuminate\Support\Str;
 
 class ContentPageAdminService
 {
+    public function ensureWorkspacePages(): void
+    {
+        foreach (ContentPageCatalog::workspaceDefinitions() as $definition) {
+            $match = $definition['product'] !== null
+                ? [
+                    'category' => $definition['category'],
+                    'product' => $definition['product'],
+                ]
+                : [
+                    'slug' => $definition['slug'],
+                ];
+
+            if (ContentPage::query()->where($match)->exists()) {
+                continue;
+            }
+
+            ContentPage::query()->create([
+                'slug' => $definition['slug'],
+                'category' => $definition['category'],
+                'product' => $definition['product'],
+                'title_en' => $definition['title_en'],
+                'title_ar' => $definition['title_ar'],
+                'body_en' => $definition['body_en'],
+                'body_ar' => $definition['body_ar'],
+                'url' => null,
+                'sort_order' => $definition['sort_order'],
+                'is_active' => true,
+            ]);
+        }
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function workspaceTabs(): array
+    {
+        $this->ensureWorkspacePages();
+
+        $pagesByTabId = ContentPage::query()
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->keyBy(function (ContentPage $page): string {
+                if ($page->category === ContentPageCatalog::CATEGORY_PRODUCT_POLICY && $page->product) {
+                    return (string) $page->product;
+                }
+
+                return (string) $page->slug;
+            });
+
+        return collect(ContentPageCatalog::workspaceDefinitions())
+            ->map(function (array $definition) use ($pagesByTabId): array {
+                $page = $pagesByTabId->get($definition['tab_id']);
+
+                return [
+                    'tab_id' => $definition['tab_id'],
+                    'group' => $definition['category'] === ContentPageCatalog::CATEGORY_LEGAL ? 'legal' : 'product',
+                    'label' => $definition['label'],
+                    'label_ar' => $definition['label_ar'],
+                    'page' => $page !== null ? $this->serialize($page) : null,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
     /**
      * @param  array<string, mixed>  $data
      */
@@ -51,6 +117,8 @@ class ContentPageAdminService
             'body_en' => $page->body_en,
             'body_ar' => $page->body_ar,
             'url' => $page->url,
+            'web_url_en' => $page->webUrl('en'),
+            'web_url_ar' => $page->webUrl('ar'),
             'sort_order' => $page->sort_order,
             'is_active' => $page->is_active,
             'updated_at' => optional($page->updated_at)?->toIso8601String(),

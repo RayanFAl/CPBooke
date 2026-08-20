@@ -87,6 +87,23 @@ class SystemSettingsService
         return $from !== '' ? $from : $this->companyName();
     }
 
+    public function supportEmail(): string
+    {
+        $email = trim((string) ($this->current()->support_email ?: ''));
+
+        return $email !== '' ? $email : (string) config('mail.addresses.support');
+    }
+
+    public function infoEmail(): string
+    {
+        return (string) config('mail.addresses.info');
+    }
+
+    public function feedbackEmail(): string
+    {
+        return (string) config('mail.addresses.feedback');
+    }
+
     public function defaultCommissionPercent(): ?float
     {
         $value = $this->current()->default_commission_percent;
@@ -130,7 +147,9 @@ class SystemSettingsService
         return [
             'company_name' => $this->companyName(),
             'company_address' => $settings->company_address,
-            'support_email' => $settings->support_email,
+            'support_email' => $this->supportEmail(),
+            'info_email' => $this->infoEmail(),
+            'feedback_email' => $this->feedbackEmail(),
             'support_phone' => $settings->support_phone,
             'tax_id' => $settings->tax_id,
             'default_currency' => $this->defaultCurrency(),

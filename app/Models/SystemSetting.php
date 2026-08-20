@@ -75,7 +75,7 @@ class SystemSetting extends Model
         return [
             'company_name' => config('app.name', 'CPBooke'),
             'company_address' => null,
-            'support_email' => config('mail.from.address'),
+            'support_email' => config('mail.addresses.support'),
             'support_phone' => null,
             'tax_id' => null,
             'logo_path' => null,

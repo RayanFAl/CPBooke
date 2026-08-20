@@ -43,6 +43,8 @@ class NotificationChannelManager
     public function statuses(): array
     {
         $pushConfigured = $this->fcmHttpV1Client->isConfigured();
+        $whatsappConfigured = filled(config('services.notifications.whatsapp_endpoint'))
+            || ! app()->environment('production');
 
         return [
             [
@@ -77,9 +79,11 @@ class NotificationChannelManager
             ],
             [
                 'channel' => NotificationChannels::WHATSAPP,
-                'healthy' => filled(config('services.notifications.whatsapp_endpoint')),
-                'provider' => 'whatsapp-gateway',
-                'configured' => filled(config('services.notifications.whatsapp_endpoint')),
+                'healthy' => $whatsappConfigured,
+                'provider' => $whatsappConfigured && ! filled(config('services.notifications.whatsapp_endpoint'))
+                    ? 'whatsapp-simulated'
+                    : 'whatsapp-gateway',
+                'configured' => $whatsappConfigured,
                 'enabled' => $this->systemSettingsService->isChannelEnabled(NotificationChannels::WHATSAPP),
             ],
         ];

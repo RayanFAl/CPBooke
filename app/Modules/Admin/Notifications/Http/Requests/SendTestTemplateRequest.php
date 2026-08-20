@@ -29,6 +29,7 @@ class SendTestTemplateRequest extends FormRequest
                 ),
             ],
             'include_email' => ['sometimes', 'boolean'],
+            'include_whatsapp' => ['sometimes', 'boolean'],
         ];
     }
 }

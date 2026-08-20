@@ -82,11 +82,20 @@ class ContentPage extends Model
         return $this->localizedField('body', $locale) ?? '';
     }
 
-    public function publicUrl(): ?string
+    public function publicUrl(?string $locale = null): ?string
     {
         $url = is_string($this->url) ? trim($this->url) : '';
 
-        return $url === '' ? null : $url;
+        if ($url !== '') {
+            return $url;
+        }
+
+        return $this->webUrl($locale ?? 'en');
+    }
+
+    public function webUrl(string $locale = 'en'): string
+    {
+        return ContentPageCatalog::publicWebUrl($locale, (string) $this->slug);
     }
 
     public function publishedAt(): ?string

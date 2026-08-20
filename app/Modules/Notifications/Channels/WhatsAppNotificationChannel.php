@@ -7,6 +7,7 @@ use App\Models\NotificationTemplate;
 use App\Models\User;
 use App\Modules\Notifications\Contracts\NotificationChannel;
 use App\Modules\Notifications\Support\NotificationChannels;
+use App\Modules\Notifications\Support\WhatsAppSandboxInbox;
 use App\Modules\Settings\Services\SystemSettingsService;
 use Illuminate\Support\Facades\Http;
 
@@ -14,6 +15,7 @@ class WhatsAppNotificationChannel implements NotificationChannel
 {
     public function __construct(
         private readonly SystemSettingsService $systemSettingsService,
+        private readonly WhatsAppSandboxInbox $sandboxInbox,
     ) {
     }
 
@@ -73,6 +75,16 @@ class WhatsAppNotificationChannel implements NotificationChannel
                 'reason' => 'channel_not_configured',
             ];
         }
+
+        $this->sandboxInbox->record([
+            'to' => $user->phone,
+            'body' => $log->body,
+            'subject' => $log->subject,
+            'template_code' => $template->code,
+            'sender' => $payload['sender'],
+            'user_id' => $user->id,
+            'recorded_at' => now()->toIso8601String(),
+        ]);
 
         return [
             'provider' => 'whatsapp-simulated',

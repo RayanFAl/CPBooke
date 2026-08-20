@@ -17,6 +17,7 @@ use App\Modules\Notifications\Support\NotificationLocales;
 use App\Modules\Notifications\Support\NotificationTemplateCategories;
 use App\Modules\Notifications\Support\NotificationTemplateSamples;
 use App\Modules\Notifications\Support\NotificationTemplateStaffLabels;
+use App\Modules\Notifications\Support\WhatsAppSandboxInbox;
 use App\Support\Rbac\RbacAuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -58,6 +59,7 @@ class NotificationsController
                     'available_channels' => NotificationChannels::all(),
                     'push_targets' => $this->pushTargets(),
                     'test_targets' => $this->testTargets(),
+                    'whatsapp_sandbox' => app(WhatsAppSandboxInbox::class)->all(),
                 ],
             ]);
         }
@@ -101,6 +103,7 @@ class NotificationsController
                 'available_channels' => NotificationChannels::all(),
                 'push_targets' => $this->pushTargets(),
                 'test_targets' => $this->testTargets(),
+                'whatsapp_sandbox' => app(WhatsAppSandboxInbox::class)->all(),
             ],
         ]);
     }
@@ -175,6 +178,7 @@ class NotificationsController
         $user = User::query()->findOrFail((int) $request->validated('user_id'));
         $templateCode = strtoupper((string) $request->validated('template_code'));
         $includeEmail = $request->boolean('include_email');
+        $includeWhatsapp = $request->boolean('include_whatsapp');
 
         $channels = [
             NotificationChannels::IN_APP,
@@ -183,6 +187,10 @@ class NotificationsController
 
         if ($includeEmail) {
             $channels[] = NotificationChannels::EMAIL;
+        }
+
+        if ($includeWhatsapp) {
+            $channels[] = NotificationChannels::WHATSAPP;
         }
 
         $result = $this->notificationService->sendTestTemplates(
@@ -201,6 +209,7 @@ class NotificationsController
                 'template_code' => $templateCode,
                 'count' => $result['count'],
                 'include_email' => $includeEmail,
+                'include_whatsapp' => $includeWhatsapp,
             ],
         );
 
@@ -208,9 +217,17 @@ class NotificationsController
             ? "{$result['count']} templates"
             : $templateCode;
 
+        $via = 'in-app + push';
+        if ($includeEmail) {
+            $via .= ' + email';
+        }
+        if ($includeWhatsapp) {
+            $via .= ' + WhatsApp sandbox';
+        }
+
         return redirect()
             ->route('admin.notifications.index', ['tab' => 'tools'])
-            ->with('success', "Test sent to {$user->email}: {$label} (in-app + push".($includeEmail ? ' + email' : '').'). Check the app inbox and Logs tab.');
+            ->with('success', "Test sent to {$user->email}: {$label} ({$via}). Check Logs, and Tools for the WhatsApp sandbox.");
     }
 
     public function retry(NotificationLog $notificationLog): RedirectResponse
@@ -300,11 +317,12 @@ class NotificationsController
         }
 
         return $query
-            ->get(['id', 'name', 'full_name', 'email'])
+            ->get(['id', 'name', 'full_name', 'email', 'phone'])
             ->map(fn (User $user): array => [
                 'id' => $user->id,
                 'name' => $user->full_name ?: $user->name,
                 'email' => $user->email,
+                'phone' => $user->phone,
                 'devices' => (int) ($user->active_devices_count ?? 0),
             ])
             ->values()

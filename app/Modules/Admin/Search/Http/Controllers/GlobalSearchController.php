@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Search\Http\Controllers;
 
 use App\Modules\Audit\Services\GlobalSearchService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -29,5 +30,20 @@ class GlobalSearchController
             'result' => $this->globalSearchService->search($query),
             'q' => $query,
         ]);
+    }
+
+    public function suggest(Request $request): JsonResponse
+    {
+        Gate::authorize('search.view');
+
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $query = trim((string) ($validated['q'] ?? ''));
+
+        return response()->json(
+            $this->globalSearchService->search($query, 5),
+        );
     }
 }

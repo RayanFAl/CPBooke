@@ -1,5 +1,7 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import AdminButton from '../../components/AdminButton.vue';
+import AdminEmptyState from '../../components/AdminEmptyState.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { reactive } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
@@ -118,7 +120,20 @@ const openSettlement = (row) => {
                             </td>
                         </tr>
                         <tr v-if="settlements.data.length === 0">
-                            <td colspan="7" class="px-4 py-10 text-center text-slate-500">{{ t('No settlements yet.') }}</td>
+                            <td colspan="7" class="px-4 py-6">
+                                <AdminEmptyState
+                                    title="No settlements yet."
+                                    description="Create a settlement when you are ready to reconcile provider invoices."
+                                >
+                                    <template v-if="can_manage" #action>
+                                        <Link :href="route('admin.settlements.create')">
+                                            <AdminButton size="sm">
+                                                {{ t('Create period') }}
+                                            </AdminButton>
+                                        </Link>
+                                    </template>
+                                </AdminEmptyState>
+                            </td>
                         </tr>
                     </tbody>
                 </table>

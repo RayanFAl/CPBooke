@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { useAdminConfirm } from '../../composables/useAdminConfirm';
 
 const props = defineProps({
     tab: { type: String, default: 'banners' },
@@ -11,6 +12,7 @@ const props = defineProps({
 });
 
 const { t } = useAdminLocale();
+const { confirm } = useAdminConfirm();
 const page = usePage();
 const flashSuccess = computed(() => page.props.flash?.success ?? null);
 
@@ -18,16 +20,26 @@ const switchTab = (tab) => {
     router.get(route('admin.home.index'), { tab }, { preserveState: true, replace: true });
 };
 
-const destroyBanner = (banner) => {
-    if (!window.confirm(t('Delete this banner?'))) {
+const destroyBanner = async (banner) => {
+    if (!await confirm({
+        title: 'Confirm action',
+        message: t('Delete this banner?'),
+        confirmLabel: 'Delete',
+        variant: 'danger',
+    })) {
         return;
     }
 
     router.delete(route('admin.home.banners.destroy', banner.id));
 };
 
-const destroyOffer = (offer) => {
-    if (!window.confirm(t('Delete this offer?'))) {
+const destroyOffer = async (offer) => {
+    if (!await confirm({
+        title: 'Confirm action',
+        message: t('Delete this offer?'),
+        confirmLabel: 'Delete',
+        variant: 'danger',
+    })) {
         return;
     }
 

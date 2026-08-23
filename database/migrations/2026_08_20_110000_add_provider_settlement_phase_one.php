@@ -1,13 +1,23 @@
 <?php
 
+use App\Support\EnsuresInnoDbStorageEngine;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
+        EnsuresInnoDbStorageEngine::apply(
+            'users',
+            'settlements',
+            'settlement_items',
+            'approvals',
+            'financial_transactions',
+        );
+
         Schema::table('settlements', function (Blueprint $table): void {
             $table->timestamp('approved_at')->nullable()->after('compared_at');
             $table->foreignId('approved_by')->nullable()->after('approved_at')->constrained('users')->nullOnDelete();
@@ -28,7 +38,7 @@ return new class extends Migration
 
         Schema::create('settlement_attachments', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('settlement_id')->constrained('settlements')->cascadeOnDelete();
+            $table->unsignedBigInteger('settlement_id');
             $table->string('kind', 30)->index();
             $table->string('disk', 30)->default('local');
             $table->string('path');
@@ -36,11 +46,71 @@ return new class extends Migration
             $table->string('mime', 120)->nullable();
             $table->unsignedInteger('size')->default(0);
             $table->string('source', 30)->default('upload');
-            $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->unsignedBigInteger('uploaded_by')->nullable();
             $table->timestamps();
 
             $table->index(['settlement_id', 'kind']);
         });
+
+        $this->ensureInnoDb('settlements');
+        $this->ensureInnoDb('settlement_items');
+        $this->ensureInnoDb('settlement_attachments');
+
+        $this->ensureForeignKey('settlement_attachments', 'settlement_id', 'settlements', 'id', 'cascade');
+        $this->ensureForeignKey('settlement_attachments', 'uploaded_by', 'users', 'id', 'set null');
+    }
+
+    private function ensureForeignKey(
+        string $table,
+        string $column,
+        string $referencedTable,
+        string $referencedColumn,
+        string $onDelete,
+    ): void {
+        if ($this->foreignKeyExists($table, $column)) {
+            return;
+        }
+
+        Schema::table($table, function (Blueprint $blueprint) use ($column, $referencedTable, $referencedColumn, $onDelete): void {
+            $foreign = $blueprint->foreign($column)->references($referencedColumn)->on($referencedTable);
+
+            match ($onDelete) {
+                'cascade' => $foreign->cascadeOnDelete(),
+                'set null' => $foreign->nullOnDelete(),
+                default => $foreign,
+            };
+        });
+    }
+
+    private function foreignKeyExists(string $table, string $column): bool
+    {
+        $connection = Schema::getConnection();
+
+        if ($connection->getDriverName() === 'sqlite') {
+            return false;
+        }
+
+        $database = $connection->getDatabaseName();
+
+        $result = $connection->select(
+            'SELECT COUNT(*) AS aggregate FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL',
+            [$database, $table, $column],
+        );
+
+        return (int) ($result[0]->aggregate ?? 0) > 0;
+    }
+
+    private function ensureInnoDb(string $table): void
+    {
+        if (Schema::getConnection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
+        $status = DB::selectOne('SHOW TABLE STATUS WHERE Name = ?', [$table]);
+
+        if ($status && strtolower((string) ($status->Engine ?? '')) !== 'innodb') {
+            DB::statement("ALTER TABLE `{$table}` ENGINE=InnoDB");
+        }
     }
 
     public function down(): void

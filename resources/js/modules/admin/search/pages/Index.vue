@@ -1,5 +1,8 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import AdminButton from '../../components/AdminButton.vue';
+import AdminEmptyState from '../../components/AdminEmptyState.vue';
+import AdminInput from '../../components/AdminInput.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
@@ -40,27 +43,31 @@ const search = () => {
                     {{ t('Search booking references, PNRs, orders, customers, tickets, wallets, and settlements in one place.') }}
                 </p>
 
-                <form class="mt-6 flex flex-col gap-3 sm:flex-row" @submit.prevent="search">
-                    <input
+                <form class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end" @submit.prevent="search">
+                    <AdminInput
                         v-model="query"
                         type="search"
-                        class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-600 focus:ring-2"
                         :placeholder="t('Booking ref, PNR, order id, phone, email, passport, ticket…')"
-                        autofocus
-                    >
-                    <button type="submit" class="rounded-xl bg-slate-950 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800">
+                    />
+                    <AdminButton type="submit" size="lg">
                         {{ t('Search') }}
-                    </button>
+                    </AdminButton>
                 </form>
             </div>
 
-            <div v-if="!q" class="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
-                {{ t('Enter at least 2 characters to search across operational records.') }}
-            </div>
+            <AdminEmptyState
+                v-if="!q"
+                title="Enter at least 2 characters to search across operational records."
+                description="Search booking references, PNRs, orders, customers, tickets, wallets, and settlements in one place."
+                icon="search"
+            />
 
-            <div v-else-if="result.total === 0" class="rounded-3xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-                {{ t('No results for') }} “{{ q }}”.
-            </div>
+            <AdminEmptyState
+                v-else-if="result.total === 0"
+                :title="`${t('No results for')} “${q}”`"
+                description="Try a different booking reference, customer email, phone number, or ticket identifier."
+                icon="search"
+            />
 
             <div v-else class="space-y-4">
                 <p class="text-sm text-slate-600">{{ result.total }} {{ t('results') }}</p>

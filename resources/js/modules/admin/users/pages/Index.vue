@@ -1,6 +1,7 @@
 <script setup>
 import AccountTypeBadge from '../components/AccountTypeBadge.vue';
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import AdminEmptyState from '../../components/AdminEmptyState.vue';
 import RoleBadge from '../components/RoleBadge.vue';
 import UserStatusBadge from '../components/UserStatusBadge.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
@@ -384,7 +385,7 @@ const users = computed(() => props.users);
             </div>
 
             <div class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-                <div class="overflow-x-auto">
+                <div class="hidden overflow-x-auto md:block">
                     <table class="min-w-full divide-y divide-slate-200">
                         <thead class="bg-slate-50">
                             <tr class="text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -442,12 +443,56 @@ const users = computed(() => props.users);
                             </tr>
 
                             <tr v-if="displayedUsers.length === 0">
-                                <td colspan="6" class="px-6 py-14 text-center text-sm text-slate-500">
-                                    {{ t('No users matched the current filter bar.') }}
+                                <td colspan="6" class="px-6 py-6">
+                                    <AdminEmptyState
+                                        title="No users matched the current filter bar."
+                                        description="Try changing the filters or search terms to find the user you need."
+                                    />
                                 </td>
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <div v-if="displayedUsers.length === 0" class="md:hidden">
+                    <AdminEmptyState
+                        title="No users matched the current filter bar."
+                        description="Try changing the filters or search terms to find the user you need."
+                    />
+                </div>
+
+                <div v-else class="divide-y divide-slate-100 md:hidden">
+                    <button
+                        v-for="user in displayedUsers"
+                        :key="`mobile-${user.id}`"
+                        type="button"
+                        class="block w-full px-4 py-4 text-start transition hover:bg-cyan-50/50"
+                        @click="openUserPage(user)"
+                    >
+                        <div class="flex items-start gap-3">
+                            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-xs font-semibold uppercase tracking-[0.18em] text-white">
+                                {{ (user.full_name || user.email).slice(0, 2) }}
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p class="font-semibold text-slate-950">{{ user.full_name }}</p>
+                                <p class="mt-1 text-sm text-slate-600">{{ user.email }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ user.phone || t('No phone provided') }}</p>
+                            </div>
+                            <UserStatusBadge :active="user.is_active" />
+                        </div>
+
+                        <div class="mt-3 flex flex-wrap items-center gap-2">
+                            <AccountTypeBadge :account-type="user.account_type" />
+                            <RoleBadge :role="user.role" />
+                            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                                {{ user.country || t('Not set') }}
+                            </span>
+                        </div>
+
+                        <p class="mt-3 text-xs text-slate-500">
+                            {{ t('Last login') }}: {{ relativeTime(user.last_login_at) }}
+                        </p>
+                    </button>
                 </div>
 
                 <div class="flex flex-col gap-4 border-t border-slate-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">

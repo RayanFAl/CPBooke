@@ -7,6 +7,7 @@ import UserStatusBadge from '../components/UserStatusBadge.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { useAdminConfirm } from '../../composables/useAdminConfirm';
 
 const props = defineProps({
     user: {
@@ -16,6 +17,7 @@ const props = defineProps({
 });
 
 const { locale, t } = useAdminLocale();
+const { confirm } = useAdminConfirm();
 
 const page = usePage();
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
@@ -221,10 +223,14 @@ const bubbleTone = (senderType) => (senderType === 'user'
 
 const metaTone = (senderType) => (senderType === 'user' ? 'text-slate-300' : 'text-slate-500');
 
-const toggleStatus = () => {
+const toggleStatus = async () => {
     const actionLabel = props.user.is_active ? t('deactivate') : t('activate');
 
-    if (!window.confirm(t('Do you want to :action :name?', { action: actionLabel, name: props.user.full_name }))) {
+    if (!await confirm({
+        title: 'Confirm action',
+        message: t('Do you want to :action :name?', { action: actionLabel, name: props.user.full_name }),
+        confirmLabel: 'Confirm',
+    })) {
         return;
     }
 

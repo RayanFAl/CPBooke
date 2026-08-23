@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { useAdminConfirm } from '../../composables/useAdminConfirm';
 
 const props = defineProps({
     supplier: { type: Object, required: true },
@@ -19,6 +20,7 @@ const props = defineProps({
 });
 
 const { locale, t } = useAdminLocale();
+const { confirm } = useAdminConfirm();
 const page = usePage();
 const flashSuccess = computed(() => page.props.flash?.success ?? null);
 const flashError = computed(() => page.props.flash?.error ?? null);
@@ -179,8 +181,13 @@ const testConnection = (environment) => {
     });
 };
 
-const disableConfig = (environment) => {
-    if (! window.confirm(t('Disable this API configuration?'))) {
+const disableConfig = async (environment) => {
+    if (!await confirm({
+        title: 'Confirm action',
+        message: t('Disable this API configuration?'),
+        confirmLabel: 'Disable',
+        variant: 'danger',
+    })) {
         return;
     }
 

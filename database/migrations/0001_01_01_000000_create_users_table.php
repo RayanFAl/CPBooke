@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\EnsuresInnoDbStorageEngine;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -36,6 +37,8 @@ return new class extends Migration
             $table->longText('payload');
             $table->integer('last_activity')->index();
         });
+
+        EnsuresInnoDbStorageEngine::apply('users', 'password_reset_tokens', 'sessions');
     }
 
     /**

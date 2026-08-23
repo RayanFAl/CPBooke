@@ -1,5 +1,10 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AdminButton from '../../modules/admin/components/AdminButton.vue';
+import AdminInput from '../../modules/admin/components/AdminInput.vue';
+import AdminSelect from '../../modules/admin/components/AdminSelect.vue';
+import AdminTextarea from '../../modules/admin/components/AdminTextarea.vue';
+import { useAdminLocale } from '../../modules/admin/composables/useAdminLocale';
 import { Head } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { getEcho } from '../../lib/echo';
@@ -34,18 +39,37 @@ const createForm = ref({
     message: '',
 });
 
-const statusLabel = (value) => String(value || '')
+const { locale, isArabic, setLocale, t } = useAdminLocale();
+
+const chatCategories = [
+    { value: 'booking_change', label: 'Booking Change' },
+    { value: 'refund_request', label: 'Refund Request' },
+    { value: 'technical_issue', label: 'Technical Issue' },
+    { value: 'payment_issue', label: 'Payment Issue' },
+    { value: 'document_request', label: 'Document Request' },
+];
+
+const chatPriorities = [
+    { value: 'low', label: 'Low' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'high', label: 'High' },
+    { value: 'urgent', label: 'Urgent' },
+];
+
+const formatLabel = (value) => String(value || '')
     .replaceAll('_', ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
+const statusLabel = (value) => t(formatLabel(value));
+
 const relativeTime = (value) => {
     if (!value) {
-        return 'now';
+        return t('now');
     }
 
     const diff = new Date(value).getTime() - Date.now();
     const absSeconds = Math.abs(Math.round(diff / 1000));
-    const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+    const formatter = new Intl.RelativeTimeFormat(locale.value, { numeric: 'auto' });
 
     if (absSeconds < 60) {
         return formatter.format(Math.round(diff / 1000), 'second');
@@ -84,7 +108,7 @@ const apiFetch = async (url, options = {}) => {
     const payload = await response.json();
 
     if (!response.ok || payload.success === false) {
-        throw new Error(payload.message || 'Request failed.');
+        throw new Error(payload.message || t('Request failed.'));
     }
 
     return payload;
@@ -126,7 +150,15 @@ const groupedMessages = computed(() => messages.value.reduce((groups, message) =
     return groups;
 }, []));
 
-const attachmentLabel = computed(() => composerFile.value?.name || 'Attach file');
+const attachmentLabel = computed(() => composerFile.value?.name || t('Attach file'));
+
+const toggleLocale = () => {
+    setLocale(locale.value === 'ar' ? 'en' : 'ar');
+};
+
+const localeToggleLabel = computed(() => (
+    locale.value === 'ar' ? t('Switch to English') : t('Switch to Arabic')
+));
 
 const loadTickets = async () => {
     loadingTickets.value = true;
@@ -248,7 +280,7 @@ const subscribeToTicket = (ticketId) => {
             return;
         }
 
-        typingName.value = event.typing.sender?.name || 'Support';
+        typingName.value = event.typing.sender?.name || t('Support');
 
         if (typingStopTimer.value) {
             window.clearTimeout(typingStopTimer.value);
@@ -392,42 +424,54 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <Head title="Support Chat" />
+    <Head :title="t('Support Chat')" />
 
     <AuthenticatedLayout>
         <template #header>
             <div class="flex items-center justify-between gap-4">
                 <div>
-                    <h2 class="text-xl font-semibold leading-tight text-slate-950">Support Chat</h2>
-                    <p class="mt-1 text-sm text-slate-500">Chat with support from the web using the same live support API.</p>
+                    <h2 class="text-xl font-semibold leading-tight text-slate-950">{{ t('Support Chat') }}</h2>
+                    <p class="mt-1 text-sm text-slate-500">{{ t('Chat with support from the web using the same live support API.') }}</p>
                 </div>
-                <span class="inline-flex rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-rose-700">{{ unreadTicketsCount }} unread</span>
+                <div class="flex items-center gap-3">
+                    <button
+                        type="button"
+                        class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                        :title="localeToggleLabel"
+                        :aria-label="localeToggleLabel"
+                        @click="toggleLocale"
+                    >
+                        <svg class="h-[18px] w-[18px]" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.65" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M10 3c3.866 0 7 3.134 7 7s-3.134 7-7 7-7-3.134-7-7 3.134-7 7-7Z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.5 10h13" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M10 3c1.74 1.87 2.625 4.213 2.5 7-.125 2.787-.96 5.13-2.5 7" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M10 3c-1.74 1.87-2.625 4.213-2.5 7 .125 2.787.96 5.13 2.5 7" />
+                        </svg>
+                    </button>
+                    <span class="inline-flex rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-rose-700">{{ unreadTicketsCount }} {{ t('unread') }}</span>
+                </div>
             </div>
         </template>
 
-        <div class="bg-slate-100 py-8">
+        <div class="bg-slate-100 py-8" :dir="isArabic ? 'rtl' : 'ltr'">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
                     <aside class="space-y-4">
                         <div class="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
                             <div class="flex items-center justify-between gap-3">
                                 <div>
-                                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">Inbox</p>
-                                    <h3 class="mt-2 text-lg font-semibold text-slate-950">Your conversations</h3>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">{{ t('Inbox') }}</p>
+                                    <h3 class="mt-2 text-lg font-semibold text-slate-950">{{ t('Your conversations') }}</h3>
                                 </div>
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
-                                    @click="selectedTicketId = null"
-                                >
-                                    New chat
-                                </button>
+                                <AdminButton size="sm" @click="selectedTicketId = null">
+                                    {{ t('New chat') }}
+                                </AdminButton>
                             </div>
                         </div>
 
                         <div class="max-h-[72vh] overflow-y-auto rounded-[1.75rem] border border-slate-200 bg-white p-3 shadow-sm">
-                            <div v-if="loadingTickets" class="px-4 py-8 text-sm text-slate-500">Loading conversations…</div>
-                            <div v-else-if="!hasTickets" class="px-4 py-8 text-sm text-slate-500">No conversations yet. Start a new support chat.</div>
+                            <div v-if="loadingTickets" class="px-4 py-8 text-sm text-slate-500">{{ t('Loading conversations…') }}</div>
+                            <div v-else-if="!hasTickets" class="px-4 py-8 text-sm text-slate-500">{{ t('No conversations yet. Start a new support chat.') }}</div>
                             <div v-else class="space-y-3">
                                 <button
                                     v-for="ticket in sortedTickets"
@@ -462,52 +506,44 @@ onBeforeUnmount(() => {
                     <section class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
                         <div v-if="isCreatingNewConversation" class="p-6 sm:p-8">
                             <div class="max-w-2xl">
-                                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">Start Support Chat</p>
-                                <h3 class="mt-2 text-2xl font-semibold text-slate-950">Open a new conversation</h3>
-                                <p class="mt-3 text-sm leading-6 text-slate-600">This creates or reuses your live support ticket through the same support API used by the mobile client.</p>
+                                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">{{ t('Start Support Chat') }}</p>
+                                <h3 class="mt-2 text-2xl font-semibold text-slate-950">{{ t('Open a new conversation') }}</h3>
+                                <p class="mt-3 text-sm leading-6 text-slate-600">{{ t('This creates or reuses your live support ticket through the same support API used by the mobile client.') }}</p>
                             </div>
 
                             <div class="mt-8 grid gap-4 md:grid-cols-2">
-                                <label class="space-y-2 text-sm font-medium text-slate-700 md:col-span-2">
-                                    <span>Subject</span>
-                                    <input v-model="createForm.subject" type="text" class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500">
-                                </label>
+                                <AdminInput
+                                    v-model="createForm.subject"
+                                    class="md:col-span-2"
+                                    :label="t('Subject')"
+                                />
 
-                                <label class="space-y-2 text-sm font-medium text-slate-700">
-                                    <span>Category</span>
-                                    <select v-model="createForm.category" class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500">
-                                        <option value="booking_change">Booking Change</option>
-                                        <option value="refund_request">Refund Request</option>
-                                        <option value="technical_issue">Technical Issue</option>
-                                        <option value="payment_issue">Payment Issue</option>
-                                        <option value="document_request">Document Request</option>
-                                    </select>
-                                </label>
+                                <AdminSelect v-model="createForm.category" :label="t('Category')">
+                                    <option v-for="option in chatCategories" :key="option.value" :value="option.value">
+                                        {{ t(option.label) }}
+                                    </option>
+                                </AdminSelect>
 
-                                <label class="space-y-2 text-sm font-medium text-slate-700">
-                                    <span>Priority</span>
-                                    <select v-model="createForm.priority" class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500">
-                                        <option value="low">Low</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="high">High</option>
-                                        <option value="urgent">Urgent</option>
-                                    </select>
-                                </label>
+                                <AdminSelect v-model="createForm.priority" :label="t('Priority')">
+                                    <option v-for="option in chatPriorities" :key="option.value" :value="option.value">
+                                        {{ t(option.label) }}
+                                    </option>
+                                </AdminSelect>
 
-                                <label class="space-y-2 text-sm font-medium text-slate-700 md:col-span-2">
-                                    <span>Message</span>
-                                    <textarea v-model="createForm.message" rows="6" class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-cyan-500" />
-                                </label>
+                                <AdminTextarea
+                                    v-model="createForm.message"
+                                    class="md:col-span-2"
+                                    :label="t('Message')"
+                                    :rows="6"
+                                />
 
                                 <div class="md:col-span-2">
-                                    <button
-                                        type="button"
-                                        class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
-                                        :disabled="creatingConversation"
+                                    <AdminButton
+                                        :processing="creatingConversation"
                                         @click="createConversation"
                                     >
-                                        {{ creatingConversation ? 'Opening…' : 'Open live chat' }}
-                                    </button>
+                                        {{ creatingConversation ? t('Opening…') : t('Open live chat') }}
+                                    </AdminButton>
                                 </div>
                             </div>
                         </div>
@@ -515,20 +551,20 @@ onBeforeUnmount(() => {
                         <div v-else class="flex h-[72vh] flex-col">
                             <div class="border-b border-slate-200 bg-slate-50 px-6 py-5">
                                 <div>
-                                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">Active Chat</p>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">{{ t('Active Chat') }}</p>
                                     <h3 class="mt-2 text-xl font-semibold text-slate-950">{{ selectedTicketRecord?.subject }}</h3>
                                     <p class="mt-2 text-sm text-slate-500">{{ selectedTicketRecord?.code }} · {{ statusLabel(selectedTicketRecord?.status) }}</p>
                                 </div>
                             </div>
 
                             <div class="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.08),transparent_24%),linear-gradient(180deg,#f8fafc_0%,#f8fafc_40%,#ffffff_100%)] px-5 py-6 sm:px-6">
-                                <div v-if="loadingMessages" class="text-sm text-slate-500">Loading messages…</div>
-                                <div v-else-if="messages.length === 0" class="rounded-2xl bg-white/70 px-4 py-4 text-sm text-slate-500">No messages yet.</div>
+                                <div v-if="loadingMessages" class="text-sm text-slate-500">{{ t('Loading messages…') }}</div>
+                                <div v-else-if="messages.length === 0" class="rounded-2xl bg-white/70 px-4 py-4 text-sm text-slate-500">{{ t('No messages yet.') }}</div>
                                 <div v-else class="space-y-6">
                                     <article v-for="group in groupedMessages" :key="group.id" class="flex" :class="group.sender_type === 'customer' ? 'justify-end' : 'justify-start'">
                                         <div class="max-w-[85%] space-y-2">
                                             <p class="px-2 text-xs text-slate-500" :class="group.sender_type === 'customer' ? 'text-right' : 'text-left'">
-                                                {{ group.sender?.name || 'Support' }} · {{ relativeTime(group.messages[group.messages.length - 1]?.created_at) }}
+                                                {{ group.sender?.name || t('Support') }} · {{ relativeTime(group.messages[group.messages.length - 1]?.created_at) }}
                                             </p>
                                             <div class="space-y-2">
                                                 <div
@@ -546,7 +582,7 @@ onBeforeUnmount(() => {
                                                         class="mt-3 inline-flex rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em]"
                                                         :class="group.sender_type === 'customer' ? 'border-white/20 text-white' : 'border-slate-200 text-slate-700'"
                                                     >
-                                                        {{ message.attachment.name || 'Attachment' }}
+                                                        {{ message.attachment.name || t('Attachment') }}
                                                     </a>
                                                     <p class="mt-2 text-[11px]" :class="group.sender_type === 'customer' ? 'text-slate-300' : 'text-slate-500'">
                                                         {{ new Date(message.created_at).toLocaleString() }}
@@ -559,16 +595,16 @@ onBeforeUnmount(() => {
                             </div>
 
                             <div class="border-t border-slate-200 bg-white px-5 py-4 sm:px-6">
-                                <div v-if="typingName" class="mb-3 rounded-2xl bg-cyan-50 px-4 py-3 text-sm text-cyan-700">{{ typingName }} is typing…</div>
+                                <div v-if="typingName" class="mb-3 rounded-2xl bg-cyan-50 px-4 py-3 text-sm text-cyan-700">{{ t(':name is typing…', { name: typingName }) }}</div>
 
                                 <div v-if="selectedTicketRecord?.status === 'closed'" class="rounded-2xl bg-amber-50 px-4 py-4 text-sm text-amber-800">
-                                    This conversation is closed. Start a new chat if you need more help.
+                                    {{ t('This conversation is closed. Start a new chat if you need more help.') }}
                                 </div>
 
                                 <form v-else class="rounded-[1.5rem] border border-slate-200 p-3 shadow-sm" @submit.prevent="sendMessage">
                                     <div v-if="composerFile" class="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
                                         <span class="truncate">{{ composerFile.name }}</span>
-                                        <button type="button" class="text-slate-500" @click="composerFile = null; composerFileInput.value = ''">Remove</button>
+                                        <button type="button" class="text-slate-500" @click="composerFile = null; composerFileInput.value = ''">{{ t('Remove') }}</button>
                                     </div>
 
                                     <div class="flex items-end gap-3">
@@ -580,15 +616,15 @@ onBeforeUnmount(() => {
                                             v-model="composerText"
                                             rows="1"
                                             class="block min-h-[48px] flex-1 resize-none rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
-                                            placeholder="Write your message"
+                                            :placeholder="t('Write your message')"
                                             @input="queueTyping"
                                         />
-                                        <button type="submit" class="inline-flex items-center justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60" :disabled="sendingMessage || (!composerText.trim() && !composerFile)">
-                                            {{ sendingMessage ? 'Sending…' : 'Send' }}
-                                        </button>
+                                        <AdminButton type="submit" size="sm" :processing="sendingMessage" :disabled="sendingMessage || (!composerText.trim() && !composerFile)">
+                                            {{ sendingMessage ? t('Sending…') : t('Send') }}
+                                        </AdminButton>
                                     </div>
 
-                                    <p class="mt-3 text-xs text-slate-500">{{ composerFile ? attachmentLabel : 'Images and documents are supported.' }}</p>
+                                    <p class="mt-3 text-xs text-slate-500">{{ composerFile ? attachmentLabel : t('Images and documents are supported.') }}</p>
                                 </form>
                             </div>
                         </div>

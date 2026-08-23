@@ -9,6 +9,7 @@ const props = defineProps({
     settlement: { type: Object, required: true },
     items: { type: Object, required: true },
     attachments: { type: Array, default: () => [] },
+    invoice_imports: { type: Array, default: () => [] },
     filters: { type: Object, required: true },
     can_manage: { type: Boolean, default: false },
     can_reopen: { type: Boolean, default: false },
@@ -211,7 +212,62 @@ const formatStatus = (status) => status.replaceAll('_', ' ');
                         <span class="text-sm font-normal text-slate-500">/ {{ settlement.matched_count }} {{ t('matched') }}</span>
                     </p>
                     <p class="mt-1 text-xs text-slate-500">{{ settlement.pending_approvals }} {{ t('pending approvals') }}</p>
+                    <p v-if="settlement.resolved_count" class="mt-1 text-xs text-slate-500">
+                        {{ settlement.resolved_count }} {{ t('resolved') }} · {{ settlement.adjustment_total }} {{ t('adjustments') }}
+                    </p>
                 </div>
+            </div>
+
+            <div v-if="settlement.close_snapshot" class="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+                <h3 class="text-sm font-semibold text-emerald-950">{{ t('Close snapshot') }}</h3>
+                <p class="mt-1 text-xs text-emerald-800">{{ t('Frozen totals at close. Later order or wallet changes do not rewrite this period.') }}</p>
+                <dl class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Expected total') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.expected_total }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Wallet total') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.wallet_total }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Invoice total') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.invoice_total }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Variance total') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.variance_total }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Matched') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.matched_count }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Resolved') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.resolved_count }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Adjustment total') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.adjustment_total }}</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 class="text-sm font-semibold text-slate-950">{{ t('Invoice imports') }}</h3>
+                <p class="mt-1 text-sm text-slate-600">{{ t('Re-import replaces the active invoice. Previous imports stay in the audit trail.') }}</p>
+                <ul class="mt-4 space-y-2 text-sm">
+                    <li v-for="item in invoice_imports" :key="item.id" class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 px-3 py-2">
+                        <span>
+                            {{ t('Import') }} #{{ item.sequence }}
+                            <span v-if="item.is_active" class="ms-2 rounded-full bg-cyan-50 px-2 py-0.5 text-xs font-medium text-cyan-800">{{ t('Active') }}</span>
+                        </span>
+                        <span class="text-xs text-slate-500">
+                            {{ item.row_count }} {{ t('rows') }} · {{ item.matched_count }} {{ t('matched') }} · {{ item.extra_count }} {{ t('extra') }} · {{ item.error_count }} {{ t('errors') }}
+                        </span>
+                    </li>
+                    <li v-if="invoice_imports.length === 0" class="text-slate-500">{{ t('No invoice imports yet.') }}</li>
+                </ul>
             </div>
 
             <div v-if="canMutate" class="grid gap-6 lg:grid-cols-2">

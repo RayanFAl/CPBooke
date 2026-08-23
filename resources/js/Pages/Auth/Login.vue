@@ -1,10 +1,9 @@
 <script setup>
 import Checkbox from '@/Components/Checkbox.vue';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
-import InputError from '@/Components/InputError.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import TextInput from '@/Components/TextInput.vue';
+import AdminButton from '../../modules/admin/components/AdminButton.vue';
+import AdminInput from '../../modules/admin/components/AdminInput.vue';
+import { useAdminLocale } from '../../modules/admin/composables/useAdminLocale';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 
 defineProps({
@@ -22,6 +21,8 @@ const form = useForm({
     remember: false,
 });
 
+const { t } = useAdminLocale();
+
 const submit = () => {
     form.post(route('login'), {
         onFinish: () => form.reset('password'),
@@ -31,76 +32,58 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Admin Login" />
+        <Head :title="t('Admin Login')" />
 
         <div class="mb-6">
-            <h1 class="text-xl font-semibold text-slate-900">Admin Login</h1>
+            <h1 class="text-xl font-semibold text-slate-950">{{ t('Admin Login') }}</h1>
             <p class="mt-1 text-sm text-slate-600">
-                Sign in with an administrator account to access the Booke control panel.
+                {{ t('Sign in with an administrator account to access the Booke control panel.') }}
             </p>
         </div>
 
-        <div v-if="status" class="mb-4 text-sm font-medium text-green-600">
+        <div v-if="status" class="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
             {{ status }}
         </div>
 
-        <form @submit.prevent="submit">
-            <div>
-                <InputLabel for="email" value="Email" />
+        <form class="space-y-4" @submit.prevent="submit">
+            <AdminInput
+                id="email"
+                v-model="form.email"
+                type="email"
+                :label="t('Email')"
+                required
+                autofocus
+                autocomplete="username"
+                :error="form.errors.email"
+            />
 
-                <TextInput
-                    id="email"
-                    type="email"
-                    class="mt-1 block w-full"
-                    v-model="form.email"
-                    required
-                    autofocus
-                    autocomplete="username"
-                />
+            <AdminInput
+                id="password"
+                v-model="form.password"
+                type="password"
+                :label="t('Password')"
+                required
+                autocomplete="current-password"
+                :error="form.errors.password"
+            />
 
-                <InputError class="mt-2" :message="form.errors.email" />
-            </div>
+            <label class="flex items-center gap-2 text-sm text-slate-600">
+                <Checkbox name="remember" v-model:checked="form.remember" />
+                <span>{{ t('Remember me') }}</span>
+            </label>
 
-            <div class="mt-4">
-                <InputLabel for="password" value="Password" />
-
-                <TextInput
-                    id="password"
-                    type="password"
-                    class="mt-1 block w-full"
-                    v-model="form.password"
-                    required
-                    autocomplete="current-password"
-                />
-
-                <InputError class="mt-2" :message="form.errors.password" />
-            </div>
-
-            <div class="mt-4 block">
-                <label class="flex items-center">
-                    <Checkbox name="remember" v-model:checked="form.remember" />
-                    <span class="ms-2 text-sm text-gray-600"
-                        >Remember me</span
-                    >
-                </label>
-            </div>
-
-            <div class="mt-4 flex items-center justify-end">
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
                 <Link
                     v-if="canResetPassword"
                     :href="route('password.request')"
-                    class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    class="text-sm font-medium text-cyan-700 transition hover:text-cyan-800"
                 >
-                    Forgot your password?
+                    {{ t('Forgot your password?') }}
                 </Link>
 
-                <PrimaryButton
-                    class="ms-4"
-                    :class="{ 'opacity-25': form.processing }"
-                    :disabled="form.processing"
-                >
-                    Log in
-                </PrimaryButton>
+                <AdminButton type="submit" :processing="form.processing">
+                    {{ t('Log in') }}
+                </AdminButton>
             </div>
         </form>
     </GuestLayout>

@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import AdminEmptyState from '../../components/AdminEmptyState.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { reactive } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
@@ -139,8 +140,11 @@ const summarizeValues = (values) => {
                             </td>
                         </tr>
                         <tr v-if="!logs.data?.length">
-                            <td colspan="6" class="px-4 py-8 text-center text-slate-500">
-                                {{ t('No audit events found for the current filters.') }}
+                            <td colspan="6" class="px-4 py-6">
+                                <AdminEmptyState
+                                    title="No audit events found for the current filters."
+                                    description="Try broadening the filters to see more audit activity."
+                                />
                             </td>
                         </tr>
                     </tbody>

@@ -1,9 +1,8 @@
 <script setup>
 import GuestLayout from '@/Layouts/GuestLayout.vue';
-import InputError from '@/Components/InputError.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import TextInput from '@/Components/TextInput.vue';
+import AdminButton from '../../modules/admin/components/AdminButton.vue';
+import AdminInput from '../../modules/admin/components/AdminInput.vue';
+import { useAdminLocale } from '../../modules/admin/composables/useAdminLocale';
 import { Head, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -24,6 +23,8 @@ const form = useForm({
     password_confirmation: '',
 });
 
+const { t } = useAdminLocale();
+
 const submit = () => {
     form.post(route('password.store'), {
         onFinish: () => form.reset('password', 'password_confirmation'),
@@ -33,68 +34,48 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Reset Password" />
+        <Head :title="t('Reset Password')" />
 
-        <form @submit.prevent="submit">
-            <div>
-                <InputLabel for="email" value="Email" />
+        <div class="mb-6">
+            <h1 class="text-xl font-semibold text-slate-950">{{ t('Reset Password') }}</h1>
+        </div>
 
-                <TextInput
-                    id="email"
-                    type="email"
-                    class="mt-1 block w-full"
-                    v-model="form.email"
-                    required
-                    autofocus
-                    autocomplete="username"
-                />
+        <form class="space-y-4" @submit.prevent="submit">
+            <AdminInput
+                id="email"
+                v-model="form.email"
+                type="email"
+                :label="t('Email')"
+                required
+                autofocus
+                autocomplete="username"
+                :error="form.errors.email"
+            />
 
-                <InputError class="mt-2" :message="form.errors.email" />
-            </div>
+            <AdminInput
+                id="password"
+                v-model="form.password"
+                type="password"
+                :label="t('Password')"
+                required
+                autocomplete="new-password"
+                :error="form.errors.password"
+            />
 
-            <div class="mt-4">
-                <InputLabel for="password" value="Password" />
+            <AdminInput
+                id="password_confirmation"
+                v-model="form.password_confirmation"
+                type="password"
+                :label="t('Confirm Password')"
+                required
+                autocomplete="new-password"
+                :error="form.errors.password_confirmation"
+            />
 
-                <TextInput
-                    id="password"
-                    type="password"
-                    class="mt-1 block w-full"
-                    v-model="form.password"
-                    required
-                    autocomplete="new-password"
-                />
-
-                <InputError class="mt-2" :message="form.errors.password" />
-            </div>
-
-            <div class="mt-4">
-                <InputLabel
-                    for="password_confirmation"
-                    value="Confirm Password"
-                />
-
-                <TextInput
-                    id="password_confirmation"
-                    type="password"
-                    class="mt-1 block w-full"
-                    v-model="form.password_confirmation"
-                    required
-                    autocomplete="new-password"
-                />
-
-                <InputError
-                    class="mt-2"
-                    :message="form.errors.password_confirmation"
-                />
-            </div>
-
-            <div class="mt-4 flex items-center justify-end">
-                <PrimaryButton
-                    :class="{ 'opacity-25': form.processing }"
-                    :disabled="form.processing"
-                >
-                    Reset Password
-                </PrimaryButton>
+            <div class="flex justify-end pt-2">
+                <AdminButton type="submit" :processing="form.processing">
+                    {{ t('Reset Password') }}
+                </AdminButton>
             </div>
         </form>
     </GuestLayout>

@@ -1,7 +1,10 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import AdminBadge from '../../components/AdminBadge.vue';
+import AdminButton from '../../components/AdminButton.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { alertSeverityMap, healthStatusMap } from '../../config/statusPalette';
 
 const props = defineProps({
     dashboard: { type: Object, required: true },
@@ -16,13 +19,9 @@ const statusTone = (status) => {
     return 'border-rose-200 bg-rose-50 text-rose-950';
 };
 
-const statusDot = (status) => {
-    if (status === 'ok') return '🟢';
-    if (status === 'warn') return '🟡';
-    return '🔴';
-};
+const healthBadge = (status) => healthStatusMap[status] ?? healthStatusMap.fail;
 
-const severityDot = (severity) => (severity === 'critical' ? '🔴' : '🟡');
+const alertBadge = (severity) => alertSeverityMap[severity] ?? alertSeverityMap.warning;
 
 const formatTime = (value) => {
     if (!value) return '—';
@@ -52,7 +51,7 @@ const signalCards = [
 </script>
 
 <template>
-    <AdminLayout>
+    <AdminLayout title="Monitoring">
         <Head :title="t('Monitoring')" />
 
         <section class="space-y-6">
@@ -66,14 +65,13 @@ const signalCards = [
                         </p>
                         <p class="mt-3 text-xs text-slate-500">{{ t('Updated') }}: {{ formatTime(dashboard.generated_at) }}</p>
                     </div>
-                    <button
+                    <AdminButton
                         v-if="can_manage"
-                        type="button"
-                        class="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+                        size="sm"
                         @click="runProbes"
                     >
                         {{ t('Run health probes') }}
-                    </button>
+                    </AdminButton>
                 </div>
             </div>
 
@@ -107,7 +105,13 @@ const signalCards = [
                     >
                         <div class="flex items-start justify-between gap-2">
                             <div>
-                                <p class="font-semibold">{{ statusDot(service.status) }} {{ service.label }}</p>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <AdminBadge
+                                        :variant="healthBadge(service.status).variant"
+                                        :label="healthBadge(service.status).label"
+                                    />
+                                    <p class="font-semibold">{{ service.label }}</p>
+                                </div>
                                 <p class="mt-1 text-sm opacity-90">{{ service.message }}</p>
                             </div>
                             <p class="text-xs tabular-nums opacity-70">
@@ -138,10 +142,14 @@ const signalCards = [
                     <li
                         v-for="(alert, index) in dashboard.alerts"
                         :key="`${alert.code}-${index}`"
-                        class="rounded-2xl border px-4 py-3 text-sm"
+                        class="flex flex-wrap items-center gap-2 rounded-2xl border px-4 py-3 text-sm"
                         :class="alert.severity === 'critical' ? 'border-rose-200 bg-rose-50 text-rose-950' : 'border-amber-200 bg-amber-50 text-amber-950'"
                     >
-                        {{ severityDot(alert.severity) }} {{ alert.message }}
+                        <AdminBadge
+                            :variant="alertBadge(alert.severity).variant"
+                            :label="alertBadge(alert.severity).label"
+                        />
+                        <span>{{ alert.message }}</span>
                     </li>
                 </ul>
                 <p v-else class="mt-4 text-sm text-slate-500">{{ t('No active alerts.') }}</p>

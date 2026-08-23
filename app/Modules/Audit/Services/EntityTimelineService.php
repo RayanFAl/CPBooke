@@ -234,89 +234,67 @@ class EntityTimelineService
      */
     public function forSettlement(Settlement $settlement): array
     {
-        $settlement->loadMissing(['creator', 'closer', 'approver', 'reopener']);
-
         $events = collect();
-
-        $events->push($this->event(
-            key: 'settlement.created',
-            label: 'Settlement Period Created',
-            description: ($settlement->period_start?->toDateString() ?? '?').' → '.($settlement->period_end?->toDateString() ?? '?'),
-            occurredAt: $settlement->created_at?->toIso8601String(),
-            actor: $settlement->creator?->full_name ?: $settlement->creator?->name ?: 'System',
-            tone: 'slate',
-            source: 'settlement',
-        ));
-
-        if ($settlement->compared_at) {
-            $events->push($this->event(
-                key: 'settlement.compared',
-                label: 'Comparison Completed',
-                description: 'Matched '.$settlement->matched_count.' · Review '.$settlement->review_count,
-                occurredAt: $settlement->compared_at->toIso8601String(),
-                actor: 'System',
-                tone: 'cyan',
-                source: 'settlement',
-            ));
-        }
-
-        SettlementItem::query()
-            ->where('settlement_id', $settlement->id)
-            ->where('status', SettlementItem::STATUS_RESOLVED)
-            ->orderBy('resolved_at')
-            ->limit(40)
-            ->get()
-            ->each(function (SettlementItem $item) use ($events): void {
-                $events->push($this->event(
-                    key: 'settlement.item.'.$item->id,
-                    label: 'Item Resolved',
-                    description: ($item->booking_reference ?: 'Order #'.$item->order_id).' · '.($item->resolution_note ?: ''),
-                    occurredAt: $item->resolved_at?->toIso8601String(),
-                    actor: 'Settlement',
-                    tone: 'violet',
-                    source: 'settlement_item',
-                ));
-            });
-
-        if ($settlement->approved_at) {
-            $events->push($this->event(
-                key: 'settlement.approved',
-                label: 'Settlement Approved',
-                description: 'Period approved for close.',
-                occurredAt: $settlement->approved_at->toIso8601String(),
-                actor: $settlement->approver?->full_name ?: $settlement->approver?->name ?: 'Finance',
-                tone: 'cyan',
-                source: 'settlement',
-            ));
-        }
-
-        if ($settlement->isClosed()) {
-            $events->push($this->event(
-                key: 'settlement.closed',
-                label: 'Settlement Closed',
-                description: 'Period locked for audit.',
-                occurredAt: $settlement->closed_at?->toIso8601String(),
-                actor: $settlement->closer?->full_name ?: $settlement->closer?->name ?: 'System',
-                tone: 'emerald',
-                source: 'settlement',
-            ));
-        }
-
-        if ($settlement->reopened_at) {
-            $events->push($this->event(
-                key: 'settlement.reopened',
-                label: 'Settlement Reopened',
-                description: $settlement->reopen_reason ?: 'Period reopened with audit.',
-                occurredAt: $settlement->reopened_at->toIso8601String(),
-                actor: $settlement->reopener?->full_name ?: $settlement->reopener?->name ?: 'Finance',
-                tone: 'amber',
-                source: 'settlement',
-            ));
-        }
 
         $this->appendAuditLogs($events, AuditLog::ENTITY_SETTLEMENT, (int) $settlement->id);
 
-        return $this->finalize($events);
+        if ($events->isEmpty()) {
+            $settlement->loadMissing(['creator', 'closer', 'approver', 'reopener']);
+            $events->push($this->event(
+                key: 'settlement.created',
+                label: 'Created',
+                description: ($settlement->period_start?->toDateString() ?? '?').' → '.($settlement->period_end?->toDateString() ?? '?'),
+                occurredAt: $settlement->created_at?->toIso8601String(),
+                actor: $settlement->creator?->full_name ?: $settlement->creator?->name ?: 'System',
+                tone: 'slate',
+                source: 'settlement',
+            ));
+        }
+
+        if (Schema::hasTable('approvals')) {
+            Approval::query()
+                ->with(['requester:id,name,full_name', 'approver:id,name,full_name'])
+                ->where('entity_type', Approval::ENTITY_SETTLEMENT)
+                ->where('entity_id', $settlement->id)
+                ->orderBy('id')
+                ->get()
+                ->each(function (Approval $approval) use ($events): void {
+                    $events->push($this->event(
+                        key: 'settlement.approval.requested.'.$approval->id,
+                        label: 'Approval requested',
+                        description: $this->humanize($approval->type).($approval->reason ? ' · '.$approval->reason : ''),
+                        occurredAt: $approval->created_at?->toIso8601String(),
+                        actor: $approval->requester?->full_name ?: $approval->requester?->name ?: 'Finance',
+                        tone: 'amber',
+                        source: 'approval',
+                    ));
+
+                    if ($approval->approved_at) {
+                        $events->push($this->event(
+                            key: 'settlement.approval.approved.'.$approval->id,
+                            label: 'Approved by '.($approval->approver?->full_name ?: $approval->approver?->name ?: 'Finance'),
+                            description: 'Settlement adjustment approved.',
+                            occurredAt: $approval->approved_at->toIso8601String(),
+                            actor: $approval->approver?->full_name ?: $approval->approver?->name ?: 'Finance',
+                            tone: 'emerald',
+                            source: 'approval',
+                        ));
+                    }
+                });
+        }
+
+        $events = $events->map(function (array $event): array {
+            $event['label'] = $this->settlementStoryLabel((string) $event['label'], (string) ($event['source'] ?? ''));
+
+            return $event;
+        });
+
+        return $events
+            ->unique('key')
+            ->sortBy(fn (array $event): int => strtotime((string) ($event['occurred_at'] ?? '')) ?: 0)
+            ->values()
+            ->take((int) config('audit.timeline_limit', 100))
+            ->all();
     }
 
     /**
@@ -605,5 +583,24 @@ class EntityTimelineService
     private function humanize(string $value): string
     {
         return ucwords(str_replace(['_', '-', '.'], ' ', $value));
+    }
+
+    private function settlementStoryLabel(string $label, string $source): string
+    {
+        $haystack = strtolower($label.' '.$source);
+
+        return match (true) {
+            str_contains($haystack, 'created') && $source !== 'approval' => 'Created',
+            str_contains($haystack, 'invoice_imported') || str_contains($haystack, 'imported invoice') => 'Imported invoice',
+            str_contains($haystack, 'compared') || str_contains($haystack, 're-compared') => 'Re-compared',
+            str_contains($haystack, 'variance_approval_requested') || str_contains($haystack, 'approval requested') => 'Approval requested',
+            str_contains($haystack, 'item_resolved') || str_contains($haystack, 'accepted as variance') => 'Accepted variance',
+            str_contains($haystack, 'item_corrected') || str_contains($haystack, 'corrected') => 'Corrected data',
+            str_contains($haystack, 'approved by') => $label,
+            str_contains($haystack, 'approved') => 'Settlement approved',
+            str_contains($haystack, 'reopened') => 'Reopened',
+            str_contains($haystack, 'closed') => 'Closed',
+            default => $label,
+        };
     }
 }

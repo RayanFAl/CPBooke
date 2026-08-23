@@ -77,6 +77,13 @@ export const navigationItems = [
                 permission: 'settlements.view',
                 icon: 'finance',
             },
+            {
+                label: 'Provider Health',
+                route: 'admin.provider-health.index',
+                startsWith: '/admin/provider-health',
+                permission: 'provider-health.view',
+                icon: 'health',
+            },
         ],
     },
     {
@@ -130,6 +137,27 @@ export const navigationItems = [
                 startsWith: '/admin/notifications',
                 permission: 'notifications.view',
                 icon: 'notifications',
+            },
+            {
+                label: 'Global Search',
+                route: 'admin.search.index',
+                startsWith: '/admin/search',
+                permission: 'search.view',
+                icon: 'search',
+            },
+            {
+                label: 'Monitoring',
+                route: 'admin.monitoring.index',
+                startsWith: '/admin/monitoring',
+                permission: 'monitoring.view',
+                icon: 'monitoring',
+            },
+            {
+                label: 'Governance',
+                route: 'admin.governance.dashboard',
+                startsWith: '/admin/governance',
+                permission: 'governance.view',
+                icon: 'governance',
             },
             {
                 label: 'Audit Center',

@@ -1,11 +1,14 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import AdminEmptyState from '../../components/AdminEmptyState.vue';
+import AdminTableSkeleton from '../../components/AdminTableSkeleton.vue';
 import OrderStatusBadge from '../components/OrderStatusBadge.vue';
 import OrderProviderCell from '../components/OrderProviderCell.vue';
 import PaymentStatusBadge from '../components/PaymentStatusBadge.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, reactive } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { useAdminNavigation } from '../../composables/useAdminNavigation';
 
 const props = defineProps({
     orders: {
@@ -24,6 +27,7 @@ const props = defineProps({
 
 const page = usePage();
 const { locale, t } = useAdminLocale();
+const { navigating } = useAdminNavigation();
 
 const filterForm = reactive({
     search: props.filters.search ?? '',
@@ -158,8 +162,13 @@ const openOrderPage = (order) => {
                 </form>
             </div>
 
-            <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                <div class="overflow-x-auto">
+            <AdminTableSkeleton
+                v-if="navigating"
+                :columns="canViewFinancials ? 7 : 6"
+            />
+
+            <div v-else class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <div class="hidden overflow-x-auto md:block">
                     <table class="min-w-full divide-y divide-slate-200">
                         <thead class="bg-slate-50">
                             <tr class="text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -217,12 +226,61 @@ const openOrderPage = (order) => {
                             </tr>
 
                             <tr v-if="orders.data.length === 0">
-                                <td :colspan="canViewFinancials ? 7 : 6" class="px-6 py-12 text-center text-sm text-slate-500">
-                                    {{ t('No orders matched the selected filters.') }}
+                                <td :colspan="canViewFinancials ? 7 : 6" class="px-6 py-6">
+                                    <AdminEmptyState
+                                        title="No orders matched the selected filters."
+                                        description="Try adjusting your search or status filters to find the booking you need."
+                                        icon="search"
+                                    />
                                 </td>
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <div v-if="orders.data.length === 0" class="md:hidden">
+                    <AdminEmptyState
+                        title="No orders matched the selected filters."
+                        description="Try adjusting your search or status filters to find the booking you need."
+                        icon="search"
+                    />
+                </div>
+
+                <div v-else class="divide-y divide-slate-100 md:hidden">
+                    <button
+                        v-for="order in orders.data"
+                        :key="`mobile-${order.id}`"
+                        type="button"
+                        class="block w-full px-4 py-4 text-start transition hover:bg-cyan-50/50"
+                        @click="openOrderPage(order)"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="font-semibold text-slate-950">{{ order.booking_reference || `${t('Order')} #${order.id}` }}</p>
+                                <p class="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500">
+                                    {{ order.ticket_number || t('Awaiting ticket number') }}
+                                </p>
+                            </div>
+                            <OrderStatusBadge :status="order.status" />
+                        </div>
+
+                        <div class="mt-3 space-y-1 text-sm">
+                            <p class="font-medium text-slate-900">{{ order.customer.name }}</p>
+                            <p class="text-slate-500">{{ order.customer.email }}</p>
+                        </div>
+
+                        <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                            <PaymentStatusBadge :status="order.payment_status" />
+                            <span class="rounded-full bg-slate-100 px-2.5 py-1 uppercase tracking-[0.14em] text-slate-600">
+                                {{ formatServiceType(order.service_type) }}
+                            </span>
+                            <span v-if="canViewFinancials" class="font-medium text-slate-900">
+                                {{ formatMoney(order.total_amount, order.currency) }}
+                            </span>
+                        </div>
+
+                        <p class="mt-3 text-xs text-slate-500">{{ formatDateTime(order.created_at) }}</p>
+                    </button>
                 </div>
 
                 <div class="flex flex-col gap-4 border-t border-slate-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">

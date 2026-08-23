@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import TemplateManager from '../components/TemplateManager.vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { useAdminConfirm } from '../../composables/useAdminConfirm';
 import { useForm, usePage } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -13,6 +14,7 @@ const props = defineProps({
 });
 
 const { t, isArabic } = useAdminLocale();
+const { confirm } = useAdminConfirm();
 const page = usePage();
 
 const allowedTabs = ['overview', 'channels', 'logs', 'templates', 'tools'];
@@ -68,13 +70,13 @@ const sendTestPush = () => {
     });
 };
 
-const sendTestTemplate = () => {
+const sendTestTemplate = async () => {
     if (templateTestForm.template_code === 'ALL') {
-        const confirmed = window.confirm(
-            t('This will send every active template to the selected user. Continue?'),
-        );
-
-        if (!confirmed) {
+        if (!await confirm({
+            title: 'Confirm action',
+            message: t('This will send every active template to the selected user. Continue?'),
+            confirmLabel: 'Confirm',
+        })) {
             return;
         }
     }

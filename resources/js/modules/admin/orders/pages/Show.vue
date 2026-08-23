@@ -1,5 +1,10 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import AdminButton from '../../components/AdminButton.vue';
+import AdminDrawer from '../../components/AdminDrawer.vue';
+import AdminModal from '../../components/AdminModal.vue';
+import AdminSelect from '../../components/AdminSelect.vue';
+import AdminTextarea from '../../components/AdminTextarea.vue';
 import OrderTicketPanel from '../components/OrderTicketPanel.vue';
 import SystemTimeline from '../../components/SystemTimeline.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
@@ -28,6 +33,16 @@ const props = defineProps({
 const page = usePage();
 const { locale, t } = useAdminLocale();
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
+
+const orderBreadcrumbs = computed(() => [
+    { label: 'Dashboard', href: route('admin.dashboard') },
+    { label: 'Orders', href: route('admin.orders.index') },
+    {
+        label: props.order.booking_reference || `${t('Order')} #${props.order.id}`,
+        current: true,
+        translate: false,
+    },
+]);
 
 const canUpdateStatus = computed(() => permissions.value.includes('orders.change-status'));
 const canUpdateNotes = computed(() => permissions.value.includes('orders.update-notes'));
@@ -415,17 +430,11 @@ const handleTicketAction = ({ action, ticket }) => {
     <AdminLayout
         :title="order.booking_reference || `${t('Order')} #${order.id}`"
         description=""
+        :breadcrumbs="orderBreadcrumbs"
     >
         <section class="space-y-4">
             <div class="overflow-visible rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-200 px-4 py-4 sm:px-5">
-                    <Link
-                        :href="route('admin.orders.index')"
-                        class="text-sm font-medium text-slate-500 transition hover:text-slate-800"
-                    >
-                        ← {{ t('Back to orders') }}
-                    </Link>
-
                     <div
                         v-if="showHealthAlert"
                         class="mt-4 rounded-lg border px-4 py-3"
@@ -463,13 +472,13 @@ const handleTicketAction = ({ action, ticket }) => {
                         >
                             {{ t('New ticket') }}
                         </Link>
-                        <button
-                            type="button"
-                            class="inline-flex items-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                        <AdminButton
+                            variant="secondary"
+                            size="sm"
                             @click="exportSnapshot"
                         >
                             {{ t('Export') }}
-                        </button>
+                        </AdminButton>
                         <div class="relative">
                             <button
                                 type="button"
@@ -541,81 +550,6 @@ const handleTicketAction = ({ action, ticket }) => {
 
             <template v-if="activeTab === 'ticket'">
                 <div class="space-y-3">
-                    <div
-                        v-if="statusPanelOpen && canUpdateStatus"
-                        class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
-                    >
-                        <div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                            <h3 class="text-sm font-semibold text-slate-950">{{ t('Operational status') }}</h3>
-                            <button
-                                type="button"
-                                class="text-xs font-medium text-slate-500 transition hover:text-slate-800"
-                                @click="statusPanelOpen = false"
-                            >
-                                {{ t('Close') }}
-                            </button>
-                        </div>
-
-                        <form class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" @submit.prevent="submit">
-                            <label class="flex-1 space-y-1 text-xs font-medium text-slate-600">
-                                <span>{{ t('Operational status') }}</span>
-                                <select
-                                    v-model="form.status"
-                                    class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                                    :disabled="statuses.length === 0"
-                                >
-                                    <option v-for="status in statuses" :key="status.name" :value="status.name">
-                                        {{ t(status.label) }}
-                                    </option>
-                                </select>
-                            </label>
-                            <button
-                                type="submit"
-                                class="inline-flex items-center justify-center rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
-                                :disabled="form.processing || statuses.length === 0"
-                            >
-                                {{ t('Update status') }}
-                            </button>
-                        </form>
-                    </div>
-
-                    <div
-                        v-if="paymentPanelOpen && canUpdateStatus"
-                        class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
-                    >
-                        <div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                            <h3 class="text-sm font-semibold text-slate-950">{{ t('Payment status') }}</h3>
-                            <button
-                                type="button"
-                                class="text-xs font-medium text-slate-500 transition hover:text-slate-800"
-                                @click="paymentPanelOpen = false"
-                            >
-                                {{ t('Close') }}
-                            </button>
-                        </div>
-
-                        <form class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" @submit.prevent="submitPaymentStatus">
-                            <label class="flex-1 space-y-1 text-xs font-medium text-slate-600">
-                                <span>{{ t('Payment status') }}</span>
-                                <select
-                                    v-model="paymentForm.payment_status"
-                                    class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
-                                >
-                                    <option v-for="status in payment_statuses" :key="status.name" :value="status.name">
-                                        {{ t(status.label) }}
-                                    </option>
-                                </select>
-                            </label>
-                            <button
-                                type="submit"
-                                class="inline-flex items-center justify-center rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
-                                :disabled="paymentForm.processing"
-                            >
-                                {{ t('Update payment') }}
-                            </button>
-                        </form>
-                    </div>
-
                 <OrderTicketPanel
                     :ticket="order.ticket"
                     :currency="order.currency"
@@ -639,20 +573,20 @@ const handleTicketAction = ({ action, ticket }) => {
                         </button>
                     </div>
 
-                    <form v-if="canUpdateNotes" class="mt-4 space-y-3" @submit.prevent="submitNotes">
-                        <textarea
+                    <form v-if="canUpdateNotes" class="mt-4 space-y-4" @submit.prevent="submitNotes">
+                        <AdminTextarea
                             v-model="notesForm.internal_notes"
-                            rows="5"
-                            class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                            :label="t('Internal notes')"
+                            :rows="5"
                             :placeholder="t('Add an internal operational note')"
                         />
-                        <button
+                        <AdminButton
                             type="submit"
-                            class="inline-flex items-center justify-center rounded-lg bg-slate-950 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
-                            :disabled="notesForm.processing"
+                            size="sm"
+                            :processing="notesForm.processing"
                         >
                             {{ t('Save notes') }}
-                        </button>
+                        </AdminButton>
                     </form>
 
                     <p v-else class="mt-4 text-sm leading-6 text-slate-700">
@@ -773,58 +707,77 @@ const handleTicketAction = ({ action, ticket }) => {
             </div>
         </section>
 
-        <Teleport to="body">
-            <Transition
-                enter-active-class="transition duration-200 ease-out"
-                enter-from-class="opacity-0"
-                enter-to-class="opacity-100"
-                leave-active-class="transition duration-150 ease-in"
-                leave-from-class="opacity-100"
-                leave-to-class="opacity-0"
-            >
-                <div
-                    v-if="customerDrawerOpen"
-                    class="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm"
-                    @click="closeCustomerDrawer"
-                />
-            </Transition>
-        </Teleport>
-
-        <Teleport to="body">
-            <Transition
-                enter-active-class="transition duration-300 ease-out"
-                enter-from-class="translate-x-full"
-                enter-to-class="translate-x-0"
-                leave-active-class="transition duration-200 ease-in"
-                leave-from-class="translate-x-0"
-                leave-to-class="translate-x-full"
-            >
-                <aside
-                    v-if="customerDrawerOpen"
-                    class="fixed inset-y-0 right-0 z-[60] flex w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-[0_20px_80px_-20px_rgba(15,23,42,0.45)]"
+        <AdminModal
+            :show="statusPanelOpen && canUpdateStatus"
+            title="Operational status"
+            @close="statusPanelOpen = false"
+        >
+            <form id="order-status-form" class="space-y-4" @submit.prevent="submit">
+                <AdminSelect
+                    v-model="form.status"
+                    :label="t('Operational status')"
+                    :disabled="statuses.length === 0"
                 >
-                    <div class="border-b border-slate-200 bg-slate-50 px-6 py-5">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-700">{{ t('Customer Drawer') }}</p>
-                                <h3 class="mt-2 text-2xl font-semibold text-slate-950">{{ order.customer.name }}</h3>
-                                <p class="mt-2 text-sm text-slate-600">{{ order.customer.email }}</p>
-                            </div>
-                            <button
-                                type="button"
-                                class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-white hover:text-slate-900"
-                                @click="closeCustomerDrawer"
-                            >
-                                <span class="sr-only">{{ t('Close drawer') }}</span>
-                                <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
-                                    <path fill-rule="evenodd" d="M4.22 4.22a.75.75 0 011.06 0L10 8.94l4.72-4.72a.75.75 0 111.06 1.06L11.06 10l4.72 4.72a.75.75 0 11-1.06 1.06L10 11.06l-4.72 4.72a.75.75 0 11-1.06-1.06L8.94 10 4.22 5.28a.75.75 0 010-1.06z" clip-rule="evenodd" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
+                    <option v-for="status in statuses" :key="status.name" :value="status.name">
+                        {{ t(status.label) }}
+                    </option>
+                </AdminSelect>
+            </form>
+            <template #footer>
+                <AdminButton variant="secondary" size="sm" @click="statusPanelOpen = false">
+                    {{ t('Close') }}
+                </AdminButton>
+                <AdminButton
+                    type="submit"
+                    form="order-status-form"
+                    size="sm"
+                    :processing="form.processing"
+                    :disabled="statuses.length === 0"
+                >
+                    {{ t('Update status') }}
+                </AdminButton>
+            </template>
+        </AdminModal>
 
-                    <div class="flex-1 overflow-y-auto px-6 py-6">
-                        <div class="space-y-6">
+        <AdminModal
+            :show="paymentPanelOpen && canUpdateStatus"
+            title="Payment status"
+            @close="paymentPanelOpen = false"
+        >
+            <form id="order-payment-form" @submit.prevent="submitPaymentStatus">
+                <AdminSelect v-model="paymentForm.payment_status" :label="t('Payment status')">
+                    <option v-for="status in payment_statuses" :key="status.name" :value="status.name">
+                        {{ t(status.label) }}
+                    </option>
+                </AdminSelect>
+            </form>
+            <template #footer>
+                <AdminButton variant="secondary" size="sm" @click="paymentPanelOpen = false">
+                    {{ t('Close') }}
+                </AdminButton>
+                <AdminButton
+                    type="submit"
+                    form="order-payment-form"
+                    size="sm"
+                    :processing="paymentForm.processing"
+                >
+                    {{ t('Update payment') }}
+                </AdminButton>
+            </template>
+        </AdminModal>
+
+        <AdminDrawer
+            :show="customerDrawerOpen"
+            size="md"
+            @close="closeCustomerDrawer"
+        >
+            <template #header>
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-700">{{ t('Customer Drawer') }}</p>
+                <h2 id="admin-drawer-title" class="mt-2 text-2xl font-semibold text-slate-950">{{ order.customer.name }}</h2>
+                <p class="mt-2 text-sm text-slate-600">{{ order.customer.email }}</p>
+            </template>
+
+            <div class="space-y-6">
                             <div class="rounded-[1.6rem] border border-slate-200 bg-slate-50 p-5">
                                 <h4 class="text-lg font-semibold text-slate-950">{{ t('Customer profile') }}</h4>
                                 <dl class="mt-5 grid gap-4">
@@ -922,10 +875,7 @@ const handleTicketAction = ({ action, ticket }) => {
                                     </Link>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </aside>
-            </Transition>
-        </Teleport>
+            </div>
+        </AdminDrawer>
     </AdminLayout>
 </template>

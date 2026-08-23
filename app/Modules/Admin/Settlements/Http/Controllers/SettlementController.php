@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Settlements\Http\Controllers;
 use App\Models\Provider;
 use App\Models\Settlement;
 use App\Models\SettlementAttachment;
+use App\Models\SettlementInvoiceImport;
 use App\Models\SettlementItem;
 use App\Modules\Admin\Settlements\Http\Requests\ImportSettlementInvoiceRequest;
 use App\Modules\Admin\Settlements\Http\Requests\ReopenSettlementRequest;
@@ -328,7 +329,9 @@ class SettlementController
             'difference' => $settlement->difference,
             'orders_count' => $settlement->orders_count,
             'matched_count' => $settlement->matched_count,
+            'resolved_count' => $settlement->resolved_count,
             'review_count' => $settlement->review_count,
+            'adjustment_total' => $settlement->adjustment_total,
             'pending_approvals' => $detailed ? $this->settlementService->pendingAdjustmentApprovalsCount($settlement) : null,
             'created_by' => $settlement->creator?->full_name ?: $settlement->creator?->name,
             'created_at' => optional($settlement->created_at)?->toIso8601String(),
@@ -346,6 +349,8 @@ class SettlementController
             $data['reopened_by'] = $settlement->reopener?->full_name ?: $settlement->reopener?->name;
             $data['reopen_reason'] = $settlement->reopen_reason;
             $data['close_history'] = $settlement->close_history ?? [];
+            $data['close_snapshot'] = $settlement->close_snapshot;
+            $data['current_invoice_import_id'] = $settlement->current_invoice_import_id;
             $data['can_mutate'] = $settlement->canMutate();
         }
 
@@ -394,6 +399,26 @@ class SettlementController
             'source' => $attachment->source,
             'uploaded_by' => $attachment->uploader?->full_name ?: $attachment->uploader?->name,
             'created_at' => optional($attachment->created_at)?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeInvoiceImport(SettlementInvoiceImport $import): array
+    {
+        return [
+            'id' => $import->id,
+            'sequence' => $import->sequence,
+            'original_name' => $import->original_name,
+            'uploaded_by' => $import->uploader?->full_name ?: $import->uploader?->name,
+            'uploaded_at' => optional($import->uploaded_at)?->toIso8601String(),
+            'row_count' => $import->row_count,
+            'matched_count' => $import->matched_count,
+            'extra_count' => $import->extra_count,
+            'error_count' => $import->error_count,
+            'errors' => $import->errors ?? [],
+            'is_active' => (bool) $import->is_active,
         ];
     }
 }

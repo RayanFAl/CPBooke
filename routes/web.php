@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CustomerSupportChatController;
 use App\Http\Controllers\ProfileController;
+use App\Modules\Content\Http\Controllers\AppDownloadController;
 use App\Modules\Content\Http\Controllers\PublicContentPageController;
 use App\Modules\Content\Support\ContentPageCatalog;
 use App\Modules\Support\Http\Controllers\SupportAttachmentDownloadController;
@@ -27,6 +28,13 @@ Route::prefix('pages')->as('content.pages.')->controller(PublicContentPageContro
 
 Route::redirect('/privacy-policy', '/pages/privacy-policy');
 Route::redirect('/terms', '/pages/terms-of-service');
+
+Route::prefix('app')->as('app.')->controller(AppDownloadController::class)->group(function (): void {
+    Route::get('/', 'show')->name('download.page');
+    Route::get('/download', 'download')->name('download.file');
+});
+
+Route::redirect('/download', '/app');
 
 Route::get('/support/attachments/{message}', SupportAttachmentDownloadController::class)
     ->middleware('signed')

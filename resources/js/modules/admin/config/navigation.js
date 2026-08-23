@@ -174,6 +174,13 @@ export const navigationItems = [
                 icon: 'governance',
             },
             {
+                label: 'Mobile App',
+                route: 'admin.mobile-app.index',
+                startsWith: '/admin/mobile-app',
+                permission: 'settings.manage',
+                icon: 'governance',
+            },
+            {
                 label: 'AI Assistant',
                 route: 'admin.ai.settings.index',
                 startsWith: '/admin/ai/settings',

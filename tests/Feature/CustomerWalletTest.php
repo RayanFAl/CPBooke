@@ -28,6 +28,28 @@ class CustomerWalletTest extends TestCase
         ]);
     }
 
+    public function test_customer_can_get_wallet_and_transactions(): void
+    {
+        $customer = $this->makeCustomer();
+        Sanctum::actingAs($customer);
+
+        $this->getJson('/api/v1/wallet')
+            ->assertOk()
+            ->assertJsonPath('data.currency', 'LYD')
+            ->assertJsonPath('data.balance', '0.00')
+            ->assertJsonPath('data.test_mode_enabled', true);
+
+        $this->postJson('/api/v1/wallet/test/top-up', ['amount' => 75])
+            ->assertOk()
+            ->assertJsonPath('data.wallet.balance', '75.00');
+
+        $this->getJson('/api/v1/wallet/transactions')
+            ->assertOk()
+            ->assertJsonPath('data.wallet.balance', '75.00')
+            ->assertJsonPath('data.transactions.data.0.type', CustomerWalletTransaction::TYPE_CREDIT)
+            ->assertJsonPath('data.transactions.data.0.amount', '75.00');
+    }
+
     public function test_admin_can_credit_customer_wallet_and_record_balance_before_after(): void
     {
         $admin = $this->makeAdmin('super_admin');
@@ -349,6 +371,246 @@ class CustomerWalletTest extends TestCase
         $this->expectException(InsufficientCustomerWalletBalanceException::class);
 
         app(CustomerWalletService::class)->adminDebit($wallet, 100);
+    }
+
+    public function test_pay_order_also_debits_provider_wallet(): void
+    {
+        $customer = $this->makeCustomer();
+        CustomerWallet::query()->create([
+            'user_id' => $customer->id,
+            'wallet_number' => 'WLT-000010-TEST10',
+            'currency' => 'LYD',
+            'balance' => 1000,
+            'status' => CustomerWallet::STATUS_ACTIVE,
+        ]);
+
+        $provider = \App\Models\Provider::query()->create([
+            'name' => 'BookNow',
+            'key' => \App\Models\Provider::KEY_BOOKNOW,
+            'status' => \App\Models\Provider::STATUS_ACTIVE,
+        ]);
+
+        $providerWallet = \App\Models\ProviderWallet::query()->create([
+            'provider_id' => $provider->id,
+            'currency' => 'LYD',
+            'environment' => 'production',
+            'balance' => 2000,
+            'allow_negative' => true,
+            'is_active' => true,
+        ]);
+
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'provider_id' => $provider->id,
+            'provider_name' => 'BookNow',
+            'status' => Order::STATUS_PENDING_PAYMENT,
+            'payment_status' => Order::PAYMENT_STATUS_UNPAID,
+            'service_type' => Order::SERVICE_TYPE_FLIGHT,
+            'currency' => 'LYD',
+            'total_amount' => 550,
+            'selling_price' => 550,
+            'supplier_cost' => 500,
+            'request_payload' => ['product_type' => 'flight', 'test' => true],
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->postJson('/api/v1/wallet/pay-order', [
+            'order_id' => $order->id,
+        ])->assertOk()
+            ->assertJsonPath('data.wallet.balance', '450.00');
+
+        $this->assertSame('1500.00', (string) $providerWallet->refresh()->balance);
+        $this->assertDatabaseHas('provider_wallet_transactions', [
+            'provider_wallet_id' => $providerWallet->id,
+            'type' => \App\Models\ProviderWalletTransaction::TYPE_DEBIT,
+            'order_id' => $order->id,
+            'amount' => '500.00',
+        ]);
+        $this->assertSame(Order::PAYMENT_METHOD_WALLET, $order->refresh()->payment_method);
+    }
+
+    public function test_sync_flight_with_wallet_debits_customer_and_provider(): void
+    {
+        $customer = $this->makeCustomer();
+        CustomerWallet::query()->create([
+            'user_id' => $customer->id,
+            'wallet_number' => 'WLT-000011-TEST11',
+            'currency' => 'LYD',
+            'balance' => 1000,
+            'status' => CustomerWallet::STATUS_ACTIVE,
+        ]);
+
+        $provider = \App\Models\Provider::query()->create([
+            'name' => 'BookNow',
+            'key' => \App\Models\Provider::KEY_BOOKNOW,
+            'status' => \App\Models\Provider::STATUS_ACTIVE,
+            'commission_rate' => '10.00',
+        ]);
+
+        $providerWallet = \App\Models\ProviderWallet::query()->create([
+            'provider_id' => $provider->id,
+            'currency' => 'LYD',
+            'environment' => 'production',
+            'balance' => 2000,
+            'allow_negative' => true,
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $payload = [
+            'source' => 'mobile_app',
+            'product_type' => 'flight',
+            'status' => 'confirmed',
+            'currency' => 'LYD',
+            'grand_total' => 590.00,
+            'base_amount' => 531.00,
+            'provider_booking' => [
+                'booking_id' => 'wallet-sync-booking-001',
+                'order_number' => 'WFQWALLET1',
+                'pnr' => 'WLTAAA',
+                'provider_id' => 12,
+                'provider_name' => 'Buraq Air',
+            ],
+            'contact' => [
+                'first_name' => 'Test',
+                'last_name' => 'User',
+                'email' => $customer->email,
+                'phone' => '+218911111111',
+            ],
+            'passengers' => [
+                [
+                    'type' => 'adult',
+                    'title' => 'Mr',
+                    'first_name' => 'Test',
+                    'last_name' => 'User',
+                    'dob' => '1990-01-01',
+                    'gender' => 'M',
+                    'nationality' => 'LY',
+                    'passport_number' => 'P1234567',
+                    'passport_expiry' => '2030-01-01',
+                    'passport_issue_country' => 'LY',
+                ],
+            ],
+            'items' => [
+                [
+                    'type' => 'flight',
+                    'product_type' => 'ticket',
+                    'product_subtype' => 'oneway',
+                    'provider_reference' => 'WLTAAA',
+                    'total' => 590.00,
+                    'currency' => 'LYD',
+                    'item_details' => [
+                        'pnr' => 'WLTAAA',
+                        'airline_code' => 'BM',
+                        'airline_name' => 'Buraq Air',
+                        'segments' => [],
+                        'passengers' => [],
+                    ],
+                ],
+            ],
+            'payment' => [
+                'status' => 'paid',
+                'method' => 'wallet',
+                'amount' => 590.00,
+                'currency' => 'LYD',
+            ],
+        ];
+
+        $this->postJson('/api/v1/orders/sync-flight', $payload)
+            ->assertCreated();
+
+        $order = Order::query()->where('external_booking_id', 'wallet-sync-booking-001')->firstOrFail();
+
+        $this->assertSame(Order::PAYMENT_STATUS_PAID, $order->payment_status);
+        $this->assertSame(Order::PAYMENT_METHOD_WALLET, $order->payment_method);
+        $this->assertSame('410.00', (string) CustomerWallet::query()->where('user_id', $customer->id)->value('balance'));
+        $this->assertSame('1469.00', (string) $providerWallet->refresh()->balance);
+        $this->assertDatabaseHas('customer_wallet_transactions', [
+            'order_id' => $order->id,
+            'type' => CustomerWalletTransaction::TYPE_BOOKING,
+            'amount' => '590.00',
+        ]);
+    }
+
+    public function test_sync_flight_with_wallet_rejects_insufficient_customer_balance(): void
+    {
+        $customer = $this->makeCustomer();
+        CustomerWallet::query()->create([
+            'user_id' => $customer->id,
+            'wallet_number' => 'WLT-000012-TEST12',
+            'currency' => 'LYD',
+            'balance' => 10,
+            'status' => CustomerWallet::STATUS_ACTIVE,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $payload = [
+            'source' => 'mobile_app',
+            'product_type' => 'flight',
+            'status' => 'confirmed',
+            'currency' => 'LYD',
+            'grand_total' => 590.00,
+            'provider_booking' => [
+                'booking_id' => 'wallet-sync-fail-001',
+                'order_number' => 'WFQFAIL1',
+                'pnr' => 'FAIL01',
+                'provider_id' => 12,
+                'provider_name' => 'Buraq Air',
+            ],
+            'contact' => [
+                'first_name' => 'Test',
+                'last_name' => 'User',
+                'email' => $customer->email,
+                'phone' => '+218911111111',
+            ],
+            'passengers' => [
+                [
+                    'type' => 'adult',
+                    'title' => 'Mr',
+                    'first_name' => 'Test',
+                    'last_name' => 'User',
+                    'dob' => '1990-01-01',
+                    'gender' => 'M',
+                    'nationality' => 'LY',
+                    'passport_number' => 'P1234567',
+                    'passport_expiry' => '2030-01-01',
+                    'passport_issue_country' => 'LY',
+                ],
+            ],
+            'items' => [
+                [
+                    'type' => 'flight',
+                    'product_type' => 'ticket',
+                    'product_subtype' => 'oneway',
+                    'provider_reference' => 'FAIL01',
+                    'total' => 590.00,
+                    'currency' => 'LYD',
+                    'item_details' => [
+                        'pnr' => 'FAIL01',
+                        'segments' => [],
+                        'passengers' => [],
+                    ],
+                ],
+            ],
+            'payment' => [
+                'status' => 'paid',
+                'method' => 'wallet',
+                'amount' => 590.00,
+                'currency' => 'LYD',
+            ],
+        ];
+
+        $this->postJson('/api/v1/orders/sync-flight', $payload)
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'insufficient_wallet_balance');
+
+        $this->assertDatabaseMissing('orders', [
+            'external_booking_id' => 'wallet-sync-fail-001',
+        ]);
+        $this->assertSame('10.00', (string) CustomerWallet::query()->where('user_id', $customer->id)->value('balance'));
     }
 
     private function makeAdmin(string $role): User

@@ -8,6 +8,7 @@ use App\Models\Provider;
 use App\Models\User;
 use App\Modules\Admin\ProviderWallets\Services\ProviderWalletService;
 use App\Modules\Api\DTO\SyncBooknowOrderDTO;
+use App\Modules\CustomerWallets\Services\CustomerWalletService;
 use App\Modules\Orders\Events\FlightStatusUpdated as FlightStatusUpdatedEvent;
 use App\Modules\Orders\Events\HotelStatusUpdated as HotelStatusUpdatedEvent;
 use App\Modules\Orders\Events\OrderCancelled as OrderCancelledEvent;
@@ -30,6 +31,7 @@ class BooknowOrderSyncService
     public function __construct(
         private readonly OrderService $orderService,
         private readonly ProviderWalletService $providerWalletService,
+        private readonly CustomerWalletService $customerWalletService,
         private readonly WalletService $walletService,
         private readonly OrderCostService $orderCostService,
         private readonly ProviderApiEventRecorder $apiEventRecorder,
@@ -139,6 +141,12 @@ class BooknowOrderSyncService
             }
 
             $mapped = $this->mapOrderAttributes($data);
+            $wantsCustomerWalletPayment = $this->wantsCustomerWalletPayment($data);
+
+            // Do not trust client "paid" for wallet until customer balance is collected.
+            if ($wantsCustomerWalletPayment && ($data->payment['status'] ?? null) === 'paid') {
+                $mapped['payment_status'] = Order::PAYMENT_STATUS_UNPAID;
+            }
 
             if ($order->exists) {
                 unset($mapped['booking_reference']);
@@ -164,8 +172,16 @@ class BooknowOrderSyncService
                 'base_amount' => $data->baseAmount,
             ]);
 
+            if ($wantsCustomerWalletPayment && ($data->payment['status'] ?? null) === 'paid') {
+                $this->customerWalletService->payForOrder($order->fresh(), $customer);
+                $order = $order->fresh();
+            }
+
             if ($created) {
-                if ($order->payment_status === Order::PAYMENT_STATUS_PAID) {
+                if (
+                    $order->payment_status === Order::PAYMENT_STATUS_PAID
+                    && $order->payment_method !== Order::PAYMENT_METHOD_WALLET
+                ) {
                     $this->orderService->recordFinancialTransactionOnce(
                         $order,
                         FinancialTransaction::TYPE_PAYMENT,
@@ -255,6 +271,13 @@ class BooknowOrderSyncService
         }
 
         return $authenticatedUser;
+    }
+
+    private function wantsCustomerWalletPayment(SyncBooknowOrderDTO $data): bool
+    {
+        $method = strtolower(trim((string) ($data->payment['method'] ?? '')));
+
+        return in_array($method, ['wallet', 'customer_wallet'], true);
     }
 
     private function assertSameCustomer(Order $existing, User $customer): void

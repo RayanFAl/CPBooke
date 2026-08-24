@@ -8,8 +8,10 @@ use App\Models\CustomerWallet;
 use App\Models\CustomerWalletTransaction;
 use App\Models\FinancialTransaction;
 use App\Models\Order;
+use App\Models\Provider;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Modules\Admin\ProviderWallets\Services\ProviderWalletService;
 use App\Modules\Api\Orders\Services\OrderService;
 use App\Modules\Audit\Services\AuditRecorder;
 use App\Modules\Notifications\Events\PassengerActionDue;
@@ -23,6 +25,7 @@ class CustomerWalletService
     public function __construct(
         private readonly AuditRecorder $auditRecorder,
         private readonly OrderService $orderService,
+        private readonly ProviderWalletService $providerWalletService,
     ) {}
 
     public function resolveWallet(
@@ -196,16 +199,22 @@ class CustomerWalletService
             ]);
         }
 
-        if ($order->payment_status === Order::PAYMENT_STATUS_PAID) {
-            $existing = CustomerWalletTransaction::query()
-                ->where('order_id', $order->id)
-                ->where('type', CustomerWalletTransaction::TYPE_BOOKING)
-                ->first();
+        $existing = CustomerWalletTransaction::query()
+            ->where('order_id', $order->id)
+            ->where('type', CustomerWalletTransaction::TYPE_BOOKING)
+            ->first();
 
-            if ($existing) {
-                return $existing;
-            }
+        if ($existing) {
+            $this->debitProviderForPaidOrder($order->fresh());
 
+            return $existing;
+        }
+
+        if (
+            $order->payment_status === Order::PAYMENT_STATUS_PAID
+            && $order->payment_method !== null
+            && $order->payment_method !== Order::PAYMENT_METHOD_WALLET
+        ) {
             throw ValidationException::withMessages([
                 'order' => 'This order has already been paid.',
             ]);
@@ -227,7 +236,15 @@ class CustomerWalletService
             ]);
         }
 
-        return DB::transaction(function () use ($wallet, $order, $user, $amount): CustomerWalletTransaction {
+        $transaction = DB::transaction(function () use ($wallet, $order, $user, $amount): CustomerWalletTransaction {
+            // Sync may have marked the order paid before collecting the customer wallet.
+            // Charge the wallet first, then normalize payment fields to wallet/paid.
+            if ($order->payment_status === Order::PAYMENT_STATUS_PAID) {
+                $order->forceFill([
+                    'payment_status' => Order::PAYMENT_STATUS_UNPAID,
+                ])->save();
+            }
+
             $transaction = $this->debit(
                 $wallet,
                 $amount,
@@ -282,6 +299,29 @@ class CustomerWalletService
 
             return $transaction;
         });
+
+        $this->debitProviderForPaidOrder($order->fresh());
+
+        return $transaction;
+    }
+
+    /**
+     * Debit the provider wallet after a customer wallet payment when a provider is known.
+     * Idempotent via provider wallet reference keys.
+     */
+    public function debitProviderForPaidOrder(Order $order): void
+    {
+        if (! $order->provider_id) {
+            return;
+        }
+
+        $provider = Provider::query()->find($order->provider_id);
+
+        if (! $provider) {
+            return;
+        }
+
+        $this->providerWalletService->debitPaidOrder($order->fresh(), $provider);
     }
 
     /**

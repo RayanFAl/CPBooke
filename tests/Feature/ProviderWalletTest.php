@@ -574,7 +574,7 @@ class ProviderWalletTest extends TestCase
             ],
             'payment' => [
                 'status' => 'paid',
-                'method' => 'wallet',
+                'method' => 'card',
                 'method_code' => 1,
                 'amount' => $grandTotal,
                 'currency' => 'LYD',

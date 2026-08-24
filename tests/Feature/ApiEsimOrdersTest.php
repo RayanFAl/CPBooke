@@ -168,7 +168,7 @@ class ApiEsimOrdersTest extends TestCase
                 ],
             ],
             'payment' => [
-                'method' => 'wallet',
+                'method' => 'card',
                 'status' => 'paid',
                 'amount' => 12.5,
                 'currency' => 'USD',

@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\FinancialTransaction;
 use App\Models\Order;
+use App\Models\Provider;
+use App\Models\ProviderWallet;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -12,6 +14,30 @@ use Tests\TestCase;
 class ApiOrdersTest extends TestCase
 {
     use RefreshDatabase;
+
+    private function seedBooknowProviderWallet(float $balance = 10000): void
+    {
+        $provider = Provider::query()->firstOrCreate(
+            ['key' => Provider::KEY_BOOKNOW],
+            [
+                'name' => 'BookNow',
+                'status' => Provider::STATUS_ACTIVE,
+            ],
+        );
+
+        ProviderWallet::query()->firstOrCreate(
+            [
+                'provider_id' => $provider->id,
+                'currency' => 'LYD',
+                'environment' => ProviderWallet::ENVIRONMENT_PRODUCTION,
+            ],
+            [
+                'balance' => number_format($balance, 2, '.', ''),
+                'allow_negative' => true,
+                'is_active' => true,
+            ],
+        );
+    }
 
     public function test_customer_can_create_a_flight_order(): void
     {
@@ -235,6 +261,7 @@ class ApiOrdersTest extends TestCase
             'phone' => '+218943215277',
         ]);
 
+        $this->seedBooknowProviderWallet();
         Sanctum::actingAs($customer);
 
         $payload = $this->booknowOrderPayload();
@@ -271,6 +298,7 @@ class ApiOrdersTest extends TestCase
             'is_admin' => false,
         ]);
 
+        $this->seedBooknowProviderWallet();
         Sanctum::actingAs($customer);
 
         $payload = $this->booknowOrderPayload();
@@ -308,6 +336,7 @@ class ApiOrdersTest extends TestCase
             'is_admin' => false,
         ]);
 
+        $this->seedBooknowProviderWallet();
         Sanctum::actingAs($customer);
 
         $payload = $this->booknowOrderPayload();
@@ -331,6 +360,7 @@ class ApiOrdersTest extends TestCase
             'is_admin' => false,
         ]);
 
+        $this->seedBooknowProviderWallet();
         Sanctum::actingAs($customer);
 
         $response = $this->postJson('/api/v1/orders/sync-flight', $this->booknowOrderPayload())->assertCreated();
@@ -356,6 +386,7 @@ class ApiOrdersTest extends TestCase
             'is_admin' => false,
         ]);
 
+        $this->seedBooknowProviderWallet();
         Sanctum::actingAs($customer);
 
         $payload = $this->booknowOrderPayload();
@@ -398,6 +429,7 @@ class ApiOrdersTest extends TestCase
             'is_admin' => false,
         ]);
 
+        $this->seedBooknowProviderWallet();
         Sanctum::actingAs($customer);
 
         $payload = $this->booknowOrderPayload();
@@ -415,6 +447,7 @@ class ApiOrdersTest extends TestCase
             'is_admin' => false,
         ]);
 
+        $this->seedBooknowProviderWallet();
         Sanctum::actingAs($customer);
 
         $payload = $this->booknowOrderPayload();
@@ -438,6 +471,7 @@ class ApiOrdersTest extends TestCase
             'is_admin' => false,
         ]);
 
+        $this->seedBooknowProviderWallet();
         Sanctum::actingAs($customer);
 
         $payload = $this->booknowOrderPayload();
@@ -523,7 +557,7 @@ class ApiOrdersTest extends TestCase
             ],
             'payment' => [
                 'status' => 'paid',
-                'method' => 'wallet',
+                'method' => 'card',
                 'method_code' => 1,
                 'amount' => 590.00,
                 'currency' => 'LYD',

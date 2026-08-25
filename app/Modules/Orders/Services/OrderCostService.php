@@ -4,20 +4,25 @@ namespace App\Modules\Orders\Services;
 
 use App\Models\Order;
 use App\Models\Provider;
-use App\Models\SystemSetting;
+use App\Modules\Settings\Services\SystemSettingsService;
 
+/**
+ * Commercial margin resolution order (V1):
+ * 1) Payload hints (commission_amount / base_amount)
+ * 2) Provider.commission_rate
+ * 3) SystemSetting.default_commission_percent (platform default)
+ * 4) Zero margin (supplier_cost = selling)
+ *
+ * Historical order financial rows are never rewritten by settings changes.
+ */
 class OrderCostService
 {
+    public function __construct(
+        private readonly SystemSettingsService $systemSettingsService,
+    ) {
+    }
+
     /**
-     * Apply selling/cost/profit fields on an order using payload hints and supplier defaults.
-     *
-     * Precedence:
-     * 1. Incoming commission hint
-     * 2. Incoming base-cost hint
-     * 3. Provider commission rate
-     * 4. Platform default margin percent (SystemSetting)
-     * 5. Zero visible margin (treat selling as cost)
-     *
      * @param  array{commission_amount?: string|float|null, base_amount?: string|float|null}  $hints
      * @return array{
      *     selling_price: string,
@@ -49,11 +54,10 @@ class OrderCostService
             $rate = (float) $provider->commission_rate;
             $commission = round($selling * ($rate / 100), 2);
             $supplierCost = max(0, round($selling - $commission, 2));
-        } elseif (($platformMargin = $this->platformMarginPercent()) !== null) {
-            $commission = round($selling * ($platformMargin / 100), 2);
+        } elseif (($defaultRate = $this->systemSettingsService->defaultCommissionPercent()) !== null) {
+            $commission = round($selling * ($defaultRate / 100), 2);
             $supplierCost = max(0, round($selling - $commission, 2));
         } else {
-            // Unknown supplier cost: treat full selling price as cost (zero visible margin).
             $supplierCost = $selling;
             $commission = 0.0;
         }
@@ -96,23 +100,6 @@ class OrderCostService
         }
 
         return $this->money($order->total_amount) ?? 0.0;
-    }
-
-    private function platformMarginPercent(): ?float
-    {
-        try {
-            $value = SystemSetting::current()->default_margin_percent;
-        } catch (\Throwable) {
-            return null;
-        }
-
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        $rate = (float) $value;
-
-        return $rate > 0 ? $rate : null;
     }
 
     private function money(mixed $value): ?float

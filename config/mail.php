@@ -111,8 +111,25 @@ return [
     */
 
     'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
-        'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
+        'address' => env('MAIL_FROM_ADDRESS', 'no-reply@booke.ly'),
+        'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Booke')),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Booke mailbox roles
+    |--------------------------------------------------------------------------
+    |
+    | Sending uses MAIL_FROM_ADDRESS (no-reply). Support is Reply-To / contact.
+    | Info and feedback are inbound mailboxes — the app does not send from them.
+    |
+    */
+
+    'addresses' => [
+        'noreply' => env('MAIL_FROM_ADDRESS', 'no-reply@booke.ly'),
+        'support' => env('MAIL_SUPPORT_ADDRESS', 'support@booke.ly'),
+        'info' => env('MAIL_INFO_ADDRESS', 'info@booke.ly'),
+        'feedback' => env('MAIL_FEEDBACK_ADDRESS', 'feedback@booke.ly'),
     ],
 
 ];

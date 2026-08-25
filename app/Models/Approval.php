@@ -33,6 +33,8 @@ class Approval extends Model
 
     public const TYPE_WALLET_ADJUSTMENT = 'wallet_adjustment';
 
+    public const TYPE_SETTLEMENT_ADJUSTMENT = 'settlement_adjustment';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_APPROVED = 'approved';
@@ -46,6 +48,8 @@ class Approval extends Model
     public const ENTITY_ORDER = 'order';
 
     public const ENTITY_WALLET = 'wallet';
+
+    public const ENTITY_SETTLEMENT = 'settlement';
 
     public const ENTITY_SUPPORT_TICKET = 'support_ticket';
 

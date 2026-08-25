@@ -2,13 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Models\Approval;
+use App\Models\FinancialTransaction;
 use App\Models\Order;
 use App\Models\Provider;
 use App\Models\ProviderWallet;
 use App\Models\ProviderWalletTransaction;
 use App\Models\Settlement;
+use App\Models\SettlementAttachment;
 use App\Models\SettlementItem;
 use App\Models\User;
+use App\Modules\Finance\Support\FinancialContract;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -20,7 +24,7 @@ class SettlementTest extends TestCase
 
     public function test_finance_manager_can_create_period_import_invoice_resolve_and_close(): void
     {
-        $finance = $this->makeAdmin('finance_manager');
+        $finance = $this->makeAdmin('super_admin');
         $customer = User::factory()->create([
             'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
             'is_admin' => false,
@@ -78,6 +82,7 @@ class SettlementTest extends TestCase
         $this->assertSame(3, $settlement->orders_count);
         $this->assertSame('1181.00', (string) $settlement->expected_cost);
         $this->assertSame('1181.00', (string) $settlement->wallet_debit_total);
+        $this->assertSame(SettlementItem::COST_SOURCE_ORDER, $settlement->items()->first()->expected_cost_source);
 
         $this->actingAs($finance)
             ->post(route('admin.settlements.import-invoice', $settlement, absolute: false), [
@@ -87,30 +92,73 @@ class SettlementTest extends TestCase
 
         $settlement->refresh();
 
-        $this->assertSame(Settlement::STATUS_OPEN, $settlement->status);
+        $this->assertSame(Settlement::STATUS_PENDING_REVIEW, $settlement->status);
         $this->assertSame('961.00', (string) $settlement->supplier_invoice_total);
         $this->assertSame(1, SettlementItem::query()->where('status', SettlementItem::STATUS_MATCHED)->count());
         $this->assertSame(1, SettlementItem::query()->where('status', SettlementItem::STATUS_DIFFERENT_COST)->count());
         $this->assertSame(1, SettlementItem::query()->where('status', SettlementItem::STATUS_MISSING)->count());
         $this->assertSame(1, SettlementItem::query()->where('status', SettlementItem::STATUS_EXTRA)->count());
         $this->assertSame(3, $settlement->review_count);
+        $this->assertSame(1, SettlementAttachment::query()->where('settlement_id', $settlement->id)->count());
 
-        $reviewItems = SettlementItem::query()
+        $differentItem = SettlementItem::query()
             ->where('settlement_id', $settlement->id)
-            ->whereIn('status', [
-                SettlementItem::STATUS_DIFFERENT_COST,
-                SettlementItem::STATUS_MISSING,
-                SettlementItem::STATUS_EXTRA,
-            ])
-            ->get();
+            ->where('status', SettlementItem::STATUS_DIFFERENT_COST)
+            ->firstOrFail();
 
-        foreach ($reviewItems as $item) {
-            $this->actingAs($finance)
-                ->post(route('admin.settlements.items.resolve', [$settlement, $item], absolute: false), [
-                    'resolution_note' => 'Reviewed and accepted variance for '.$item->booking_reference,
-                ])
-                ->assertRedirect(route('admin.settlements.show', $settlement, absolute: false));
-        }
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.items.resolve', [$settlement, $differentItem], absolute: false), [
+                'resolution' => FinancialContract::RESOLUTION_ACCEPT_VARIANCE,
+                'reason' => FinancialContract::REASON_EXTRA_SUPPLIER_FEE,
+                'amount' => 10,
+                'resolution_note' => 'Supplier charged baggage on BK-SET-2',
+            ])
+            ->assertRedirect(route('admin.settlements.show', $settlement, absolute: false));
+
+        $differentItem->refresh();
+        $this->assertSame(SettlementItem::STATUS_RESOLVED, $differentItem->status);
+        $this->assertNotNull($differentItem->financial_transaction_id);
+        $this->assertSame(
+            FinancialTransaction::SOURCE_SETTLEMENT_ADJUSTMENT,
+            $differentItem->financialTransaction->source,
+        );
+
+        $extra = SettlementItem::query()
+            ->where('settlement_id', $settlement->id)
+            ->where('status', SettlementItem::STATUS_EXTRA)
+            ->firstOrFail();
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.items.resolve', [$settlement, $extra], absolute: false), [
+                'resolution' => FinancialContract::RESOLUTION_CORRECT_DATA,
+                'reason' => FinancialContract::REASON_DUPLICATE_INVOICE,
+                'drop_invoice_line' => true,
+                'resolution_note' => 'Duplicate invoice line BK-EXTRA',
+            ])
+            ->assertRedirect(route('admin.settlements.show', $settlement, absolute: false));
+
+        $this->assertSame(0, FinancialTransaction::query()->where('source_id', $extra->id)->count());
+
+        $missingItem = SettlementItem::query()
+            ->where('settlement_id', $settlement->id)
+            ->where('booking_reference', 'BK-SET-3')
+            ->firstOrFail();
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.items.resolve', [$settlement, $missingItem], absolute: false), [
+                'resolution' => FinancialContract::RESOLUTION_CORRECT_DATA,
+                'reason' => FinancialContract::REASON_MISSING_ORDER,
+                'supplier_invoice_cost' => 250,
+                'resolution_note' => 'Invoice line was missing from the first import',
+            ])
+            ->assertRedirect(route('admin.settlements.show', $settlement, absolute: false));
+
+        $missingItem->refresh();
+        $this->assertSame(SettlementItem::STATUS_MATCHED, $missingItem->status);
+        $this->assertNull($missingItem->financial_transaction_id);
+
+        $settlement->refresh();
+        $this->assertSame(Settlement::STATUS_OPEN, $settlement->status);
 
         $this->actingAs($finance)
             ->post(route('admin.settlements.close', $settlement, absolute: false))
@@ -121,6 +169,291 @@ class SettlementTest extends TestCase
         $this->assertSame(Settlement::STATUS_CLOSED, $settlement->status);
         $this->assertSame(0, $settlement->review_count);
         $this->assertNotNull($settlement->closed_at);
+        $this->assertNotEmpty($settlement->close_history);
+        $this->assertNotNull($settlement->close_snapshot);
+        $this->assertSame('1181.00', $settlement->close_snapshot['expected_total']);
+        $this->assertSame('1181.00', $settlement->close_snapshot['wallet_total']);
+        $this->assertSame('1191.00', $settlement->close_snapshot['invoice_total']);
+        $this->assertSame('10.00', $settlement->close_snapshot['variance_total']);
+        $this->assertSame(2, $settlement->close_snapshot['matched_count']);
+        $this->assertSame(1, $settlement->close_snapshot['resolved_count']);
+        $this->assertSame('10.00', $settlement->close_snapshot['adjustment_total']);
+
+        $this->actingAs($finance)
+            ->from(route('admin.settlements.show', $settlement, absolute: false))
+            ->post(route('admin.settlements.import-invoice', $settlement, absolute: false), [
+                'csv_text' => "booking_reference,amount\nBK-SET-1,531.00\n",
+            ])
+            ->assertRedirect(route('admin.settlements.show', $settlement, absolute: false))
+            ->assertSessionHasErrors('settlement');
+    }
+
+    public function test_note_only_resolve_is_rejected_and_accept_variance_requires_approval(): void
+    {
+        $finance = $this->makeAdmin('finance_manager');
+        $approver = $this->makeAdmin('admin');
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+        $provider = Provider::query()->create([
+            'name' => 'BookNow',
+            'key' => 'booknow-approval',
+            'status' => Provider::STATUS_ACTIVE,
+            'default_currency' => 'LYD',
+        ]);
+        $this->createCostedOrder($customer, $provider, 'BK-APR-1', '100.00', '2026-07-05');
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.store', absolute: false), [
+                'provider_id' => $provider->id,
+                'period_start' => '2026-07-01',
+                'period_end' => '2026-07-31',
+                'currency' => 'LYD',
+            ]);
+
+        $settlement = Settlement::query()->latest('id')->firstOrFail();
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.import-invoice', $settlement, absolute: false), [
+                'csv_text' => "booking_reference,amount\nBK-APR-1,120.00\n",
+            ]);
+
+        $item = SettlementItem::query()
+            ->where('settlement_id', $settlement->id)
+            ->where('status', SettlementItem::STATUS_DIFFERENT_COST)
+            ->firstOrFail();
+
+        $this->actingAs($finance)
+            ->from(route('admin.settlements.show', $settlement, absolute: false))
+            ->post(route('admin.settlements.items.resolve', [$settlement, $item], absolute: false), [
+                'resolution_note' => 'Looks fine',
+            ])
+            ->assertRedirect(route('admin.settlements.show', $settlement, absolute: false))
+            ->assertSessionHasErrors('resolution');
+
+        $this->actingAs($finance)
+            ->from(route('admin.settlements.show', $settlement, absolute: false))
+            ->post(route('admin.settlements.items.resolve', [$settlement, $item], absolute: false), [
+                'resolution' => FinancialContract::RESOLUTION_ACCEPT_VARIANCE,
+                'reason' => FinancialContract::REASON_DUPLICATE_INVOICE,
+                'amount' => 20,
+                'resolution_note' => 'Wrong path for this reason',
+            ])
+            ->assertSessionHasErrors('resolution');
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.items.resolve', [$settlement, $item], absolute: false), [
+                'resolution' => FinancialContract::RESOLUTION_ACCEPT_VARIANCE,
+                'reason' => FinancialContract::REASON_EXTRA_SUPPLIER_FEE,
+                'amount' => 20,
+                'resolution_note' => 'Accepted extra supplier fee',
+            ])
+            ->assertRedirect();
+
+        $item->refresh();
+        $this->assertNotNull($item->pending_approval_id);
+        $this->assertSame(SettlementItem::STATUS_DIFFERENT_COST, $item->status);
+        $this->assertSame(0, FinancialTransaction::query()->where('source', FinancialTransaction::SOURCE_SETTLEMENT_ADJUSTMENT)->count());
+
+        $this->actingAs($finance)
+            ->from(route('admin.settlements.show', $settlement, absolute: false))
+            ->post(route('admin.settlements.close', $settlement, absolute: false))
+            ->assertSessionHasErrors('settlement');
+
+        $approval = Approval::query()->findOrFail($item->pending_approval_id);
+
+        $this->actingAs($approver)
+            ->post(route('admin.approvals.approve', $approval, absolute: false))
+            ->assertRedirect();
+
+        $item->refresh();
+        $this->assertSame(SettlementItem::STATUS_RESOLVED, $item->status);
+        $this->assertNotNull($item->financial_transaction_id);
+        $this->assertNull($item->pending_approval_id);
+    }
+
+    public function test_reopen_keeps_close_history_and_requires_reason(): void
+    {
+        $admin = $this->makeAdmin('super_admin');
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+        $provider = Provider::query()->create([
+            'name' => 'BookNow',
+            'key' => 'booknow-reopen',
+            'status' => Provider::STATUS_ACTIVE,
+            'default_currency' => 'LYD',
+        ]);
+        $this->createCostedOrder($customer, $provider, 'BK-RE-1', '80.00', '2026-07-05');
+
+        $this->actingAs($admin)->post(route('admin.settlements.store', absolute: false), [
+            'provider_id' => $provider->id,
+            'period_start' => '2026-07-01',
+            'period_end' => '2026-07-31',
+            'currency' => 'LYD',
+        ]);
+
+        $settlement = Settlement::query()->latest('id')->firstOrFail();
+
+        $this->actingAs($admin)->post(route('admin.settlements.import-invoice', $settlement, absolute: false), [
+            'csv_text' => "booking_reference,amount\nBK-RE-1,80.00\n",
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.settlements.close', $settlement, absolute: false))
+            ->assertRedirect();
+
+        $closedAt = $settlement->refresh()->closed_at?->toIso8601String();
+
+        $this->actingAs($admin)
+            ->from(route('admin.settlements.show', $settlement, absolute: false))
+            ->post(route('admin.settlements.reopen', $settlement, absolute: false), [])
+            ->assertSessionHasErrors('reason');
+
+        $this->actingAs($admin)
+            ->post(route('admin.settlements.reopen', $settlement, absolute: false), [
+                'reason' => 'Provider sent a revised August invoice',
+            ])
+            ->assertRedirect();
+
+        $settlement->refresh();
+        $this->assertSame(Settlement::STATUS_REOPENED, $settlement->status);
+        $this->assertSame($closedAt, $settlement->closed_at?->toIso8601String());
+        $this->assertNotNull($settlement->reopened_at);
+        $this->assertNotEmpty($settlement->close_history);
+    }
+
+    public function test_negative_adjustment_is_rejected_and_reimport_keeps_single_item_record(): void
+    {
+        $finance = $this->makeAdmin('finance_manager');
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+        $provider = Provider::query()->create([
+            'name' => 'BookNow',
+            'key' => 'booknow-negative-adjustment',
+            'status' => Provider::STATUS_ACTIVE,
+            'default_currency' => 'LYD',
+        ]);
+
+        $this->createCostedOrder($customer, $provider, 'BK-NEG-1', '100.00', '2026-07-05');
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.store', absolute: false), [
+                'provider_id' => $provider->id,
+                'period_start' => '2026-07-01',
+                'period_end' => '2026-07-31',
+                'currency' => 'LYD',
+            ]);
+
+        $settlement = Settlement::query()->latest('id')->firstOrFail();
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.import-invoice', $settlement, absolute: false), [
+                'csv_text' => "booking_reference,amount\nBK-NEG-1,120.00\n",
+            ]);
+
+        $item = SettlementItem::query()
+            ->where('settlement_id', $settlement->id)
+            ->where('status', SettlementItem::STATUS_DIFFERENT_COST)
+            ->firstOrFail();
+
+        $this->actingAs($finance)
+            ->from(route('admin.settlements.show', $settlement, absolute: false))
+            ->post(route('admin.settlements.items.resolve', [$settlement, $item], absolute: false), [
+                'resolution' => FinancialContract::RESOLUTION_ACCEPT_VARIANCE,
+                'reason' => FinancialContract::REASON_EXTRA_SUPPLIER_FEE,
+                'amount' => -20,
+                'resolution_note' => 'Negative adjustment should be rejected',
+            ])
+            ->assertRedirect(route('admin.settlements.show', $settlement, absolute: false))
+            ->assertSessionHasErrors('amount');
+
+        $this->assertNull($item->fresh()->pending_approval_id);
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.import-invoice', $settlement, absolute: false), [
+                'csv_text' => "booking_reference,amount\nBK-NEG-1,120.00\n",
+            ])
+            ->assertRedirect(route('admin.settlements.show', $settlement, absolute: false));
+
+        $this->assertSame(1, $settlement->fresh()->items()->count());
+        $this->assertSame(2, $settlement->fresh()->invoiceImports()->count());
+    }
+
+    public function test_reimport_of_same_invoice_does_not_duplicate_items_and_keeps_resolved_amount_frozen(): void
+    {
+        $finance = $this->makeAdmin('super_admin');
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+        $provider = Provider::query()->create([
+            'name' => 'BookNow',
+            'key' => 'booknow-reimport',
+            'status' => Provider::STATUS_ACTIVE,
+            'default_currency' => 'LYD',
+        ]);
+
+        $this->createCostedOrder($customer, $provider, 'BK-REIM-1', '100.00', '2026-07-05');
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.store', absolute: false), [
+                'provider_id' => $provider->id,
+                'period_start' => '2026-07-01',
+                'period_end' => '2026-07-31',
+                'currency' => 'LYD',
+            ]);
+
+        $settlement = Settlement::query()->latest('id')->firstOrFail();
+        $csv = "booking_reference,amount\nBK-REIM-1,120.00\n";
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.import-invoice', $settlement, absolute: false), [
+                'csv_text' => $csv,
+            ])
+            ->assertRedirect(route('admin.settlements.show', $settlement, absolute: false));
+
+        $item = SettlementItem::query()
+            ->where('settlement_id', $settlement->id)
+            ->where('status', SettlementItem::STATUS_DIFFERENT_COST)
+            ->firstOrFail();
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.items.resolve', [$settlement, $item], absolute: false), [
+                'resolution' => FinancialContract::RESOLUTION_ACCEPT_VARIANCE,
+                'reason' => FinancialContract::REASON_EXTRA_SUPPLIER_FEE,
+                'amount' => 20,
+                'resolution_note' => 'Accepted 20 variance',
+            ])
+            ->assertRedirect(route('admin.settlements.show', $settlement, absolute: false));
+
+        $this->assertSame(SettlementItem::STATUS_RESOLVED, $item->fresh()->status);
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.import-invoice', $settlement, absolute: false), [
+                'csv_text' => $csv,
+            ])
+            ->assertRedirect(route('admin.settlements.show', $settlement, absolute: false));
+
+        $this->assertSame(1, $settlement->fresh()->items()->count());
+        $this->assertSame(2, $settlement->fresh()->invoiceImports()->count());
+        $this->assertSame(SettlementItem::STATUS_RESOLVED, $settlement->fresh()->items()->first()->status);
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.import-invoice', $settlement, absolute: false), [
+                'csv_text' => "booking_reference,amount\nBK-REIM-1,100.00\n",
+            ])
+            ->assertRedirect(route('admin.settlements.show', $settlement, absolute: false));
+
+        $updated = $settlement->fresh()->items()->firstOrFail();
+        $this->assertSame(SettlementItem::STATUS_RESOLVED, $updated->status);
+        $this->assertSame('120.00', (string) $updated->supplier_invoice_cost);
+        $this->assertSame(3, $settlement->fresh()->invoiceImports()->count());
+        $this->assertGreaterThan(0, (int) $settlement->fresh()->invoiceImports()->latest('id')->value('error_count'));
     }
 
     public function test_cannot_close_settlement_with_open_review_items(): void
@@ -172,6 +505,158 @@ class SettlementTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('admin/settlements/pages/Index', false)
                 ->where('can_manage', true));
+    }
+
+    public function test_empty_settlement_duplicate_zero_and_oversize_adjustment_are_rejected(): void
+    {
+        $finance = $this->makeAdmin('super_admin');
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+        $provider = Provider::query()->create([
+            'name' => 'BookNow',
+            'key' => 'booknow-edges',
+            'status' => Provider::STATUS_ACTIVE,
+            'default_currency' => 'LYD',
+        ]);
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.store', absolute: false), [
+                'provider_id' => $provider->id,
+                'period_start' => '2026-07-01',
+                'period_end' => '2026-07-31',
+                'currency' => 'LYD',
+            ]);
+
+        $empty = Settlement::query()->latest('id')->firstOrFail();
+        $this->assertSame(0, $empty->orders_count);
+
+        $this->actingAs($finance)
+            ->from(route('admin.settlements.show', $empty, absolute: false))
+            ->post(route('admin.settlements.import-invoice', $empty, absolute: false), [
+                'csv_text' => "booking_reference,amount\nBK-ZERO,0\n",
+            ])
+            ->assertRedirect(route('admin.settlements.show', $empty, absolute: false))
+            ->assertSessionHasErrors('lines');
+
+        $this->actingAs($finance)
+            ->from(route('admin.settlements.show', $empty, absolute: false))
+            ->post(route('admin.settlements.import-invoice', $empty, absolute: false), [
+                'csv_text' => "booking_reference,amount\nBK-DUP,10.00\nBK-DUP,12.00\n",
+            ])
+            ->assertRedirect(route('admin.settlements.show', $empty, absolute: false))
+            ->assertSessionHasErrors('lines');
+
+        $this->createCostedOrder($customer, $provider, 'BK-EDGE-1', '100.00', '2026-08-05');
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.store', absolute: false), [
+                'provider_id' => $provider->id,
+                'period_start' => '2026-08-01',
+                'period_end' => '2026-08-31',
+                'currency' => 'LYD',
+            ]);
+
+        $settlement = Settlement::query()->latest('id')->firstOrFail();
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.import-invoice', $settlement, absolute: false), [
+                'csv_text' => "booking_reference,amount\nBK-EDGE-1,120.00\nBK-EXTRA,15.00\n",
+            ])
+            ->assertRedirect();
+
+        $item = SettlementItem::query()
+            ->where('settlement_id', $settlement->id)
+            ->where('status', SettlementItem::STATUS_DIFFERENT_COST)
+            ->firstOrFail();
+
+        $this->actingAs($finance)
+            ->from(route('admin.settlements.show', $settlement, absolute: false))
+            ->post(route('admin.settlements.items.resolve', [$settlement, $item], absolute: false), [
+                'resolution' => FinancialContract::RESOLUTION_ACCEPT_VARIANCE,
+                'reason' => FinancialContract::REASON_EXTRA_SUPPLIER_FEE,
+                'amount' => 50,
+                'resolution_note' => 'Adjustment larger than the variance',
+            ])
+            ->assertSessionHasErrors('amount');
+
+        $extra = SettlementItem::query()
+            ->where('settlement_id', $settlement->id)
+            ->where('status', SettlementItem::STATUS_EXTRA)
+            ->firstOrFail();
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.items.resolve', [$settlement, $extra], absolute: false), [
+                'resolution' => FinancialContract::RESOLUTION_CORRECT_DATA,
+                'reason' => FinancialContract::REASON_DUPLICATE_INVOICE,
+                'drop_invoice_line' => true,
+                'resolution_note' => 'Drop unmatched extra then re-compare',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(0, $settlement->fresh()->items()->where('status', SettlementItem::STATUS_EXTRA)->count());
+
+        $this->actingAs($finance)
+            ->post(route('admin.settlements.compare', $settlement, absolute: false))
+            ->assertRedirect();
+
+        $this->assertSame(0, $settlement->fresh()->items()->where('status', SettlementItem::STATUS_EXTRA)->count());
+    }
+
+    public function test_reopen_allows_correction_then_close_again_and_timeline_tells_the_story(): void
+    {
+        $admin = $this->makeAdmin('super_admin');
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+        $provider = Provider::query()->create([
+            'name' => 'BookNow',
+            'key' => 'booknow-story',
+            'status' => Provider::STATUS_ACTIVE,
+            'default_currency' => 'LYD',
+        ]);
+        $this->createCostedOrder($customer, $provider, 'BK-STORY-1', '80.00', '2026-07-05');
+
+        $this->actingAs($admin)->post(route('admin.settlements.store', absolute: false), [
+            'provider_id' => $provider->id,
+            'period_start' => '2026-07-01',
+            'period_end' => '2026-07-31',
+            'currency' => 'LYD',
+        ]);
+
+        $settlement = Settlement::query()->latest('id')->firstOrFail();
+
+        $this->actingAs($admin)->post(route('admin.settlements.import-invoice', $settlement, absolute: false), [
+            'csv_text' => "booking_reference,amount\nBK-STORY-1,80.00\n",
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.settlements.close', $settlement, absolute: false));
+        $this->actingAs($admin)->post(route('admin.settlements.reopen', $settlement, absolute: false), [
+            'reason' => 'Provider sent a revised invoice',
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.settlements.import-invoice', $settlement, absolute: false), [
+            'csv_text' => "booking_reference,amount\nBK-STORY-1,80.00\n",
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.settlements.close', $settlement, absolute: false))
+            ->assertRedirect();
+
+        $settlement->refresh();
+        $this->assertSame(Settlement::STATUS_CLOSED, $settlement->status);
+        $this->assertCount(2, collect($settlement->close_history)->filter(fn ($row) => isset($row['closed_at'])));
+        $this->assertNotNull($settlement->close_snapshot);
+
+        $this->actingAs($admin)
+            ->get(route('admin.settlements.show', $settlement, absolute: false))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/settlements/pages/Show', false)
+                ->has('system_timeline')
+                ->has('invoice_imports')
+                ->where('settlement.close_snapshot.expected_total', '80.00'));
     }
 
     private function makeAdmin(string $role): User

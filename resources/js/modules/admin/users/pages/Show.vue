@@ -2,11 +2,13 @@
 import AccountTypeBadge from '../components/AccountTypeBadge.vue';
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import RoleBadge from '../components/RoleBadge.vue';
+import SystemTimeline from '../../components/SystemTimeline.vue';
 import UserStatusBadge from '../components/UserStatusBadge.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
+import { useAdminConfirm } from '../../composables/useAdminConfirm';
 
 const props = defineProps({
     user: {
@@ -17,6 +19,7 @@ const props = defineProps({
 
 const { locale, t } = useAdminLocale();
 const { defaultCurrency } = usePlatformCurrency();
+const { confirm } = useAdminConfirm();
 
 const page = usePage();
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
@@ -26,6 +29,59 @@ const canViewLoyalty = computed(() => permissions.value.includes('loyalty.view')
 const canViewSupport = computed(() => permissions.value.includes('support.view'));
 const activeSupportTicket = computed(() => props.user.support?.active_ticket ?? null);
 const activeSupportTicketCount = computed(() => props.user.support?.active_ticket_count ?? 0);
+const crm = computed(() => props.user.crm ?? {
+    stats: {
+        login_count: 0,
+        active_session_count: 0,
+        search_count: 0,
+        price_alert_count: 0,
+        notification_count: 0,
+        unread_notification_count: 0,
+        notification_log_count: 0,
+        timeline_count: 0,
+        ticket_count: 0,
+        saved_passenger_count: 0,
+        favorite_count: 0,
+        ai_search_count: 0,
+    },
+    timeline: [],
+    searches: [],
+    price_alerts: [],
+    notifications: [],
+    notification_logs: [],
+    sessions: [],
+    session_history: [],
+    devices: [],
+    support_tickets: [],
+    wallets: [],
+    saved_passengers: [],
+    saved_addresses: [],
+    saved_vehicles: [],
+    favorites: [],
+    ai_searches: [],
+});
+const activityFilter = ref('all');
+const activityFilters = computed(() => [
+    { id: 'all', label: t('All') },
+    { id: 'login', label: t('Logins') },
+    { id: 'search', label: t('Searches') },
+    { id: 'notification', label: t('Notifications') },
+    { id: 'order', label: t('Orders') },
+    { id: 'support', label: t('Support') },
+    { id: 'finance', label: t('Finance') },
+    { id: 'profile', label: t('Profile') },
+]);
+const filteredTimeline = computed(() => {
+    const events = crm.value.timeline ?? [];
+
+    if (activityFilter.value === 'all') {
+        return events;
+    }
+
+    return events.filter((event) => event.category === activityFilter.value
+        || (activityFilter.value === 'notification' && event.category === 'alert'));
+});
+const canViewCustomerWallets = computed(() => permissions.value.includes('customer-wallets.view'));
 const loyalty = computed(() => props.user.loyalty ?? {
     current_level: 0,
     current_tier: null,
@@ -53,9 +109,13 @@ const activeTab = ref('overview');
 const workspaceTabs = computed(() => {
     const tabs = [
         { id: 'overview', label: t('Overview'), count: 0 },
+        { id: 'activity', label: t('Activity'), count: crm.value.stats.timeline_count },
+        { id: 'searches', label: t('Searches'), count: crm.value.stats.search_count + crm.value.stats.price_alert_count },
+        { id: 'notifications', label: t('Notifications'), count: crm.value.stats.notification_count },
+        { id: 'sessions', label: t('Sessions'), count: crm.value.stats.login_count },
         { id: 'orders', label: t('Orders'), count: props.user.recent_orders.length },
-        { id: 'finance', label: t('Finance'), count: props.user.financial_transactions.length },
-        { id: 'activity', label: t('Activity'), count: props.user.recent_activities.length },
+        { id: 'finance', label: t('Finance'), count: props.user.financial_transactions.length + crm.value.wallets.length },
+        { id: 'profile', label: t('Travel profile'), count: crm.value.stats.saved_passenger_count + crm.value.stats.favorite_count },
     ];
 
     if (canViewSupport.value) {
@@ -165,10 +225,14 @@ const bubbleTone = (senderType) => (senderType === 'user'
 
 const metaTone = (senderType) => (senderType === 'user' ? 'text-slate-300' : 'text-slate-500');
 
-const toggleStatus = () => {
+const toggleStatus = async () => {
     const actionLabel = props.user.is_active ? t('deactivate') : t('activate');
 
-    if (!window.confirm(t('Do you want to :action :name?', { action: actionLabel, name: props.user.full_name }))) {
+    if (!await confirm({
+        title: 'Confirm action',
+        message: t('Do you want to :action :name?', { action: actionLabel, name: props.user.full_name }),
+        confirmLabel: 'Confirm',
+    })) {
         return;
     }
 
@@ -217,7 +281,7 @@ onBeforeUnmount(() => {
                                 <RoleBadge :role="user.role" />
                             </div>
                             <p class="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
-                                {{ t('Switch the user workspace by link-aware tabs so account details, orders, support, finance, and access are no longer stacked in one long page.') }}
+                                {{ t('Every search, login, notification, booking, and profile action for this customer is collected in one CRM workspace.') }}
                             </p>
                         </div>
 
@@ -246,26 +310,36 @@ onBeforeUnmount(() => {
                         </div>
                     </div>
 
-                    <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                        <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Logins') }}</p>
+                            <p class="mt-2 text-2xl font-semibold text-slate-950">{{ crm.stats.login_count }}</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ t('Recorded sign-ins and issued sessions.') }}</p>
+                        </div>
+                        <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Searches') }}</p>
+                            <p class="mt-2 text-2xl font-semibold text-slate-950">{{ crm.stats.search_count }}</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ t('Flight searches and AI travel lookups.') }}</p>
+                        </div>
+                        <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Notifications') }}</p>
+                            <p class="mt-2 text-2xl font-semibold text-slate-950">{{ crm.stats.notification_count }}</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ t(':count unread in the passenger inbox.', { count: crm.stats.unread_notification_count }) }}</p>
+                        </div>
                         <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Orders') }}</p>
                             <p class="mt-2 text-2xl font-semibold text-slate-950">{{ user.recent_orders.length }}</p>
-                            <p class="mt-2 text-sm text-slate-600">{{ t('Recent order cards moved into their own workspace tab.') }}</p>
-                        </div>
-                        <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Finance') }}</p>
-                            <p class="mt-2 text-2xl font-semibold text-slate-950">{{ user.financial_transactions.length }}</p>
-                            <p class="mt-2 text-sm text-slate-600">{{ t('Wallet state and transactions are isolated from profile details.') }}</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ t('Latest bookings on this customer profile.') }}</p>
                         </div>
                         <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Activity') }}</p>
-                            <p class="mt-2 text-2xl font-semibold text-slate-950">{{ user.recent_activities.length }}</p>
-                            <p class="mt-2 text-sm text-slate-600">{{ t('Operational history is now separated into a dedicated activity view.') }}</p>
+                            <p class="mt-2 text-2xl font-semibold text-slate-950">{{ crm.stats.timeline_count }}</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ t('Unified timeline of every tracked customer action.') }}</p>
                         </div>
                         <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Support') }}</p>
-                            <p class="mt-2 text-2xl font-semibold text-slate-950">{{ activeSupportTicketCount }}</p>
-                            <p class="mt-2 text-sm text-slate-600">{{ t('Active conversations remain available without crowding the main profile view.') }}</p>
+                            <p class="mt-2 text-2xl font-semibold text-slate-950">{{ crm.stats.ticket_count || activeSupportTicketCount }}</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ t('All support tickets opened by this customer.') }}</p>
                         </div>
                     </div>
                 </div>
@@ -329,12 +403,56 @@ onBeforeUnmount(() => {
                                 <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Last login') }}</dt>
                                 <dd class="mt-2 text-sm text-slate-900">{{ formatDateTime(user.last_login_at) }}</dd>
                             </div>
+                            <div>
+                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Login count') }}</dt>
+                                <dd class="mt-2 text-sm text-slate-900">{{ crm.stats.login_count }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Preferred language') }}</dt>
+                                <dd class="mt-2 text-sm text-slate-900">{{ user.preferred_locale ? formatValueLabel(user.preferred_locale) : t('Not provided') }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Phone verification') }}</dt>
+                                <dd class="mt-2 text-sm text-slate-900">{{ user.phone_verified_at ? formatDateTime(user.phone_verified_at) : t('Not verified') }}</dd>
+                            </div>
                         </dl>
                     </div>
 
                     <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                         <h3 class="text-lg font-semibold text-slate-950">{{ t('Workspace shortcuts') }}</h3>
                         <div class="mt-5 grid gap-3 sm:grid-cols-2">
+                            <button
+                                type="button"
+                                class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                                @click="changeTab('activity')"
+                            >
+                                <span>{{ t('Open activity feed') }}</span>
+                                <span class="font-medium text-slate-950">{{ crm.stats.timeline_count }}</span>
+                            </button>
+                            <button
+                                type="button"
+                                class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                                @click="changeTab('searches')"
+                            >
+                                <span>{{ t('Open searches workspace') }}</span>
+                                <span class="font-medium text-slate-950">{{ crm.stats.search_count }}</span>
+                            </button>
+                            <button
+                                type="button"
+                                class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                                @click="changeTab('notifications')"
+                            >
+                                <span>{{ t('Open notifications workspace') }}</span>
+                                <span class="font-medium text-slate-950">{{ crm.stats.notification_count }}</span>
+                            </button>
+                            <button
+                                type="button"
+                                class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                                @click="changeTab('sessions')"
+                            >
+                                <span>{{ t('Open sessions workspace') }}</span>
+                                <span class="font-medium text-slate-950">{{ crm.stats.login_count }}</span>
+                            </button>
                             <button
                                 type="button"
                                 class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
@@ -350,22 +468,6 @@ onBeforeUnmount(() => {
                             >
                                 <span>{{ t('Open finance workspace') }}</span>
                                 <span class="font-medium text-slate-950">{{ walletBalanceLabel }}</span>
-                            </button>
-                            <button
-                                type="button"
-                                class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
-                                @click="changeTab('activity')"
-                            >
-                                <span>{{ t('Open activity feed') }}</span>
-                                <span class="font-medium text-slate-950">{{ user.recent_activities.length }}</span>
-                            </button>
-                            <button
-                                type="button"
-                                class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
-                                @click="changeTab(canViewLoyalty ? 'loyalty' : (canViewSupport ? 'support' : 'access'))"
-                            >
-                                <span>{{ canViewLoyalty ? t('Open loyalty workspace') : (canViewSupport ? t('Open support workspace') : t('Open access workspace')) }}</span>
-                                <span class="font-medium text-slate-950">{{ canViewLoyalty ? loyalty.history.length : (canViewSupport ? activeSupportTicketCount : user.permissions.length) }}</span>
                             </button>
                         </div>
                     </div>
@@ -444,57 +546,366 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-            <div v-else-if="activeTab === 'finance'" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 class="text-lg font-semibold text-slate-950">{{ t('Financial transactions') }}</h3>
-                <div class="mt-5 rounded-2xl bg-slate-50 p-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Wallet balance') }}</p>
-                    <p class="mt-2 text-2xl font-semibold text-slate-950">{{ walletBalanceLabel }}</p>
-                    <p class="mt-2 text-sm text-slate-600">
-                        {{ user.financial_summary?.has_wallet_data ? t("Calculated from the user's recorded financial transactions.") : t('Wallet data is unavailable because finance tables are not present in this environment.') }}
-                    </p>
-                </div>
-                <div class="mt-5 space-y-4">
+            <div v-else-if="activeTab === 'finance'" class="space-y-6">
+                <div v-if="crm.wallets.length" class="space-y-4">
                     <div
-                        v-for="transaction in user.financial_transactions"
-                        :key="transaction.id"
-                        class="rounded-2xl border border-slate-200 p-4"
+                        v-for="wallet in crm.wallets"
+                        :key="wallet.id"
+                        class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
                     >
                         <div class="flex flex-wrap items-start justify-between gap-4">
                             <div>
-                                <p class="font-medium text-slate-900">#{{ transaction.id }} / {{ formatValueLabel(transaction.type) }}</p>
-                                <p class="mt-2 text-sm text-slate-600">{{ formatValueLabel(transaction.source) }} / {{ t('Order') }} #{{ transaction.order_id }}</p>
+                                <h3 class="text-lg font-semibold text-slate-950">{{ t('Customer wallet') }}</h3>
+                                <p class="mt-2 text-sm text-slate-600">{{ wallet.wallet_number }} · {{ formatValueLabel(wallet.status) }}</p>
                             </div>
                             <div class="text-right">
-                                <p class="text-sm font-medium text-slate-950">{{ transaction.amount }} {{ transaction.currency }}</p>
-                                <p class="mt-2 text-xs uppercase tracking-[0.16em] text-slate-500">{{ formatDateTime(transaction.created_at) }}</p>
+                                <p class="text-2xl font-semibold text-slate-950">{{ wallet.balance }} {{ wallet.currency }}</p>
+                                <Link
+                                    v-if="canViewCustomerWallets"
+                                    :href="route('admin.customer-wallets.show', wallet.id)"
+                                    class="mt-2 inline-flex text-sm font-medium text-cyan-700 hover:text-cyan-800"
+                                >
+                                    {{ t('Open wallet ledger') }}
+                                </Link>
                             </div>
                         </div>
+                        <div class="mt-5 space-y-3">
+                            <div
+                                v-for="transaction in wallet.transactions"
+                                :key="transaction.id"
+                                class="rounded-2xl border border-slate-200 p-4"
+                            >
+                                <div class="flex flex-wrap items-start justify-between gap-4">
+                                    <div>
+                                        <p class="font-medium text-slate-900">{{ formatValueLabel(transaction.type) }}</p>
+                                        <p class="mt-2 text-sm text-slate-600">{{ transaction.description || t('Wallet movement') }}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-sm font-medium text-slate-950">{{ transaction.signed_amount }} {{ transaction.currency }}</p>
+                                        <p class="mt-2 text-xs uppercase tracking-[0.16em] text-slate-500">{{ formatDateTime(transaction.created_at) }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <p v-if="wallet.transactions.length === 0" class="text-sm text-slate-500">{{ t('No wallet ledger rows yet.') }}</p>
+                        </div>
                     </div>
-                    <p v-if="user.financial_transactions.length === 0" class="text-sm text-slate-500">{{ t('No financial transactions recorded for this user yet.') }}</p>
+                </div>
+
+                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Financial transactions') }}</h3>
+                    <div class="mt-5 rounded-2xl bg-slate-50 p-4">
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Order payments total') }}</p>
+                        <p class="mt-2 text-2xl font-semibold text-slate-950">{{ walletBalanceLabel }}</p>
+                        <p class="mt-2 text-sm text-slate-600">
+                            {{ user.financial_summary?.has_wallet_data ? t("Calculated from the user's recorded financial transactions.") : t('Wallet data is unavailable because finance tables are not present in this environment.') }}
+                        </p>
+                    </div>
+                    <div class="mt-5 space-y-4">
+                        <div
+                            v-for="transaction in user.financial_transactions"
+                            :key="transaction.id"
+                            class="rounded-2xl border border-slate-200 p-4"
+                        >
+                            <div class="flex flex-wrap items-start justify-between gap-4">
+                                <div>
+                                    <p class="font-medium text-slate-900">#{{ transaction.id }} / {{ formatValueLabel(transaction.type) }}</p>
+                                    <p class="mt-2 text-sm text-slate-600">{{ formatValueLabel(transaction.source) }} / {{ t('Order') }} #{{ transaction.order_id }}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm font-medium text-slate-950">{{ transaction.amount }} {{ transaction.currency }}</p>
+                                    <p class="mt-2 text-xs uppercase tracking-[0.16em] text-slate-500">{{ formatDateTime(transaction.created_at) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <p v-if="user.financial_transactions.length === 0" class="text-sm text-slate-500">{{ t('No financial transactions recorded for this user yet.') }}</p>
+                    </div>
                 </div>
             </div>
 
-            <div v-else-if="activeTab === 'activity'" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 class="text-lg font-semibold text-slate-950">{{ t('Recent activity') }}</h3>
-                <div class="mt-5 space-y-4">
-                    <div
-                        v-for="activity in user.recent_activities"
-                        :key="activity.id"
-                        class="rounded-2xl border border-slate-200 p-4"
+            <div v-else-if="activeTab === 'activity'" class="space-y-4">
+                <div class="flex flex-wrap gap-2">
+                    <button
+                        v-for="filter in activityFilters"
+                        :key="filter.id"
+                        type="button"
+                        class="rounded-full px-4 py-2 text-sm font-medium transition"
+                        :class="activityFilter === filter.id ? 'bg-slate-950 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'"
+                        @click="activityFilter = filter.id"
                     >
-                        <div class="flex flex-wrap items-start justify-between gap-4">
-                            <div>
-                                <p class="font-medium text-slate-900">{{ formatValueLabel(activity.action) }} / {{ formatValueLabel(activity.field) }}</p>
-                                <p class="mt-2 text-sm text-slate-600">
-                                    {{ activity.booking_reference ? `${activity.booking_reference} / ` : '' }}{{ t('Order') }} #{{ activity.order_id }}
+                        {{ filter.label }}
+                    </button>
+                </div>
+                <SystemTimeline
+                    :events="filteredTimeline"
+                    title="Customer activity"
+                    description="Every search, login, notification, booking, wallet movement, and profile action recorded for this customer."
+                    empty-text="No tracked activity recorded for this user yet."
+                />
+            </div>
+
+            <div v-else-if="activeTab === 'searches'" class="grid gap-6 xl:grid-cols-2">
+                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Flight searches') }}</h3>
+                    <p class="mt-2 text-sm text-slate-600">{{ t('Routes this customer looked up, including abandoned and converted searches.') }}</p>
+                    <div class="mt-5 space-y-4">
+                        <div
+                            v-for="search in crm.searches"
+                            :key="search.id"
+                            class="rounded-2xl border border-slate-200 p-4"
+                        >
+                            <div class="flex flex-wrap items-start justify-between gap-4">
+                                <div>
+                                    <p class="font-medium text-slate-900">{{ search.route }}</p>
+                                    <p class="mt-2 text-sm text-slate-600">
+                                        {{ search.departure_date || t('No date') }}
+                                        <span v-if="search.return_date"> → {{ search.return_date }}</span>
+                                        <span v-if="search.last_seen_price"> · {{ search.last_seen_price }} {{ search.currency }}</span>
+                                    </p>
+                                </div>
+                                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">
+                                    {{ formatValueLabel(search.status) }}
+                                </span>
+                            </div>
+                            <p class="mt-3 text-xs uppercase tracking-[0.16em] text-slate-500">{{ formatDateTime(search.last_searched_at) }}</p>
+                        </div>
+                        <p v-if="crm.searches.length === 0" class="text-sm text-slate-500">{{ t('No searches recorded for this customer yet.') }}</p>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Price alerts') }}</h3>
+                        <div class="mt-5 space-y-4">
+                            <div
+                                v-for="alert in crm.price_alerts"
+                                :key="alert.id"
+                                class="rounded-2xl border border-slate-200 p-4"
+                            >
+                                <div class="flex flex-wrap items-start justify-between gap-4">
+                                    <div>
+                                        <p class="font-medium text-slate-900">{{ alert.route }}</p>
+                                        <p class="mt-2 text-sm text-slate-600">{{ t('Target') }}: {{ alert.target_price }} {{ alert.currency }}</p>
+                                    </div>
+                                    <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]" :class="alert.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'">
+                                        {{ alert.is_active ? t('Active') : t('Inactive') }}
+                                    </span>
+                                </div>
+                                <p class="mt-3 text-xs uppercase tracking-[0.16em] text-slate-500">
+                                    {{ alert.last_triggered_at ? t('Last hit :date', { date: formatDateTime(alert.last_triggered_at) }) : t('Not triggered yet') }}
                                 </p>
                             </div>
-                            <div class="text-right">
-                                <p class="text-sm font-medium text-slate-950">{{ formatDateTime(activity.created_at) }}</p>
-                            </div>
+                            <p v-if="crm.price_alerts.length === 0" class="text-sm text-slate-500">{{ t('No price alerts set by this customer.') }}</p>
                         </div>
                     </div>
-                    <p v-if="user.recent_activities.length === 0" class="text-sm text-slate-500">{{ t('No tracked activity recorded for this user yet.') }}</p>
+
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">{{ t('AI travel searches') }}</h3>
+                        <div class="mt-5 space-y-4">
+                            <div
+                                v-for="log in crm.ai_searches"
+                                :key="log.id"
+                                class="rounded-2xl border border-slate-200 p-4"
+                            >
+                                <p class="font-medium text-slate-900">{{ formatValueLabel(log.intent || log.mode || 'AI') }}</p>
+                                <p class="mt-2 text-sm text-slate-600">{{ log.message || t('No prompt stored.') }}</p>
+                                <p class="mt-3 text-xs uppercase tracking-[0.16em] text-slate-500">{{ formatDateTime(log.created_at) }}</p>
+                            </div>
+                            <p v-if="crm.ai_searches.length === 0" class="text-sm text-slate-500">{{ t('No AI travel searches recorded yet.') }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else-if="activeTab === 'notifications'" class="grid gap-6 xl:grid-cols-2">
+                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Passenger inbox') }}</h3>
+                    <p class="mt-2 text-sm text-slate-600">{{ t('What was sent to this customer and whether they opened it.') }}</p>
+                    <div class="mt-5 space-y-4">
+                        <div
+                            v-for="notification in crm.notifications"
+                            :key="notification.id"
+                            class="rounded-2xl border border-slate-200 p-4"
+                        >
+                            <div class="flex flex-wrap items-start justify-between gap-4">
+                                <div>
+                                    <p class="font-medium text-slate-900">{{ notification.title || formatValueLabel(notification.template_code) }}</p>
+                                    <p class="mt-2 text-sm text-slate-600">{{ notification.message }}</p>
+                                </div>
+                                <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]" :class="notification.is_unread ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'">
+                                    {{ notification.is_unread ? t('Unread') : t('Read') }}
+                                </span>
+                            </div>
+                            <p class="mt-3 text-xs uppercase tracking-[0.16em] text-slate-500">
+                                {{ formatValueLabel(notification.category) }} · {{ formatDateTime(notification.created_at) }}
+                            </p>
+                        </div>
+                        <p v-if="crm.notifications.length === 0" class="text-sm text-slate-500">{{ t('No notifications were sent to this customer yet.') }}</p>
+                    </div>
+                </div>
+
+                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Delivery log') }}</h3>
+                    <p class="mt-2 text-sm text-slate-600">{{ t('Push, email, and in-app delivery attempts.') }}</p>
+                    <div class="mt-5 space-y-4">
+                        <div
+                            v-for="log in crm.notification_logs"
+                            :key="log.id"
+                            class="rounded-2xl border border-slate-200 p-4"
+                        >
+                            <div class="flex flex-wrap items-start justify-between gap-4">
+                                <div>
+                                    <p class="font-medium text-slate-900">{{ formatValueLabel(log.template_code) }}</p>
+                                    <p class="mt-2 text-sm text-slate-600">{{ formatValueLabel(log.channel) }} · {{ log.subject || t('No subject') }}</p>
+                                </div>
+                                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">
+                                    {{ formatValueLabel(log.status) }}
+                                </span>
+                            </div>
+                            <p class="mt-3 text-xs uppercase tracking-[0.16em] text-slate-500">{{ formatDateTime(log.sent_at || log.created_at) }}</p>
+                        </div>
+                        <p v-if="crm.notification_logs.length === 0" class="text-sm text-slate-500">{{ t('No delivery attempts recorded yet.') }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else-if="activeTab === 'sessions'" class="grid gap-6 xl:grid-cols-2">
+                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Sign-ins') }}</h3>
+                    <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                        <div class="rounded-2xl bg-slate-50 p-4">
+                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Login count') }}</p>
+                            <p class="mt-2 text-2xl font-semibold text-slate-950">{{ crm.stats.login_count }}</p>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 p-4">
+                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Last login') }}</p>
+                            <p class="mt-2 text-sm font-medium text-slate-950">{{ formatDateTime(user.last_login_at) }}</p>
+                        </div>
+                    </div>
+                    <div class="mt-5 space-y-4">
+                        <div
+                            v-for="session in crm.session_history"
+                            :key="session.id"
+                            class="rounded-2xl border border-slate-200 p-4"
+                        >
+                            <div class="flex flex-wrap items-start justify-between gap-4">
+                                <div>
+                                    <p class="font-medium text-slate-900">{{ session.device_name || t('Unknown device') }}</p>
+                                    <p class="mt-2 text-sm text-slate-600">{{ session.revoked_at ? t('Revoked') : t('Active or expired') }}</p>
+                                </div>
+                                <p class="text-xs uppercase tracking-[0.16em] text-slate-500">{{ formatDateTime(session.created_at) }}</p>
+                            </div>
+                        </div>
+                        <p v-if="crm.session_history.length === 0" class="text-sm text-slate-500">{{ t('No session history recorded yet.') }}</p>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Active sessions') }}</h3>
+                        <div class="mt-5 space-y-4">
+                            <div
+                                v-for="session in crm.sessions"
+                                :key="session.id"
+                                class="rounded-2xl border border-slate-200 p-4"
+                            >
+                                <p class="font-medium text-slate-900">{{ session.device_name || t('Unknown device') }}</p>
+                                <p class="mt-2 text-sm text-slate-600">{{ t('Last used') }}: {{ formatDateTime(session.last_used_at) }}</p>
+                            </div>
+                            <p v-if="crm.sessions.length === 0" class="text-sm text-slate-500">{{ t('No active app sessions.') }}</p>
+                        </div>
+                    </div>
+
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Push devices') }}</h3>
+                        <div class="mt-5 space-y-4">
+                            <div
+                                v-for="device in crm.devices"
+                                :key="device.id"
+                                class="rounded-2xl border border-slate-200 p-4"
+                            >
+                                <div class="flex flex-wrap items-start justify-between gap-4">
+                                    <div>
+                                        <p class="font-medium text-slate-900">{{ formatValueLabel(device.platform || device.channel) }}</p>
+                                        <p class="mt-2 text-sm text-slate-600">{{ device.app_version || t('No app version') }}</p>
+                                    </div>
+                                    <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]" :class="device.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'">
+                                        {{ device.is_active ? t('Active') : t('Inactive') }}
+                                    </span>
+                                </div>
+                                <p class="mt-3 text-xs uppercase tracking-[0.16em] text-slate-500">{{ t('Last seen') }}: {{ formatDateTime(device.last_seen_at) }}</p>
+                            </div>
+                            <p v-if="crm.devices.length === 0" class="text-sm text-slate-500">{{ t('No push devices registered.') }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else-if="activeTab === 'profile'" class="grid gap-6 xl:grid-cols-2">
+                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Saved passengers') }}</h3>
+                    <div class="mt-5 space-y-4">
+                        <div
+                            v-for="passenger in crm.saved_passengers"
+                            :key="passenger.id"
+                            class="rounded-2xl border border-slate-200 p-4"
+                        >
+                            <div class="flex flex-wrap items-start justify-between gap-4">
+                                <div>
+                                    <p class="font-medium text-slate-900">{{ passenger.name }}</p>
+                                    <p class="mt-2 text-sm text-slate-600">{{ formatValueLabel(passenger.type) }} · {{ passenger.nationality || t('No nationality') }}</p>
+                                </div>
+                                <span v-if="passenger.is_default" class="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">{{ t('Default') }}</span>
+                            </div>
+                        </div>
+                        <p v-if="crm.saved_passengers.length === 0" class="text-sm text-slate-500">{{ t('No saved passengers yet.') }}</p>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Favorites') }}</h3>
+                        <div class="mt-5 space-y-4">
+                            <div
+                                v-for="favorite in crm.favorites"
+                                :key="favorite.id"
+                                class="rounded-2xl border border-slate-200 p-4"
+                            >
+                                <p class="font-medium text-slate-900">{{ favorite.title }}</p>
+                                <p class="mt-2 text-sm text-slate-600">{{ formatValueLabel(favorite.type) }} · {{ formatValueLabel(favorite.status) }}</p>
+                            </div>
+                            <p v-if="crm.favorites.length === 0" class="text-sm text-slate-500">{{ t('No favorites saved yet.') }}</p>
+                        </div>
+                    </div>
+
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Saved addresses') }}</h3>
+                        <div class="mt-5 space-y-4">
+                            <div
+                                v-for="address in crm.saved_addresses"
+                                :key="address.id"
+                                class="rounded-2xl border border-slate-200 p-4"
+                            >
+                                <p class="font-medium text-slate-900">{{ address.title || t('Address') }}</p>
+                                <p class="mt-2 text-sm text-slate-600">{{ address.address }}</p>
+                            </div>
+                            <p v-if="crm.saved_addresses.length === 0" class="text-sm text-slate-500">{{ t('No saved addresses yet.') }}</p>
+                        </div>
+                    </div>
+
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Saved vehicles') }}</h3>
+                        <div class="mt-5 space-y-4">
+                            <div
+                                v-for="vehicle in crm.saved_vehicles"
+                                :key="vehicle.id"
+                                class="rounded-2xl border border-slate-200 p-4"
+                            >
+                                <p class="font-medium text-slate-900">{{ vehicle.label }}</p>
+                                <p class="mt-2 text-sm text-slate-600">{{ formatValueLabel(vehicle.type) }}</p>
+                            </div>
+                            <p v-if="crm.saved_vehicles.length === 0" class="text-sm text-slate-500">{{ t('No saved vehicles yet.') }}</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -669,9 +1080,29 @@ onBeforeUnmount(() => {
                         {{ t('This user does not currently have an open, in-progress, or waiting-customer ticket.') }}
                     </p>
                 </div>
+
+                <div v-if="crm.support_tickets.length" class="mt-6 space-y-3">
+                    <h4 class="text-sm font-semibold text-slate-950">{{ t('All tickets') }}</h4>
+                    <Link
+                        v-for="ticket in crm.support_tickets"
+                        :key="ticket.id"
+                        :href="route('admin.support.show', ticket.id)"
+                        class="block rounded-2xl border border-slate-200 p-4 transition hover:border-cyan-300 hover:bg-cyan-50/40"
+                    >
+                        <div class="flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                                <p class="font-medium text-slate-900">{{ ticket.ticket_number }} · {{ ticket.subject }}</p>
+                                <p class="mt-2 text-sm text-slate-600">{{ formatValueLabel(ticket.category) }} / {{ formatValueLabel(ticket.priority) }}</p>
+                            </div>
+                            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">
+                                {{ formatValueLabel(ticket.status) }}
+                            </span>
+                        </div>
+                    </Link>
+                </div>
             </div>
 
-            <div v-else class="space-y-6">
+            <div v-else-if="activeTab === 'access'" class="space-y-6">
                 <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                     <h3 class="text-lg font-semibold text-slate-950">{{ t('Resolved permissions') }}</h3>
                     <div class="mt-5 flex flex-wrap gap-2">

@@ -10,8 +10,7 @@ const props = defineProps({
 
 const { locale } = useAdminLocale();
 const { defaultCurrency } = usePlatformCurrency();
-
-const resolvedCurrency = computed(() => props.currency || defaultCurrency.value);
+const resolvedCurrency = computed(() => props.currency || defaultCurrency.value || 'LYD');
 
 const format = (value) => {
     try {

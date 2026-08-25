@@ -70,11 +70,11 @@
 | **Notifications** | قوالب، سجلات تسليم، إعادة محاولة الفاشل |
 | **Airports** | دليل المطارات، استيراد، Featured للتطبيق |
 | **Governance** | رقابة مركزية عبر الوحدات |
-| **Settings** | إعدادات عامة (صلاحية خاصة) |
+| **Settings** | Company / Currency / Margins / Channels / Feature flags (`settings.manage`) |
 
 ### ب) API للعميل/التطبيق
 
-- Auth: register / login / logout / me  
+- Auth: login / logout / me (لا يوجد `/register` عام — الحسابات تُنشأ من الأدمن)  
 - Orders: list / show / create / **sync-flight**  
 - Airports + Featured  
 - Favorites (رحلات/فنادق)  
@@ -168,8 +168,8 @@ POST /api/v1/orders/sync-flight
 6. سياسة السالب بدون **سقف ائتمان رقمي** محدد.
 7. «محفظة العميل» في الأدمن **عرض مشتق** وقد تُفهم خطأ كرصيد نقدي مخزّن.
 8. تكامل بوابات الدفع ليس موديول مستقل ناضج (الحالة غالباً من الـ sync/الأدمن).
-9. عمق قنوات SMS/WhatsApp/Push قد يحتاج تجهيز إنتاجي إضافي.
-10. وحدة Settings ما زالت أخف من باقي الوحدات.
+9. عمق قنوات SMS/WhatsApp/Push ما زال يعتمد على تهيئة `.env` في الإنتاج (بدون محاكاة نجاح وهمية).
+10. Partner API / Webhooks مؤجّل لـ V2.
 11. التشغيل الإنتاجي يحتاج **Queue workers** و(للشات) إعداد Realtime.
 12. README الأساسي أبسط من حجم النظام الفعلي.
 

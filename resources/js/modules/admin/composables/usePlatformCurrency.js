@@ -3,7 +3,7 @@ import { usePage } from '@inertiajs/vue3';
 
 /**
  * Platform default currency from SystemSetting (shared via Inertia).
- * Falls back to LYD when platform props are unavailable.
+ * Returns a computed string and also `{ defaultCurrency, formatMoney }` for older callers.
  */
 export function usePlatformCurrency(fallback = 'LYD') {
     const page = usePage();
@@ -29,8 +29,8 @@ export function usePlatformCurrency(fallback = 'LYD') {
         }
     };
 
-    return {
+    return Object.assign(defaultCurrency, {
         defaultCurrency,
         formatMoney,
-    };
+    });
 }

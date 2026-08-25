@@ -1,6 +1,8 @@
 <?php
 
 use App\Modules\Api\Support\Http\Responses\ApiResponse;
+use App\Exceptions\InsufficientCustomerWalletBalanceException;
+use App\Exceptions\InsufficientWalletBalanceException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -90,6 +92,38 @@ return Application::configure(basePath: dirname(__DIR__))
                 [],
                 'http_error',
                 $exception->getStatusCode(),
+            );
+        });
+
+        $exceptions->render(function (InsufficientWalletBalanceException $exception, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ApiResponse::error(
+                'Insufficient provider balance.',
+                [
+                    'requested_amount' => $exception->requestedAmount,
+                    'available_balance' => $exception->availableBalance,
+                ],
+                'insufficient_provider_balance',
+                409,
+            );
+        });
+
+        $exceptions->render(function (InsufficientCustomerWalletBalanceException $exception, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ApiResponse::error(
+                'Insufficient wallet balance.',
+                [
+                    'requested_amount' => $exception->requestedAmount,
+                    'available_balance' => $exception->availableBalance,
+                ],
+                'insufficient_wallet_balance',
+                422,
             );
         });
 

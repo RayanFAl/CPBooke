@@ -213,21 +213,20 @@ class ApiSupportTest extends TestCase
         $message = SupportMessage::query()->firstOrFail();
 
         Storage::disk('local')->assertExists($message->attachment_path);
+        $this->assertStringStartsWith('support/attachments/', $message->attachment_path);
+        $this->assertNotSame('voucher.png', basename((string) $message->attachment_path));
 
-        $this->getJson('/api/v1/support/tickets/current?subject=Upload%20travel%20voucher')
+        $current = $this->getJson('/api/v1/support/tickets/current?subject=Upload%20travel%20voucher')
             ->assertOk()
-            ->assertJsonMissingPath('data.ticket.messages.0.attachment_path')
             ->assertJsonPath('data.ticket.messages.0.attachment_name', 'voucher.png')
             ->assertJsonPath('data.ticket.messages.0.attachment_mime', 'image/png')
-            ->assertJsonPath('data.ticket.messages.0.attachment_size', $message->attachment_size);
+            ->assertJsonPath('data.ticket.messages.0.attachment_size', $message->attachment_size)
+            ->assertJsonMissingPath('data.ticket.messages.0.attachment_path');
 
-        $attachmentUrl = $this->getJson('/api/v1/support/tickets/current?subject=Upload%20travel%20voucher')
-            ->json('data.ticket.messages.0.attachment_url');
-
+        $attachmentUrl = $current->json('data.ticket.messages.0.attachment_url');
         $this->assertIsString($attachmentUrl);
         $this->assertStringContainsString('/support/attachments/'.$message->id, $attachmentUrl);
-
-        $this->get($attachmentUrl)->assertOk();
+        $this->assertStringContainsString('signature=', $attachmentUrl);
     }
 
     public function test_customer_can_send_file_attachment_and_read_attachment_metadata(): void

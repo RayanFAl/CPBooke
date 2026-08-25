@@ -52,6 +52,7 @@ class ApprovalController
                 Approval::TYPE_CANCEL,
                 Approval::TYPE_WALLET_DEPOSIT,
                 Approval::TYPE_WALLET_ADJUSTMENT,
+                Approval::TYPE_SETTLEMENT_ADJUSTMENT,
             ],
             'statuses' => [
                 Approval::STATUS_PENDING,

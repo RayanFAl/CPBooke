@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Notifications\Http\Requests;
 
 use App\Modules\Notifications\Support\NotificationChannels;
+use App\Modules\Notifications\Support\NotificationTemplateCategories;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,8 +18,14 @@ class UpdateNotificationTemplateRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:160'],
+            'category' => ['required', 'string', Rule::in(NotificationTemplateCategories::all())],
+            'description' => ['nullable', 'string', 'max:500'],
             'subject' => ['nullable', 'string', 'max:255'],
             'body' => ['required', 'string'],
+            'translations' => ['nullable', 'array'],
+            'translations.ar' => ['nullable', 'array'],
+            'translations.ar.subject' => ['nullable', 'string', 'max:255'],
+            'translations.ar.body' => ['nullable', 'string'],
             'channels' => ['required', 'array', 'min:1'],
             'channels.*' => ['string', Rule::in(NotificationChannels::all())],
             'variables' => ['nullable', 'array'],

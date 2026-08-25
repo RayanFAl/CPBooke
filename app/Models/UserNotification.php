@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'user_id',
     'notification_log_id',
     'template_code',
+    'template_version',
     'type',
     'title',
     'message',

@@ -7,6 +7,6 @@ Route::get('/settings', [SettingsController::class, 'index'])
     ->middleware('permission:settings.manage')
     ->name('settings.index');
 
-Route::put('/settings', [SettingsController::class, 'update'])
+Route::match(['put', 'patch'], '/settings', [SettingsController::class, 'update'])
     ->middleware('permission:settings.manage')
     ->name('settings.update');

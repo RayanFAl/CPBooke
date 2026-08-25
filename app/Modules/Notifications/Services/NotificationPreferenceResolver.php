@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\UserNotificationPreference;
 use App\Modules\Notifications\Support\NotificationChannels;
 use App\Modules\Notifications\Support\NotificationTopics;
+use Illuminate\Support\Collection;
 
 class NotificationPreferenceResolver
 {
@@ -35,6 +36,17 @@ class NotificationPreferenceResolver
             ->filter(fn (mixed $channel): bool => is_string($channel) && in_array($channel, NotificationChannels::all(), true))
             ->filter(fn (string $channel): bool => $this->channelEnabled($preferences, $channel))
             ->values()
+            ->when(
+                in_array(NotificationChannels::IN_APP, $requestedChannels, true),
+                function ($collection): Collection {
+                    if ($collection->contains(NotificationChannels::IN_APP)) {
+                        return $collection;
+                    }
+
+                    return $collection->prepend(NotificationChannels::IN_APP);
+                },
+            )
+            ->values()
             ->all();
     }
 
@@ -45,9 +57,9 @@ class NotificationPreferenceResolver
             [
                 'email_enabled' => true,
                 'in_app_enabled' => true,
-                'sms_enabled' => true,
+                'sms_enabled' => false,
                 'push_enabled' => true,
-                'whatsapp_enabled' => true,
+                'whatsapp_enabled' => false,
                 'disabled_categories' => [],
                 'topics' => NotificationTopics::defaults(),
             ],
@@ -163,7 +175,7 @@ class NotificationPreferenceResolver
     {
         return match ($channel) {
             NotificationChannels::EMAIL => $preferences->email_enabled,
-            NotificationChannels::IN_APP => $preferences->in_app_enabled,
+            NotificationChannels::IN_APP => true,
             NotificationChannels::SMS => $preferences->sms_enabled,
             NotificationChannels::PUSH => $preferences->push_enabled,
             NotificationChannels::WHATSAPP => $preferences->whatsapp_enabled,

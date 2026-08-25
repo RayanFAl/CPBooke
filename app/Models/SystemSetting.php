@@ -4,30 +4,30 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Schema;
 
 #[Fillable([
-    'company_legal_name',
-    'company_display_name',
+    'company_name',
+    'company_address',
     'support_email',
     'support_phone',
-    'website_url',
     'tax_id',
-    'company_address',
+    'logo_path',
     'default_currency',
     'timezone',
-    'default_locale',
-    'default_margin_percent',
-    'email_enabled',
-    'sms_enabled',
-    'whatsapp_enabled',
-    'push_enabled',
-    'mail_from_name',
-    'sms_sender_id',
-    'maintenance_mode',
-    'support_chat_enabled',
-    'orders_legacy_create_enabled',
-    'home_offers_enabled',
+    'locale',
+    'default_commission_percent',
+    'channel_email_enabled',
+    'channel_sms_enabled',
+    'channel_whatsapp_enabled',
+    'channel_push_enabled',
+    'email_from_name',
+    'sms_sender_name',
+    'whatsapp_sender_name',
+    'feature_maintenance_mode',
+    'feature_chat_enabled',
+    'feature_legacy_order_create',
     'settings_version',
     'updated_by_user_id',
     'metadata',
@@ -40,18 +40,22 @@ class SystemSetting extends Model
     protected function casts(): array
     {
         return [
-            'default_margin_percent' => 'decimal:2',
-            'email_enabled' => 'boolean',
-            'sms_enabled' => 'boolean',
-            'whatsapp_enabled' => 'boolean',
-            'push_enabled' => 'boolean',
-            'maintenance_mode' => 'boolean',
-            'support_chat_enabled' => 'boolean',
-            'orders_legacy_create_enabled' => 'boolean',
-            'home_offers_enabled' => 'boolean',
+            'default_commission_percent' => 'decimal:2',
+            'channel_email_enabled' => 'boolean',
+            'channel_sms_enabled' => 'boolean',
+            'channel_whatsapp_enabled' => 'boolean',
+            'channel_push_enabled' => 'boolean',
+            'feature_maintenance_mode' => 'boolean',
+            'feature_chat_enabled' => 'boolean',
+            'feature_legacy_order_create' => 'boolean',
             'settings_version' => 'integer',
             'metadata' => 'array',
         ];
+    }
+
+    public function updatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by_user_id');
     }
 
     public static function current(): self
@@ -60,7 +64,7 @@ class SystemSetting extends Model
             return new self(self::defaultAttributes());
         }
 
-        return self::query()->first() ?? self::query()->create(self::defaultAttributes());
+        return self::query()->first() ?? new self(self::defaultAttributes());
     }
 
     /**
@@ -69,62 +73,29 @@ class SystemSetting extends Model
     public static function defaultAttributes(): array
     {
         return [
-            'company_legal_name' => config('app.name', 'CPBooke'),
-            'company_display_name' => config('app.name', 'CPBooke'),
-            'support_email' => config('mail.from.address'),
-            'support_phone' => null,
-            'website_url' => config('app.url'),
-            'tax_id' => null,
+            'company_name' => config('app.name', 'CPBooke'),
             'company_address' => null,
-            'default_currency' => (string) config('settlements.default_currency', 'LYD'),
-            'timezone' => (string) config('app.timezone', 'UTC'),
-            'default_locale' => (string) config('app.locale', 'en'),
-            'default_margin_percent' => null,
-            'email_enabled' => true,
-            'sms_enabled' => false,
-            'whatsapp_enabled' => false,
-            'push_enabled' => true,
-            'mail_from_name' => config('mail.from.name'),
-            'sms_sender_id' => null,
-            'maintenance_mode' => false,
-            'support_chat_enabled' => true,
-            'orders_legacy_create_enabled' => false,
-            'home_offers_enabled' => true,
+            'support_email' => config('mail.addresses.support'),
+            'support_phone' => null,
+            'tax_id' => null,
+            'logo_path' => null,
+            'default_currency' => strtoupper((string) config('settlements.default_currency', 'LYD')),
+            'timezone' => 'Africa/Tripoli',
+            'locale' => (string) config('app.locale', 'en'),
+            'default_commission_percent' => null,
+            'channel_email_enabled' => true,
+            'channel_sms_enabled' => true,
+            'channel_whatsapp_enabled' => true,
+            'channel_push_enabled' => true,
+            'email_from_name' => config('mail.from.name'),
+            'sms_sender_name' => null,
+            'whatsapp_sender_name' => null,
+            'feature_maintenance_mode' => false,
+            'feature_chat_enabled' => true,
+            'feature_legacy_order_create' => false,
             'settings_version' => 1,
             'updated_by_user_id' => null,
             'metadata' => [],
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function toAdminPayload(): array
-    {
-        return [
-            'company_legal_name' => $this->company_legal_name,
-            'company_display_name' => $this->company_display_name,
-            'support_email' => $this->support_email,
-            'support_phone' => $this->support_phone,
-            'website_url' => $this->website_url,
-            'tax_id' => $this->tax_id,
-            'company_address' => $this->company_address,
-            'default_currency' => $this->default_currency,
-            'timezone' => $this->timezone,
-            'default_locale' => $this->default_locale,
-            'default_margin_percent' => $this->default_margin_percent,
-            'email_enabled' => (bool) $this->email_enabled,
-            'sms_enabled' => (bool) $this->sms_enabled,
-            'whatsapp_enabled' => (bool) $this->whatsapp_enabled,
-            'push_enabled' => (bool) $this->push_enabled,
-            'mail_from_name' => $this->mail_from_name,
-            'sms_sender_id' => $this->sms_sender_id,
-            'maintenance_mode' => (bool) $this->maintenance_mode,
-            'support_chat_enabled' => (bool) $this->support_chat_enabled,
-            'orders_legacy_create_enabled' => (bool) $this->orders_legacy_create_enabled,
-            'home_offers_enabled' => (bool) $this->home_offers_enabled,
-            'settings_version' => (int) $this->settings_version,
-            'updated_at' => $this->updated_at?->toIso8601String(),
         ];
     }
 }

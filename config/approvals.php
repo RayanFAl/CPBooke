@@ -29,6 +29,12 @@ return [
     'wallet_always_requires_approval' => true,
 
     /*
+    | Provider settlement accept-variance adjustments always require approval
+    | unless requester is super admin.
+    */
+    'settlement_adjustment_always_requires_approval' => true,
+
+    /*
     | Roles that may execute refunds at or below the direct threshold without approval.
     */
     'refund_direct_roles' => [

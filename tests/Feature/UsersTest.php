@@ -2,10 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Models\Favorite;
 use App\Models\FinancialTransaction;
+use App\Models\NotificationLog;
 use App\Models\Order;
 use App\Models\OrderHistory;
+use App\Models\PriceAlert;
+use App\Models\RefreshToken;
+use App\Models\TravelSearchIntent;
 use App\Models\User;
+use App\Models\UserNotification;
 use App\Modules\Loyalty\Services\LoyaltyService;
 use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -175,5 +181,111 @@ class UsersTest extends TestCase
             );
 
         Carbon::setTestNow();
+    }
+
+    public function test_user_show_includes_customer_crm_activity_for_searches_notifications_and_logins(): void
+    {
+        $actor = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+            'last_login_at' => Carbon::parse('2026-08-18 09:00:00'),
+        ]);
+
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $actor->refresh()->syncRolesByName(['super_admin']);
+
+        TravelSearchIntent::query()->create([
+            'user_id' => $customer->id,
+            'origin' => 'MJI',
+            'destination' => 'IST',
+            'route_key' => TravelSearchIntent::routeKeyFor('MJI', 'IST', '2026-09-01'),
+            'departure_date' => '2026-09-01',
+            'last_seen_price' => '850.00',
+            'currency' => 'LYD',
+            'last_searched_at' => Carbon::parse('2026-08-18 08:30:00'),
+        ]);
+
+        PriceAlert::query()->create([
+            'user_id' => $customer->id,
+            'origin' => 'MJI',
+            'destination' => 'IST',
+            'route_key' => 'mji|ist|2026-09-01',
+            'departure_date' => '2026-09-01',
+            'target_price' => '700.00',
+            'currency' => 'LYD',
+            'is_active' => true,
+        ]);
+
+        UserNotification::query()->create([
+            'user_id' => $customer->id,
+            'template_code' => 'LOGIN_ALERT',
+            'type' => 'system',
+            'title' => 'New login to your account',
+            'message' => 'A new sign-in was detected on iPhone.',
+            'delivered_at' => Carbon::parse('2026-08-18 09:00:00'),
+            'created_at' => Carbon::parse('2026-08-18 09:00:00'),
+        ]);
+
+        UserNotification::query()->create([
+            'user_id' => $customer->id,
+            'template_code' => 'ABANDONED_FLIGHT_SEARCH',
+            'type' => 'marketing',
+            'title' => 'Still looking at MJI to IST?',
+            'message' => 'Complete your booking before the fare changes.',
+            'created_at' => Carbon::parse('2026-08-18 10:00:00'),
+        ]);
+
+        NotificationLog::query()->create([
+            'user_id' => $customer->id,
+            'channel' => 'push',
+            'template_code' => 'ABANDONED_FLIGHT_SEARCH',
+            'subject' => 'Still looking at MJI to IST?',
+            'body' => 'Complete your booking before the fare changes.',
+            'status' => NotificationLog::STATUS_SENT,
+            'sent_at' => Carbon::parse('2026-08-18 10:00:00'),
+        ]);
+
+        $customer->createToken('iPhone');
+
+        RefreshToken::query()->create([
+            'user_id' => $customer->id,
+            'token_hash' => hash('sha256', 'crm-session-token'),
+            'device_name' => 'iPhone',
+            'remember_me' => false,
+            'expires_at' => Carbon::parse('2026-08-25 09:00:00'),
+        ]);
+
+        Favorite::factory()->create([
+            'user_id' => $customer->id,
+            'snapshot' => [
+                'title' => 'Tripoli to Istanbul',
+                'origin' => 'MJI',
+                'destination' => 'IST',
+            ],
+        ]);
+
+        $this->actingAs($actor)
+            ->get(route('admin.users.show', $customer))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/users/pages/Show', false)
+                ->where('user.crm.stats.login_count', 1)
+                ->where('user.crm.stats.search_count', 1)
+                ->where('user.crm.stats.price_alert_count', 1)
+                ->where('user.crm.stats.notification_count', 2)
+                ->where('user.crm.searches.0.route', 'MJI → IST')
+                ->where('user.crm.price_alerts.0.target_price', '700.00')
+                ->where('user.crm.notifications.0.template_code', 'ABANDONED_FLIGHT_SEARCH')
+                ->where('user.crm.notification_logs.0.channel', 'push')
+                ->where('user.crm.session_history.0.device_name', 'iPhone')
+                ->where('user.crm.favorites.0.title', 'Tripoli to Istanbul')
+                ->has('user.crm.timeline')
+                ->where('user.crm.timeline.0.category', fn ($category) => in_array($category, ['search', 'notification', 'login', 'alert', 'account', 'profile'], true))
+            );
     }
 }

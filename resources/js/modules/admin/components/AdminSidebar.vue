@@ -18,6 +18,7 @@ const { t, isArabic } = useAdminLocale();
 
 const user = computed(() => page.props.auth.user);
 const permissions = computed(() => user.value?.permissions ?? []);
+const companyName = computed(() => page.props.platform?.company_name || t('Booke'));
 
 const displayName = computed(() => user.value?.full_name ?? user.value?.name ?? '');
 
@@ -125,6 +126,9 @@ const iconPaths = {
     loyalty: 'M10 2.2l1.82 3.69 4.07.59-2.95 2.88.7 4.06L10 11.77l-3.64 1.69.7-4.06-2.95-2.88 4.07-.59L10 2.2z',
     notifications: 'M10 2a4 4 0 00-4 4v2.26A6 6 0 004 14h12a6 6 0 00-2-5.74V6a4 4 0 00-4-4zm0 16a2.5 2.5 0 002.45-2h-4.9A2.5 2.5 0 0010 18z',
     suppliers: 'M4 3.5A1.5 1.5 0 015.5 2h9A1.5 1.5 0 0116 3.5V6h1.25a.75.75 0 010 1.5H16v8A1.5 1.5 0 0114.5 17h-9A1.5 1.5 0 014 15.5v-8H2.75a.75.75 0 010-1.5H4V3.5zM5.5 3.5V6h9V3.5h-9zm0 4v8h9v-8h-9z',
+    search: 'M8.5 3a5.5 5.5 0 104.383 8.823l3.09 3.09a.75.75 0 101.06-1.06l-3.09-3.09A5.5 5.5 0 008.5 3zm-4 5.5a4 4 0 118 0 4 4 0 01-8 0z',
+    monitoring: 'M10 2a8 8 0 100 16 8 8 0 000-16zm0 3a.75.75 0 01.75.75v3.5l2.5 1.5a.75.75 0 11-.75 1.3l-2.875-1.725A.75.75 0 019.25 9.25V5.75A.75.75 0 0110 5z',
+    health: 'M10 3.5a6.5 6.5 0 00-5.995 9.082L2.5 14.5l2.418-.505A6.5 6.5 0 1010 3.5zm-2.25 3a.75.75 0 000 1.5h1.5v1.5a.75.75 0 001.5 0V8h1.5a.75.75 0 000-1.5H11V5.5a.75.75 0 00-1.5 0V6.5H8.75a.75.75 0 00-.75-.75z',
 };
 
 const handleNavigate = () => {
@@ -140,7 +144,7 @@ const handleNavigate = () => {
         >
             <div class="min-w-0 flex-1" :class="collapsed ? 'sr-only' : ''">
                 <p class="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-400">
-                    {{ t('Booke') }}
+                    {{ companyName }}
                 </p>
                 <h1 class="mt-2 text-lg font-semibold">{{ t('Control Panel') }}</h1>
             </div>

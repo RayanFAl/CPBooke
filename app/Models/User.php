@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable([
@@ -21,6 +22,7 @@ use Laravel\Sanctum\HasApiTokens;
     'email',
     'phone',
     'country',
+    'preferred_locale',
     'avatar_path',
     'password',
     'is_admin',
@@ -68,7 +70,7 @@ class User extends Authenticatable
             return null;
         }
 
-        $path = \Illuminate\Support\Facades\Storage::disk('public')->url((string) $this->avatar_path);
+        $path = Storage::disk('public')->url((string) $this->avatar_path);
 
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
             return $path;
@@ -138,6 +140,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Customer wallet accounts owned by the user.
+     */
+    public function customerWallets(): HasMany
+    {
+        return $this->hasMany(CustomerWallet::class);
+    }
+
+    /**
      * Get the support tickets assigned to the user.
      */
     public function assignedSupportTickets(): HasMany
@@ -195,6 +205,16 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserNotificationPreference::class)
             ->latest('id');
+    }
+
+    public function travelSearchIntents(): HasMany
+    {
+        return $this->hasMany(TravelSearchIntent::class)->latest('id');
+    }
+
+    public function priceAlerts(): HasMany
+    {
+        return $this->hasMany(PriceAlert::class)->latest('id');
     }
 
     /**

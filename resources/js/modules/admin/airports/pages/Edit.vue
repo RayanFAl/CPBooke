@@ -5,6 +5,7 @@ import AirportFeaturedStar from '../components/AirportFeaturedStar.vue';
 import { airportFormFromRecord } from '../utils/airportForm';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { useAdminConfirm } from '../../composables/useAdminConfirm';
 
 const props = defineProps({
     airport: {
@@ -34,6 +35,7 @@ const props = defineProps({
 });
 
 const { t } = useAdminLocale();
+const { confirm } = useAdminConfirm();
 
 const form = useForm(
     props.usesFullSchema
@@ -52,8 +54,13 @@ const submit = () => {
     });
 };
 
-const destroyAirport = () => {
-    if (!window.confirm(t('Confirm airport deletion?'))) {
+const destroyAirport = async () => {
+    if (!await confirm({
+        title: 'Confirm action',
+        message: t('Confirm airport deletion?'),
+        confirmLabel: 'Delete',
+        variant: 'danger',
+    })) {
         return;
     }
 

@@ -7,10 +7,18 @@ use App\Models\NotificationTemplate;
 use App\Models\User;
 use App\Modules\Notifications\Contracts\NotificationChannel;
 use App\Modules\Notifications\Support\NotificationChannels;
+use App\Modules\Notifications\Support\WhatsAppSandboxInbox;
+use App\Modules\Settings\Services\SystemSettingsService;
 use Illuminate\Support\Facades\Http;
 
 class WhatsAppNotificationChannel implements NotificationChannel
 {
+    public function __construct(
+        private readonly SystemSettingsService $systemSettingsService,
+        private readonly WhatsAppSandboxInbox $sandboxInbox,
+    ) {
+    }
+
     public function channel(): string
     {
         return NotificationChannels::WHATSAPP;
@@ -22,6 +30,14 @@ class WhatsAppNotificationChannel implements NotificationChannel
      */
     public function send(NotificationLog $log, NotificationTemplate $template, User $user, array $variables): array
     {
+        if (! $this->systemSettingsService->isChannelEnabled(NotificationChannels::WHATSAPP)) {
+            return [
+                'provider' => 'whatsapp-gateway',
+                'delivered' => false,
+                'reason' => 'channel_disabled',
+            ];
+        }
+
         if (! is_string($user->phone) || trim($user->phone) === '') {
             return [
                 'provider' => 'whatsapp-gateway',
@@ -34,6 +50,7 @@ class WhatsAppNotificationChannel implements NotificationChannel
             'to' => $user->phone,
             'body' => $log->body,
             'template_code' => $template->code,
+            'sender' => $this->systemSettingsService->current()->whatsapp_sender_name,
         ];
 
         $endpoint = config('services.notifications.whatsapp_endpoint');
@@ -55,10 +72,20 @@ class WhatsAppNotificationChannel implements NotificationChannel
             return [
                 'provider' => 'whatsapp-gateway',
                 'delivered' => false,
-                'reason' => 'missing_endpoint',
+                'reason' => 'channel_not_configured',
                 'recipient' => $user->phone,
             ];
         }
+
+        $this->sandboxInbox->record([
+            'to' => $user->phone,
+            'body' => $log->body,
+            'subject' => $log->subject,
+            'template_code' => $template->code,
+            'sender' => $payload['sender'],
+            'user_id' => $user->id,
+            'recorded_at' => now()->toIso8601String(),
+        ]);
 
         return [
             'provider' => 'whatsapp-simulated',

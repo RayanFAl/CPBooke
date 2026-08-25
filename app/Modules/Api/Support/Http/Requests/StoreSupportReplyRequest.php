@@ -2,7 +2,7 @@
 
 namespace App\Modules\Api\Support\Http\Requests;
 
-use App\Modules\Support\SupportAttachmentRules;
+use App\Modules\Support\Storage\SupportAttachmentRules;
 
 class StoreSupportReplyRequest extends ApiFormRequest
 {
@@ -23,7 +23,7 @@ class StoreSupportReplyRequest extends ApiFormRequest
     {
         return [
             'message' => ['required_without:attachment', 'nullable', 'string', 'max:5000'],
-            'attachment' => SupportAttachmentRules::attachmentFieldRules(),
+            'attachment' => SupportAttachmentRules::fileRules(),
         ];
     }
 }

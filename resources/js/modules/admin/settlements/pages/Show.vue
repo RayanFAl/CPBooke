@@ -2,15 +2,19 @@
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import SystemTimeline from '../../components/SystemTimeline.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 
 const props = defineProps({
     settlement: { type: Object, required: true },
     items: { type: Object, required: true },
+    attachments: { type: Array, default: () => [] },
+    invoice_imports: { type: Array, default: () => [] },
     filters: { type: Object, required: true },
     can_manage: { type: Boolean, default: false },
+    can_reopen: { type: Boolean, default: false },
     item_statuses: { type: Array, default: () => [] },
+    resolution_reasons: { type: Object, default: () => ({}) },
     system_timeline: { type: Array, default: () => [] },
 });
 
@@ -23,12 +27,42 @@ const filterForm = reactive({
 
 const invoiceForm = useForm({
     csv_text: '',
-    lines: [],
+    invoice_file: null,
+    attachment: null,
+});
+
+const attachmentForm = useForm({
+    file: null,
 });
 
 const resolveForm = useForm({
+    resolution: 'accept_variance',
+    reason: 'extra_supplier_fee',
     resolution_note: '',
+    amount: '',
+    booking_reference: '',
+    order_id: '',
+    supplier_invoice_cost: '',
+    drop_invoice_line: false,
 });
+
+const reopenForm = useForm({
+    reason: '',
+});
+
+const reasonOptions = computed(() => Object.entries(props.resolution_reasons)
+    .filter(([, config]) => config.resolution === resolveForm.resolution)
+    .map(([value, config]) => ({ value, posts: config.posts_ledger })));
+
+const canMutate = computed(() => props.can_manage && props.settlement.can_mutate);
+const canClose = computed(() => props.can_manage
+    && ['open', 'approved', 'reopened'].includes(props.settlement.status)
+    && Number(props.settlement.review_count) === 0
+    && Number(props.settlement.pending_approvals) === 0);
+const canApprove = computed(() => props.can_manage
+    && props.settlement.status === 'open'
+    && Number(props.settlement.review_count) === 0
+    && Number(props.settlement.pending_approvals) === 0);
 
 const applyItemFilter = () => {
     router.get(route('admin.settlements.show', props.settlement.id), {
@@ -37,8 +71,26 @@ const applyItemFilter = () => {
 };
 
 const importInvoice = () => {
-    invoiceForm.post(route('admin.settlements.import-invoice', props.settlement.id), {
+    invoiceForm.transform((data) => {
+        const payload = { csv_text: data.csv_text };
+        if (data.invoice_file) {
+            payload.invoice_file = data.invoice_file;
+        }
+        if (data.attachment) {
+            payload.attachment = data.attachment;
+        }
+        return payload;
+    }).post(route('admin.settlements.import-invoice', props.settlement.id), {
         preserveScroll: true,
+        forceFormData: true,
+    });
+};
+
+const uploadAttachment = () => {
+    attachmentForm.post(route('admin.settlements.attachments.store', props.settlement.id), {
+        preserveScroll: true,
+        forceFormData: true,
+        onSuccess: () => attachmentForm.reset(),
     });
 };
 
@@ -46,14 +98,27 @@ const compare = () => {
     router.post(route('admin.settlements.compare', props.settlement.id), {}, { preserveScroll: true });
 };
 
+const approvePeriod = () => {
+    router.post(route('admin.settlements.approve', props.settlement.id), {}, { preserveScroll: true });
+};
+
 const closePeriod = () => {
     router.post(route('admin.settlements.close', props.settlement.id), {}, { preserveScroll: true });
 };
 
-const openResolve = (itemId) => {
-    resolvingId.value = itemId;
+const reopenPeriod = () => {
+    reopenForm.post(route('admin.settlements.reopen', props.settlement.id), { preserveScroll: true });
+};
+
+const openResolve = (item) => {
+    resolvingId.value = item.id;
     resolveForm.reset();
     resolveForm.clearErrors();
+    resolveForm.resolution = 'accept_variance';
+    resolveForm.reason = 'extra_supplier_fee';
+    resolveForm.amount = item.difference ?? '';
+    resolveForm.booking_reference = item.booking_reference ?? '';
+    resolveForm.order_id = item.order_id ?? '';
 };
 
 const submitResolve = () => {
@@ -92,14 +157,27 @@ const formatStatus = (status) => status.replaceAll('_', ' ');
                             {{ settlement.currency }} · {{ settlement.status }} · {{ settlement.orders_count }} {{ t('orders') }}
                         </p>
                     </div>
-                    <div v-if="can_manage && settlement.status !== 'closed'" class="flex flex-wrap gap-2">
-                        <button type="button" class="rounded-xl border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50" @click="compare">
+                    <div class="flex flex-wrap gap-2">
+                        <button
+                            v-if="canMutate"
+                            type="button"
+                            class="rounded-xl border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
+                            @click="compare"
+                        >
                             {{ t('Re-compare') }}
                         </button>
                         <button
+                            v-if="canApprove"
                             type="button"
-                            class="rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                            :disabled="settlement.review_count > 0"
+                            class="rounded-xl border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
+                            @click="approvePeriod"
+                        >
+                            {{ t('Approve period') }}
+                        </button>
+                        <button
+                            v-if="canClose"
+                            type="button"
+                            class="rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
                             @click="closePeriod"
                         >
                             {{ t('Close period') }}
@@ -133,27 +211,143 @@ const formatStatus = (status) => status.replaceAll('_', ' ');
                         {{ settlement.review_count }}
                         <span class="text-sm font-normal text-slate-500">/ {{ settlement.matched_count }} {{ t('matched') }}</span>
                     </p>
+                    <p class="mt-1 text-xs text-slate-500">{{ settlement.pending_approvals }} {{ t('pending approvals') }}</p>
+                    <p v-if="settlement.resolved_count" class="mt-1 text-xs text-slate-500">
+                        {{ settlement.resolved_count }} {{ t('resolved') }} · {{ settlement.adjustment_total }} {{ t('adjustments') }}
+                    </p>
                 </div>
             </div>
 
-            <div v-if="can_manage && settlement.status !== 'closed'" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 class="text-sm font-semibold text-slate-950">{{ t('Import supplier invoice') }}</h3>
-                <p class="mt-1 text-sm text-slate-600">
-                    {{ t('Paste CSV lines: booking_reference,amount') }}
-                </p>
-                <form class="mt-4 space-y-3" @submit.prevent="importInvoice">
-                    <textarea
-                        v-model="invoiceForm.csv_text"
-                        rows="6"
-                        class="w-full rounded-xl border border-slate-300 px-3 py-2.5 font-mono text-sm"
-                        placeholder="BK-1001,531.00&#10;BK-1002,420.50"
-                    />
-                    <p v-if="invoiceForm.errors.lines" class="text-xs text-rose-600">{{ invoiceForm.errors.lines }}</p>
-                    <button type="submit" class="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-800" :disabled="invoiceForm.processing">
-                        {{ t('Import & compare') }}
-                    </button>
-                </form>
+            <div v-if="settlement.close_snapshot" class="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+                <h3 class="text-sm font-semibold text-emerald-950">{{ t('Close snapshot') }}</h3>
+                <p class="mt-1 text-xs text-emerald-800">{{ t('Frozen totals at close. Later order or wallet changes do not rewrite this period.') }}</p>
+                <dl class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Expected total') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.expected_total }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Wallet total') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.wallet_total }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Invoice total') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.invoice_total }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Variance total') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.variance_total }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Matched') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.matched_count }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Resolved') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.resolved_count }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-emerald-700">{{ t('Adjustment total') }}</dt>
+                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.adjustment_total }}</dd>
+                    </div>
+                </dl>
             </div>
+
+            <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 class="text-sm font-semibold text-slate-950">{{ t('Invoice imports') }}</h3>
+                <p class="mt-1 text-sm text-slate-600">{{ t('Re-import replaces the active invoice. Previous imports stay in the audit trail.') }}</p>
+                <ul class="mt-4 space-y-2 text-sm">
+                    <li v-for="item in invoice_imports" :key="item.id" class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 px-3 py-2">
+                        <span>
+                            {{ t('Import') }} #{{ item.sequence }}
+                            <span v-if="item.is_active" class="ms-2 rounded-full bg-cyan-50 px-2 py-0.5 text-xs font-medium text-cyan-800">{{ t('Active') }}</span>
+                        </span>
+                        <span class="text-xs text-slate-500">
+                            {{ item.row_count }} {{ t('rows') }} · {{ item.matched_count }} {{ t('matched') }} · {{ item.extra_count }} {{ t('extra') }} · {{ item.error_count }} {{ t('errors') }}
+                        </span>
+                    </li>
+                    <li v-if="invoice_imports.length === 0" class="text-slate-500">{{ t('No invoice imports yet.') }}</li>
+                </ul>
+            </div>
+
+            <div v-if="canMutate" class="grid gap-6 lg:grid-cols-2">
+                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 class="text-sm font-semibold text-slate-950">{{ t('Import supplier invoice') }}</h3>
+                    <p class="mt-1 text-sm text-slate-600">
+                        {{ t('Paste CSV or upload CSV/XLSX: booking_reference,amount') }}
+                    </p>
+                    <form class="mt-4 space-y-3" @submit.prevent="importInvoice">
+                        <textarea
+                            v-model="invoiceForm.csv_text"
+                            rows="5"
+                            class="w-full rounded-xl border border-slate-300 px-3 py-2.5 font-mono text-sm"
+                            placeholder="BK-1001,531.00&#10;BK-1002,420.50"
+                        />
+                        <input
+                            type="file"
+                            accept=".csv,.txt,.xlsx,.xlsm"
+                            class="block w-full text-sm"
+                            @change="invoiceForm.invoice_file = $event.target.files[0]"
+                        >
+                        <p v-if="invoiceForm.errors.lines" class="text-xs text-rose-600">{{ invoiceForm.errors.lines }}</p>
+                        <button type="submit" class="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-800" :disabled="invoiceForm.processing">
+                            {{ t('Import & compare') }}
+                        </button>
+                    </form>
+                </div>
+                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 class="text-sm font-semibold text-slate-950">{{ t('Attachments') }}</h3>
+                    <p class="mt-1 text-sm text-slate-600">{{ t('Store the provider invoice PDF, CSV, or Excel on this period.') }}</p>
+                    <form class="mt-4 space-y-3" @submit.prevent="uploadAttachment">
+                        <input
+                            type="file"
+                            accept=".csv,.txt,.xlsx,.xlsm,.pdf"
+                            class="block w-full text-sm"
+                            @change="attachmentForm.file = $event.target.files[0]"
+                        >
+                        <button type="submit" class="rounded-xl border border-slate-300 px-4 py-2 text-sm" :disabled="attachmentForm.processing">
+                            {{ t('Upload attachment') }}
+                        </button>
+                    </form>
+                    <ul class="mt-4 space-y-2 text-sm">
+                        <li v-for="file in attachments" :key="file.id">
+                            <a
+                                :href="route('admin.settlements.attachments.download', [settlement.id, file.id])"
+                                class="text-cyan-700 hover:text-cyan-800"
+                            >
+                                {{ file.original_name }}
+                            </a>
+                            <span class="text-xs text-slate-500"> · {{ file.kind }}</span>
+                        </li>
+                        <li v-if="attachments.length === 0" class="text-slate-500">{{ t('No attachments yet.') }}</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div v-else class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 class="text-sm font-semibold text-slate-950">{{ t('Attachments') }}</h3>
+                <ul class="mt-4 space-y-2 text-sm">
+                    <li v-for="file in attachments" :key="file.id">
+                        <a
+                            :href="route('admin.settlements.attachments.download', [settlement.id, file.id])"
+                            class="text-cyan-700 hover:text-cyan-800"
+                        >
+                            {{ file.original_name }}
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <form
+                v-if="can_reopen && settlement.status === 'closed'"
+                class="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm space-y-3"
+                @submit.prevent="reopenPeriod"
+            >
+                <h3 class="text-sm font-semibold text-amber-950">{{ t('Reopen period') }}</h3>
+                <textarea v-model="reopenForm.reason" rows="2" class="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm" />
+                <p v-if="reopenForm.errors.reason" class="text-xs text-rose-700">{{ reopenForm.errors.reason }}</p>
+                <button type="submit" class="rounded-xl bg-amber-700 px-4 py-2 text-sm font-medium text-white">{{ t('Reopen') }}</button>
+            </form>
 
             <form class="flex gap-3" @submit.prevent="applyItemFilter">
                 <select v-model="filterForm.item_status" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
@@ -181,7 +375,7 @@ const formatStatus = (status) => status.replaceAll('_', ' ');
                             <td class="px-4 py-3">
                                 <p class="font-medium text-slate-950">{{ item.booking_reference || '—' }}</p>
                                 <p class="text-xs text-slate-500">
-                                    <span v-if="item.order_id">Order #{{ item.order_id }}</span>
+                                    <span v-if="item.order_id">Order #{{ item.order_id }} · {{ item.expected_cost_source }}</span>
                                     <span v-else>{{ t('Invoice only') }}</span>
                                 </p>
                             </td>
@@ -193,13 +387,14 @@ const formatStatus = (status) => status.replaceAll('_', ' ');
                                 <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-slate-700">
                                     {{ formatStatus(item.status) }}
                                 </span>
+                                <p v-if="item.pending_approval_id" class="mt-1 text-xs text-amber-700">{{ t('Pending approval') }}</p>
                             </td>
                             <td class="px-4 py-3">
                                 <button
-                                    v-if="can_manage && item.needs_review && settlement.status !== 'closed'"
+                                    v-if="canMutate && item.needs_review && !item.pending_approval_id"
                                     type="button"
                                     class="text-xs font-medium text-cyan-700 hover:text-cyan-800"
-                                    @click="openResolve(item.id)"
+                                    @click="openResolve(item)"
                                 >
                                     {{ t('Resolve') }}
                                 </button>
@@ -216,12 +411,38 @@ const formatStatus = (status) => status.replaceAll('_', ' ');
             <div v-if="resolvingId" class="rounded-3xl border border-cyan-200 bg-cyan-50 p-5 shadow-sm">
                 <h3 class="text-sm font-semibold text-cyan-950">{{ t('Resolve item') }} #{{ resolvingId }}</h3>
                 <form class="mt-3 space-y-3" @submit.prevent="submitResolve">
+                    <select v-model="resolveForm.resolution" class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm">
+                        <option value="accept_variance">{{ t('Accept variance') }}</option>
+                        <option value="correct_data">{{ t('Correct data') }}</option>
+                    </select>
+                    <select v-model="resolveForm.reason" class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm">
+                        <option v-for="reason in reasonOptions" :key="reason.value" :value="reason.value">{{ formatStatus(reason.value) }}</option>
+                    </select>
+                    <input
+                        v-if="resolveForm.resolution === 'accept_variance'"
+                        v-model="resolveForm.amount"
+                        type="number"
+                        step="0.01"
+                        class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm"
+                        :placeholder="t('Adjustment amount')"
+                    >
+                    <template v-if="resolveForm.resolution === 'correct_data'">
+                        <input v-model="resolveForm.booking_reference" class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm" :placeholder="t('Booking reference')">
+                        <input v-model="resolveForm.supplier_invoice_cost" type="number" step="0.01" class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm" :placeholder="t('Invoice amount')">
+                        <label class="flex items-center gap-2 text-sm text-cyan-950">
+                            <input v-model="resolveForm.drop_invoice_line" type="checkbox">
+                            {{ t('Drop unmatched invoice line') }}
+                        </label>
+                    </template>
                     <textarea
                         v-model="resolveForm.resolution_note"
                         rows="3"
                         class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm"
                         :placeholder="t('Explain how this variance was handled')"
                     />
+                    <p v-if="resolveForm.errors.resolution" class="text-xs text-rose-700">{{ resolveForm.errors.resolution }}</p>
+                    <p v-if="resolveForm.errors.reason" class="text-xs text-rose-700">{{ resolveForm.errors.reason }}</p>
+                    <p v-if="resolveForm.errors.amount" class="text-xs text-rose-700">{{ resolveForm.errors.amount }}</p>
                     <p v-if="resolveForm.errors.resolution_note" class="text-xs text-rose-700">{{ resolveForm.errors.resolution_note }}</p>
                     <div class="flex gap-2">
                         <button type="submit" class="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-medium text-white">{{ t('Confirm resolve') }}</button>

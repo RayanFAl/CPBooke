@@ -1,8 +1,14 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import AdminSidebar from '../components/AdminSidebar.vue';
+import AdminBreadcrumbs from '../components/AdminBreadcrumbs.vue';
+import AdminToastHost from '../components/AdminToastHost.vue';
+import AdminConfirmDialog from '../components/AdminConfirmDialog.vue';
+import AdminGlobalSearch from '../components/AdminGlobalSearch.vue';
+import { bindAdminNavigation } from '../composables/useAdminNavigation';
 import { useAdminLocale } from '../composables/useAdminLocale';
+import { useAdminToast } from '../composables/useAdminToast';
 
 const props = defineProps({
     title: {
@@ -12,6 +18,10 @@ const props = defineProps({
     description: {
         type: String,
         default: '',
+    },
+    breadcrumbs: {
+        type: Array,
+        default: () => [],
     },
 });
 
@@ -24,6 +34,7 @@ const desktopSidebarCollapsed = ref(
 );
 const user = computed(() => page.props.auth.user);
 const flash = computed(() => page.props.flash ?? {});
+const toast = useAdminToast();
 const { locale, isArabic, setLocale, t } = useAdminLocale();
 const translatedTitle = computed(() => t(props.title));
 const translatedDescription = computed(() => t(props.description));
@@ -73,10 +84,35 @@ watch(desktopSidebarCollapsed, (collapsed) => {
 
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? '1' : '0');
 });
+
+watch(
+    flash,
+    (value) => {
+        if (value.success) {
+            toast.success(value.success);
+        }
+
+        if (value.error) {
+            toast.error(value.error);
+        }
+    },
+    { immediate: true },
+);
+
+onMounted(() => {
+    bindAdminNavigation();
+});
 </script>
 
 <template>
     <div class="admin-shell min-h-screen bg-slate-100 text-slate-900" :dir="isArabic ? 'rtl' : 'ltr'">
+        <a
+            href="#main-content"
+            class="skip-to-content"
+        >
+            {{ t('Skip to main content') }}
+        </a>
+
         <div class="flex min-h-screen">
             <div
                 class="hidden shrink-0 transition-[width] duration-300 lg:block"
@@ -152,6 +188,8 @@ watch(desktopSidebarCollapsed, (collapsed) => {
                         </div>
 
                         <div class="flex shrink-0 items-center gap-3 text-sm">
+                            <AdminGlobalSearch />
+
                             <button
                                 type="button"
                                 class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
@@ -186,25 +224,15 @@ watch(desktopSidebarCollapsed, (collapsed) => {
                     </div>
                 </header>
 
-                <main class="flex-1 px-5 py-6 sm:px-8">
-                    <div v-if="flash.success || flash.error" class="mb-6 space-y-3">
-                        <div
-                            v-if="flash.success"
-                            class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
-                        >
-                            {{ flash.success }}
-                        </div>
-                        <div
-                            v-if="flash.error"
-                            class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800"
-                        >
-                            {{ flash.error }}
-                        </div>
-                    </div>
+                <main id="main-content" class="flex-1 px-5 py-6 sm:px-8" tabindex="-1">
+                    <AdminBreadcrumbs v-if="breadcrumbs.length" :items="breadcrumbs" />
 
                     <slot />
                 </main>
             </div>
         </div>
+
+        <AdminToastHost />
+        <AdminConfirmDialog />
     </div>
 </template>

@@ -728,7 +728,7 @@ class SupportTest extends TestCase
 
         $this->assertTrue($supportProps['order_actions']['can_manage']);
         $this->assertSame(
-            ['cancel', 'full_refund', 'partial_refund', 'reverse_refund', 'compensation'],
+            ['cancel', 'full_refund', 'reverse_refund', 'compensation'],
             array_column($supportProps['order_actions']['available'], 'name'),
             'Support agents retain reverse refund access temporarily through the legacy orders.change-status fallback.',
         );
@@ -978,6 +978,8 @@ class SupportTest extends TestCase
         $this->assertSame('application/pdf', $message->attachment_mime);
 
         Storage::disk('local')->assertExists($message->attachment_path);
+        $this->assertStringStartsWith('support/attachments/', $message->attachment_path);
+        $this->assertNotSame('support-note.pdf', basename((string) $message->attachment_path));
     }
 
     public function test_support_auto_assignment_uses_weighted_scoring_and_falls_back_when_all_agents_are_overloaded(): void
@@ -1115,11 +1117,10 @@ class SupportTest extends TestCase
                 ->where('ticket.order_ticket.service_type', Order::SERVICE_TYPE_FLIGHT)
                 ->has('ticket.timeline')
                 ->where('order_actions.can_manage', true)
-                ->has('order_actions.available', 4)
+                ->has('order_actions.available', 3)
                 ->where('order_actions.available.0.name', 'cancel')
                 ->where('order_actions.available.1.name', 'full_refund')
-                ->where('order_actions.available.2.name', 'partial_refund')
-                ->where('order_actions.available.3.name', 'compensation')
+                ->where('order_actions.available.2.name', 'compensation')
             );
     }
 

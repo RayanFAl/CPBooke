@@ -1,9 +1,12 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import AdminSparkline from '../../components/AdminSparkline.vue';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
+import { useAdminNavigation } from '../../composables/useAdminNavigation';
+import AdminDashboardSkeleton from '../../components/AdminDashboardSkeleton.vue';
 
 const props = defineProps({
     dashboard: {
@@ -30,6 +33,7 @@ const spotlightCards = computed(() => props.dashboard.spotlights ?? []);
 const latestOrders = computed(() => props.dashboard.latest_orders ?? []);
 const { locale, t } = useAdminLocale();
 const { defaultCurrency } = usePlatformCurrency();
+const { navigating } = useAdminNavigation();
 
 const orderTrend = computed(() => props.dashboard.charts?.orders_trend ?? []);
 const revenueTrend = computed(() => props.dashboard.charts?.revenue_trend ?? []);
@@ -70,7 +74,7 @@ function metricValue(value, format) {
     if (format === 'currency') {
         return new Intl.NumberFormat(locale.value, {
             style: 'currency',
-            currency: defaultCurrency.value,
+            currency: defaultCurrency.value || 'LYD',
             maximumFractionDigits: 0,
         }).format(Number(value ?? 0));
     }
@@ -97,7 +101,7 @@ function formatLabel(value) {
 function formatMoney(value, currency = null) {
     return new Intl.NumberFormat(locale.value, {
         style: 'currency',
-        currency: currency || defaultCurrency.value,
+        currency: currency || defaultCurrency.value || 'LYD',
         maximumFractionDigits: 0,
     }).format(Number(value ?? 0));
 }
@@ -116,6 +120,14 @@ function formatDateTime(value) {
 function barWidth(value, maxValue) {
     return `${Math.max((Number(value ?? 0) / Math.max(maxValue, 1)) * 100, 6)}%`;
 }
+
+const openOrdersDesk = () => {
+    router.visit(route('admin.orders.index'));
+};
+
+const openFinanceDesk = () => {
+    router.visit(route('admin.finance.index'));
+};
 </script>
 
 <template>
@@ -177,6 +189,9 @@ function barWidth(value, maxValue) {
                 </div>
             </div>
 
+            <AdminDashboardSkeleton v-if="navigating" />
+
+            <template v-else>
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <article
                     v-for="card in overviewCards"
@@ -211,16 +226,13 @@ function barWidth(value, maxValue) {
                             </div>
 
                             <div class="mt-6 rounded-[1.5rem] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] p-4 text-slate-900">
-                                <svg viewBox="0 0 320 140" class="h-40 w-full">
-                                    <defs>
-                                        <linearGradient id="ordersLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                            <stop offset="0%" stop-color="#60a5fa" />
-                                            <stop offset="100%" stop-color="#94a3b8" />
-                                        </linearGradient>
-                                    </defs>
-                                    <path d="M 0 120 L 320 120" stroke="rgba(148,163,184,0.28)" stroke-width="1" />
-                                    <path v-if="orderTrendPath" :d="orderTrendPath" fill="none" stroke="url(#ordersLineGradient)" stroke-linecap="round" stroke-width="6" />
-                                </svg>
+                                <AdminSparkline
+                                    :points="orderTrend"
+                                    :line-path="orderTrendPath"
+                                    gradient-id="ordersLineGradient"
+                                    :locale="locale"
+                                    @point-click="openOrdersDesk"
+                                />
 
                                 <div class="mt-4 grid grid-cols-7 gap-2 text-center text-xs text-slate-500">
                                     <div v-for="point in orderTrend" :key="point.label">
@@ -243,16 +255,17 @@ function barWidth(value, maxValue) {
                             </div>
 
                             <div class="mt-6 rounded-[1.5rem] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] p-4 text-slate-900">
-                                <svg viewBox="0 0 320 140" class="h-40 w-full">
-                                    <defs>
-                                        <linearGradient id="revenueLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                            <stop offset="0%" stop-color="#86efac" />
-                                            <stop offset="100%" stop-color="#93c5fd" />
-                                        </linearGradient>
-                                    </defs>
-                                    <path d="M 0 120 L 320 120" stroke="rgba(148,163,184,0.28)" stroke-width="1" />
-                                    <path v-if="revenueTrendPath" :d="revenueTrendPath" fill="none" stroke="url(#revenueLineGradient)" stroke-linecap="round" stroke-width="6" />
-                                </svg>
+                                <AdminSparkline
+                                    :points="revenueTrend"
+                                    :line-path="revenueTrendPath"
+                                    gradient-id="revenueLineGradient"
+                                    format="currency"
+                                    :locale="locale"
+                                    :currency="platformCurrency"
+                                    stroke-from="#86efac"
+                                    stroke-to="#93c5fd"
+                                    @point-click="openFinanceDesk"
+                                />
 
                                 <div class="mt-4 grid grid-cols-7 gap-2 text-center text-[11px] text-slate-500">
                                     <div v-for="point in revenueTrend" :key="point.label">
@@ -384,6 +397,7 @@ function barWidth(value, maxValue) {
                     </article>
                 </div>
             </div>
+            </template>
         </section>
     </AdminLayout>
 </template>

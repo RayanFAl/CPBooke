@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Home\Services;
 
 use App\Models\HomeBanner;
 use App\Models\HomeOffer;
+use App\Support\Home\HomeContentSchedule;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -110,9 +111,10 @@ class HomeAdminService
                 : '',
             'sort_order' => $banner->sort_order,
             'is_active' => $banner->is_active,
-            'starts_at' => $banner->starts_at?->format('Y-m-d\TH:i'),
-            'ends_at' => $banner->ends_at?->format('Y-m-d\TH:i'),
+            'starts_at' => HomeContentSchedule::formatForAdmin($banner->starts_at),
+            'ends_at' => HomeContentSchedule::formatForAdmin($banner->ends_at),
             'platforms' => $banner->platforms ?? [],
+            'schedule_timezone' => HomeContentSchedule::timezone(),
         ];
     }
 
@@ -142,9 +144,10 @@ class HomeAdminService
                 : '',
             'sort_order' => $offer->sort_order,
             'is_active' => $offer->is_active,
-            'starts_at' => $offer->starts_at?->format('Y-m-d\TH:i'),
-            'ends_at' => $offer->ends_at?->format('Y-m-d\TH:i'),
+            'starts_at' => HomeContentSchedule::formatForAdmin($offer->starts_at),
+            'ends_at' => HomeContentSchedule::formatForAdmin($offer->ends_at),
             'platforms' => $offer->platforms ?? [],
+            'schedule_timezone' => HomeContentSchedule::timezone(),
         ];
     }
 
@@ -182,8 +185,8 @@ class HomeAdminService
             'action_payload' => $payload,
             'sort_order' => (int) ($data['sort_order'] ?? 0),
             'is_active' => (bool) ($data['is_active'] ?? true),
-            'starts_at' => $data['starts_at'] ?: null,
-            'ends_at' => $data['ends_at'] ?: null,
+            'starts_at' => HomeContentSchedule::parseAdminDateTime($data['starts_at'] ?? null),
+            'ends_at' => HomeContentSchedule::parseAdminDateTime($data['ends_at'] ?? null),
             'platforms' => $platforms,
         ];
     }

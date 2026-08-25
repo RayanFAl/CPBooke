@@ -29,3 +29,52 @@ html[lang='ar'] .admin-shell .overflow-x-auto > table.min-w-full th,
 html[lang='ar'] .admin-shell .overflow-x-auto > table.min-w-full td {
 	overflow-wrap: anywhere;
 }
+
+.skip-to-content {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.skip-to-content:focus {
+	position: fixed;
+	inset-block-start: 1rem;
+	inset-inline-start: 1rem;
+	z-index: 100;
+	width: auto;
+	height: auto;
+	margin: 0;
+	padding: 0.75rem 1rem;
+	overflow: visible;
+	clip: auto;
+	white-space: normal;
+	border-radius: 0.75rem;
+	background-color: #020617;
+	color: #ffffff;
+	font-size: 0.875rem;
+	font-weight: 600;
+	text-decoration: none;
+	box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+}
+
+.admin-skeleton {
+	background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+	background-size: 200% 100%;
+	animation: admin-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes admin-shimmer {
+	0% {
+		background-position: 200% 0;
+	}
+
+	100% {
+		background-position: -200% 0;
+	}
+}

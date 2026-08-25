@@ -1,268 +1,266 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
-import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
+import { useForm, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
-    settings: {
-        type: Object,
-        required: true,
-    },
-    channelStatus: {
-        type: Object,
-        required: true,
-    },
-    currencyOptions: {
-        type: Array,
-        required: true,
-    },
+    settings: { type: Object, required: true },
+    channel_statuses: { type: Array, default: () => [] },
+    can_manage_sensitive_flags: { type: Boolean, default: false },
+    update_url: { type: String, required: true },
 });
 
 const { t } = useAdminLocale();
 const page = usePage();
 const activeTab = ref('company');
 
-const tabs = computed(() => [
-    { id: 'company', label: t('Company') },
-    { id: 'currency', label: t('Currency & locale') },
-    { id: 'channels', label: t('Channels') },
-    { id: 'flags', label: t('Feature flags') },
-]);
+const tabs = [
+    { id: 'company', label: 'Company' },
+    { id: 'localization', label: 'Currency' },
+    { id: 'margins', label: 'Margins' },
+    { id: 'channels', label: 'Channels' },
+    { id: 'features', label: 'Feature Flags' },
+    { id: 'integrations', label: 'Integrations' },
+];
 
 const form = useForm({
-    company_legal_name: props.settings.company_legal_name ?? '',
-    company_display_name: props.settings.company_display_name ?? '',
+    company_name: props.settings.company_name ?? '',
+    company_address: props.settings.company_address ?? '',
     support_email: props.settings.support_email ?? '',
     support_phone: props.settings.support_phone ?? '',
-    website_url: props.settings.website_url ?? '',
     tax_id: props.settings.tax_id ?? '',
-    company_address: props.settings.company_address ?? '',
+    logo_path: props.settings.logo_path ?? '',
     default_currency: props.settings.default_currency ?? 'LYD',
-    timezone: props.settings.timezone ?? 'Africa/Tripoli',
-    default_locale: props.settings.default_locale ?? 'en',
-    default_margin_percent: props.settings.default_margin_percent ?? '',
-    email_enabled: Boolean(props.settings.email_enabled),
-    sms_enabled: Boolean(props.settings.sms_enabled),
-    whatsapp_enabled: Boolean(props.settings.whatsapp_enabled),
-    push_enabled: Boolean(props.settings.push_enabled),
-    mail_from_name: props.settings.mail_from_name ?? '',
-    sms_sender_id: props.settings.sms_sender_id ?? '',
-    maintenance_mode: Boolean(props.settings.maintenance_mode),
-    support_chat_enabled: Boolean(props.settings.support_chat_enabled),
-    orders_legacy_create_enabled: Boolean(props.settings.orders_legacy_create_enabled),
-    home_offers_enabled: Boolean(props.settings.home_offers_enabled),
+    timezone: props.settings.timezone ?? 'UTC',
+    locale: props.settings.locale ?? 'en',
+    default_commission_percent: props.settings.default_commission_percent ?? '',
+    channel_email_enabled: Boolean(props.settings.channel_email_enabled),
+    channel_sms_enabled: Boolean(props.settings.channel_sms_enabled),
+    channel_whatsapp_enabled: Boolean(props.settings.channel_whatsapp_enabled),
+    channel_push_enabled: Boolean(props.settings.channel_push_enabled),
+    email_from_name: props.settings.email_from_name ?? '',
+    sms_sender_name: props.settings.sms_sender_name ?? '',
+    whatsapp_sender_name: props.settings.whatsapp_sender_name ?? '',
+    feature_maintenance_mode: Boolean(props.settings.feature_maintenance_mode),
+    feature_chat_enabled: Boolean(props.settings.feature_chat_enabled),
+    feature_legacy_order_create: Boolean(props.settings.feature_legacy_order_create),
+    section: 'company',
 });
 
-const flashSuccess = computed(() => page.props.flash?.success ?? null);
-
-const channelLabel = (configured) => (configured ? t('Credentials configured') : t('Missing credentials in .env'));
+const flashSuccess = computed(() => page.props.flash?.success ?? '');
 
 const submit = () => {
-    form
-        .transform((data) => ({
-            ...data,
-            default_margin_percent: data.default_margin_percent === '' ? null : data.default_margin_percent,
-            website_url: data.website_url === '' ? null : data.website_url,
-            support_email: data.support_email === '' ? null : data.support_email,
-            support_phone: data.support_phone === '' ? null : data.support_phone,
-            tax_id: data.tax_id === '' ? null : data.tax_id,
-            company_address: data.company_address === '' ? null : data.company_address,
-            mail_from_name: data.mail_from_name === '' ? null : data.mail_from_name,
-            sms_sender_id: data.sms_sender_id === '' ? null : data.sms_sender_id,
-        }))
-        .put(route('admin.settings.update'), {
-            preserveScroll: true,
-        });
+    form.section = activeTab.value;
+    form.transform((data) => ({
+        ...data,
+        default_commission_percent:
+            data.default_commission_percent === '' || data.default_commission_percent === null
+                ? null
+                : Number(data.default_commission_percent),
+        logo_path: data.logo_path || null,
+    })).put(props.update_url, {
+        preserveScroll: true,
+    });
 };
 
-const tabClass = (id) => (activeTab.value === id
-    ? 'bg-slate-950 text-white'
-    : 'text-slate-600 hover:bg-slate-100');
+const modeBadgeClass = (mode) => {
+    if (mode === 'configured') {
+        return 'bg-emerald-100 text-emerald-800';
+    }
+
+    if (mode === 'simulated') {
+        return 'bg-amber-100 text-amber-800';
+    }
+
+    return 'bg-rose-100 text-rose-800';
+};
 </script>
 
 <template>
     <AdminLayout
         title="Settings"
-        description="Platform configuration for company identity, currency, channels, and feature flags."
+        description="Platform configuration for company profile, currency, margins, channels, and feature flags."
     >
-        <Head title="Settings" />
-
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div class="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
-                            {{ t('Configuration') }}
-                        </p>
-                        <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('System settings') }}</h2>
-                        <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                            {{ t('Secrets stay in environment variables. This screen stores editable business settings only.') }}
-                        </p>
-                    </div>
-                    <p class="text-xs text-slate-500">
-                        {{ t('Version') }} {{ settings.settings_version }}
-                    </p>
-                </div>
-
+                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Configuration') }}</p>
+                <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Settings') }}</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                    {{ t('Editable operational settings. Secrets and API tokens remain in environment variables.') }}
+                </p>
                 <p v-if="flashSuccess" class="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                     {{ flashSuccess }}
                 </p>
-
-                <div class="mt-6 flex flex-wrap gap-2">
-                    <button
-                        v-for="tab in tabs"
-                        :key="tab.id"
-                        type="button"
-                        class="rounded-full px-4 py-2 text-sm font-medium transition"
-                        :class="tabClass(tab.id)"
-                        @click="activeTab = tab.id"
-                    >
-                        {{ tab.label }}
-                    </button>
-                </div>
+                <p class="mt-3 text-xs text-slate-500">
+                    {{ t('Version') }}: {{ settings.settings_version }}
+                    <span v-if="settings.updated_at"> · {{ settings.updated_at }}</span>
+                </p>
             </div>
 
-            <form class="space-y-6" @submit.prevent="submit">
-                <div v-show="activeTab === 'company'" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Company') }}</h3>
-                    <div class="mt-4 grid gap-4 md:grid-cols-2">
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-700">{{ t('Legal name') }}</span>
-                            <input v-model="form.company_legal_name" type="text" class="w-full rounded-xl border-slate-300" />
-                        </label>
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-700">{{ t('Display name') }}</span>
-                            <input v-model="form.company_display_name" type="text" class="w-full rounded-xl border-slate-300" />
-                        </label>
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-700">{{ t('Support email') }}</span>
-                            <input v-model="form.support_email" type="email" class="w-full rounded-xl border-slate-300" />
-                        </label>
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-700">{{ t('Support phone') }}</span>
-                            <input v-model="form.support_phone" type="text" class="w-full rounded-xl border-slate-300" />
-                        </label>
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-700">{{ t('Website') }}</span>
-                            <input v-model="form.website_url" type="url" class="w-full rounded-xl border-slate-300" />
-                        </label>
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-700">{{ t('Tax / registration ID') }}</span>
-                            <input v-model="form.tax_id" type="text" class="w-full rounded-xl border-slate-300" />
-                        </label>
-                        <label class="block text-sm md:col-span-2">
-                            <span class="mb-1 block text-slate-700">{{ t('Address') }}</span>
-                            <textarea v-model="form.company_address" rows="3" class="w-full rounded-xl border-slate-300" />
-                        </label>
-                    </div>
+            <div class="flex flex-wrap gap-2">
+                <button
+                    v-for="tab in tabs"
+                    :key="tab.id"
+                    type="button"
+                    class="rounded-2xl px-4 py-2 text-sm font-medium transition"
+                    :class="activeTab === tab.id ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                    @click="activeTab = tab.id"
+                >
+                    {{ t(tab.label) }}
+                </button>
+            </div>
+
+            <form class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm" @submit.prevent="submit">
+                <div v-show="activeTab === 'company'" class="grid gap-4 md:grid-cols-2">
+                    <label class="block text-sm">
+                        <span class="mb-1 block font-medium text-slate-800">{{ t('Company name') }}</span>
+                        <input v-model="form.company_name" type="text" class="w-full rounded-2xl border-slate-200" />
+                    </label>
+                    <label class="block text-sm">
+                        <span class="mb-1 block font-medium text-slate-800">{{ t('Tax ID') }}</span>
+                        <input v-model="form.tax_id" type="text" class="w-full rounded-2xl border-slate-200" />
+                    </label>
+                    <label class="block text-sm md:col-span-2">
+                        <span class="mb-1 block font-medium text-slate-800">{{ t('Address') }}</span>
+                        <textarea v-model="form.company_address" rows="2" class="w-full rounded-2xl border-slate-200" />
+                    </label>
+                    <label class="block text-sm">
+                        <span class="mb-1 block font-medium text-slate-800">{{ t('Support email') }}</span>
+                        <input v-model="form.support_email" type="email" class="w-full rounded-2xl border-slate-200" />
+                    </label>
+                    <label class="block text-sm">
+                        <span class="mb-1 block font-medium text-slate-800">{{ t('Support phone') }}</span>
+                        <input v-model="form.support_phone" type="text" class="w-full rounded-2xl border-slate-200" />
+                    </label>
+                    <label class="block text-sm md:col-span-2">
+                        <span class="mb-1 block font-medium text-slate-800">{{ t('Logo path (optional)') }}</span>
+                        <input v-model="form.logo_path" type="text" class="w-full rounded-2xl border-slate-200" placeholder="storage path or URL" />
+                    </label>
                 </div>
 
-                <div v-show="activeTab === 'currency'" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Currency & locale') }}</h3>
-                    <div class="mt-4 grid gap-4 md:grid-cols-2">
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-700">{{ t('Default currency') }}</span>
-                            <select v-model="form.default_currency" class="w-full rounded-xl border-slate-300">
-                                <option v-for="currency in currencyOptions" :key="currency" :value="currency">
-                                    {{ currency }}
-                                </option>
-                            </select>
-                        </label>
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-700">{{ t('Timezone') }}</span>
-                            <input v-model="form.timezone" type="text" class="w-full rounded-xl border-slate-300" />
-                        </label>
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-700">{{ t('Default locale') }}</span>
-                            <input v-model="form.default_locale" type="text" class="w-full rounded-xl border-slate-300" />
-                        </label>
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-700">{{ t('Default margin %') }}</span>
-                            <input v-model="form.default_margin_percent" type="number" min="0" max="100" step="0.01" class="w-full rounded-xl border-slate-300" />
-                        </label>
-                    </div>
-                    <p class="mt-3 text-xs text-slate-500">
-                        {{ t('Historical orders keep their original currency. Margin applies only when no provider/hint rate exists.') }}
+                <div v-show="activeTab === 'localization'" class="grid gap-4 md:grid-cols-3">
+                    <label class="block text-sm">
+                        <span class="mb-1 block font-medium text-slate-800">{{ t('Default currency') }}</span>
+                        <input v-model="form.default_currency" type="text" maxlength="3" class="w-full rounded-2xl border-slate-200 uppercase" />
+                    </label>
+                    <label class="block text-sm">
+                        <span class="mb-1 block font-medium text-slate-800">{{ t('Timezone') }}</span>
+                        <input v-model="form.timezone" type="text" class="w-full rounded-2xl border-slate-200" />
+                    </label>
+                    <label class="block text-sm">
+                        <span class="mb-1 block font-medium text-slate-800">{{ t('Locale') }}</span>
+                        <input v-model="form.locale" type="text" class="w-full rounded-2xl border-slate-200" />
+                    </label>
+                </div>
+
+                <div v-show="activeTab === 'margins'" class="space-y-3">
+                    <p class="text-sm text-slate-600">
+                        {{ t('Resolution order: payload hints → provider commission → platform default → zero margin. Historical orders are never rewritten.') }}
+                    </p>
+                    <label class="block max-w-sm text-sm">
+                        <span class="mb-1 block font-medium text-slate-800">{{ t('Default commission %') }}</span>
+                        <input v-model="form.default_commission_percent" type="number" min="0" max="100" step="0.01" class="w-full rounded-2xl border-slate-200" />
+                    </label>
+                </div>
+
+                <div v-show="activeTab === 'channels'" class="grid gap-4 md:grid-cols-2">
+                    <label class="flex items-center gap-3 text-sm text-slate-800">
+                        <input v-model="form.channel_email_enabled" type="checkbox" class="rounded border-slate-300" />
+                        {{ t('Email enabled') }}
+                    </label>
+                    <label class="block text-sm">
+                        <span class="mb-1 block font-medium text-slate-800">{{ t('Email from name') }}</span>
+                        <input v-model="form.email_from_name" type="text" class="w-full rounded-2xl border-slate-200" />
+                    </label>
+                    <label class="flex items-center gap-3 text-sm text-slate-800">
+                        <input v-model="form.channel_sms_enabled" type="checkbox" class="rounded border-slate-300" />
+                        {{ t('SMS enabled') }}
+                    </label>
+                    <label class="block text-sm">
+                        <span class="mb-1 block font-medium text-slate-800">{{ t('SMS sender name') }}</span>
+                        <input v-model="form.sms_sender_name" type="text" class="w-full rounded-2xl border-slate-200" />
+                    </label>
+                    <label class="flex items-center gap-3 text-sm text-slate-800">
+                        <input v-model="form.channel_whatsapp_enabled" type="checkbox" class="rounded border-slate-300" />
+                        {{ t('WhatsApp enabled') }}
+                    </label>
+                    <label class="block text-sm">
+                        <span class="mb-1 block font-medium text-slate-800">{{ t('WhatsApp sender name') }}</span>
+                        <input v-model="form.whatsapp_sender_name" type="text" class="w-full rounded-2xl border-slate-200" />
+                    </label>
+                    <label class="flex items-center gap-3 text-sm text-slate-800 md:col-span-2">
+                        <input v-model="form.channel_push_enabled" type="checkbox" class="rounded border-slate-300" />
+                        {{ t('Push enabled') }}
+                    </label>
+                    <p class="md:col-span-2 text-xs text-slate-500">
+                        {{ t('Gateway tokens stay in .env (SMS_*, WHATSAPP_*, FIREBASE_CREDENTIALS).') }}
                     </p>
                 </div>
 
-                <div v-show="activeTab === 'channels'" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Channels') }}</h3>
-                    <p class="mt-2 text-sm text-slate-600">
-                        {{ t('Toggle delivery channels. API tokens remain in .env and are never shown here.') }}
-                    </p>
+                <div v-show="activeTab === 'features'" class="space-y-4">
+                    <label class="flex items-center gap-3 text-sm text-slate-800">
+                        <input
+                            v-model="form.feature_maintenance_mode"
+                            type="checkbox"
+                            class="rounded border-slate-300"
+                            :disabled="!can_manage_sensitive_flags"
+                        />
+                        {{ t('Maintenance mode') }}
+                        <span v-if="!can_manage_sensitive_flags" class="text-xs text-slate-500">({{ t('super admin only') }})</span>
+                    </label>
+                    <label class="flex items-center gap-3 text-sm text-slate-800">
+                        <input v-model="form.feature_chat_enabled" type="checkbox" class="rounded border-slate-300" />
+                        {{ t('Support chat enabled') }}
+                    </label>
+                    <label class="flex items-center gap-3 text-sm text-slate-800">
+                        <input
+                            v-model="form.feature_legacy_order_create"
+                            type="checkbox"
+                            class="rounded border-slate-300"
+                            :disabled="!can_manage_sensitive_flags"
+                        />
+                        {{ t('Legacy order create') }}
+                        <span v-if="!can_manage_sensitive_flags" class="text-xs text-slate-500">({{ t('super admin only') }})</span>
+                    </label>
+                </div>
 
-                    <div class="mt-4 grid gap-4 md:grid-cols-2">
-                        <label class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm">
-                            <span>
-                                <span class="block font-medium text-slate-900">{{ t('Email') }}</span>
-                                <span class="text-xs text-slate-500">{{ channelLabel(channelStatus.email) }}</span>
+                <div v-show="activeTab === 'integrations'" class="space-y-3">
+                    <div
+                        v-for="status in channel_statuses"
+                        :key="status.channel"
+                        class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3"
+                    >
+                        <div>
+                            <p class="text-sm font-medium capitalize text-slate-900">{{ status.channel }}</p>
+                            <p class="text-xs text-slate-500">{{ status.provider }}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span
+                                class="rounded-full px-2.5 py-1 text-xs font-medium"
+                                :class="status.enabled ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'"
+                            >
+                                {{ status.enabled ? t('Enabled') : t('Disabled') }}
                             </span>
-                            <input v-model="form.email_enabled" type="checkbox" class="rounded border-slate-300" />
-                        </label>
-                        <label class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm">
-                            <span>
-                                <span class="block font-medium text-slate-900">{{ t('SMS') }}</span>
-                                <span class="text-xs text-slate-500">{{ channelLabel(channelStatus.sms) }}</span>
+                            <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="modeBadgeClass(status.mode)">
+                                {{ status.mode }}
                             </span>
-                            <input v-model="form.sms_enabled" type="checkbox" class="rounded border-slate-300" />
-                        </label>
-                        <label class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm">
-                            <span>
-                                <span class="block font-medium text-slate-900">{{ t('WhatsApp') }}</span>
-                                <span class="text-xs text-slate-500">{{ channelLabel(channelStatus.whatsapp) }}</span>
-                            </span>
-                            <input v-model="form.whatsapp_enabled" type="checkbox" class="rounded border-slate-300" />
-                        </label>
-                        <label class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm">
-                            <span>
-                                <span class="block font-medium text-slate-900">{{ t('Push') }}</span>
-                                <span class="text-xs text-slate-500">{{ channelLabel(channelStatus.push) }}</span>
-                            </span>
-                            <input v-model="form.push_enabled" type="checkbox" class="rounded border-slate-300" />
-                        </label>
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-700">{{ t('Mail from name') }}</span>
-                            <input v-model="form.mail_from_name" type="text" class="w-full rounded-xl border-slate-300" />
-                        </label>
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-700">{{ t('SMS sender ID') }}</span>
-                            <input v-model="form.sms_sender_id" type="text" class="w-full rounded-xl border-slate-300" />
-                        </label>
+                        </div>
                     </div>
                 </div>
 
-                <div v-show="activeTab === 'flags'" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Feature flags') }}</h3>
-                    <div class="mt-4 grid gap-4 md:grid-cols-2">
-                        <label class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm">
-                            <span class="font-medium text-slate-900">{{ t('Maintenance mode') }}</span>
-                            <input v-model="form.maintenance_mode" type="checkbox" class="rounded border-slate-300" />
-                        </label>
-                        <label class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm">
-                            <span class="font-medium text-slate-900">{{ t('Support chat enabled') }}</span>
-                            <input v-model="form.support_chat_enabled" type="checkbox" class="rounded border-slate-300" />
-                        </label>
-                        <label class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm">
-                            <span class="font-medium text-slate-900">{{ t('Legacy order create') }}</span>
-                            <input v-model="form.orders_legacy_create_enabled" type="checkbox" class="rounded border-slate-300" />
-                        </label>
-                        <label class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm">
-                            <span class="font-medium text-slate-900">{{ t('Home offers enabled') }}</span>
-                            <input v-model="form.home_offers_enabled" type="checkbox" class="rounded border-slate-300" />
-                        </label>
-                    </div>
-                </div>
-
-                <div class="flex justify-end">
+                <div v-if="activeTab !== 'integrations'" class="mt-6 flex justify-end">
                     <button
                         type="submit"
-                        class="rounded-full bg-slate-950 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+                        class="rounded-2xl bg-slate-950 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-60"
                         :disabled="form.processing"
                     >
                         {{ form.processing ? t('Saving…') : t('Save settings') }}
                     </button>
+                </div>
+
+                <div v-if="Object.keys(form.errors).length" class="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    <p v-for="(error, key) in form.errors" :key="key">{{ error }}</p>
                 </div>
             </form>
         </section>

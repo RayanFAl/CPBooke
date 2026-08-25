@@ -2,7 +2,7 @@
 
 namespace App\Modules\Api\Support\Http\Requests;
 
-use App\Modules\Support\SupportAttachmentRules;
+use App\Modules\Support\Storage\SupportAttachmentRules;
 
 class StoreSupportChatMessageRequest extends ApiFormRequest
 {
@@ -23,7 +23,7 @@ class StoreSupportChatMessageRequest extends ApiFormRequest
     {
         return [
             'message' => ['required_without:attachment', 'nullable', 'string', 'max:5000'],
-            'attachment' => SupportAttachmentRules::attachmentFieldRules(),
+            'attachment' => SupportAttachmentRules::fileRules(),
             'reply_to_id' => ['nullable', 'integer', 'exists:support_messages,id'],
             'metadata' => ['nullable', 'array'],
         ];

@@ -69,6 +69,18 @@ const typeLabel = (type) => {
         return t('Adjustment');
     }
 
+    if (type === 'refund') {
+        return t('Refund');
+    }
+
+    if (type === 'reversal') {
+        return t('Reversal');
+    }
+
+    if (type === 'credit') {
+        return t('Credit');
+    }
+
     return type;
 };
 
@@ -123,6 +135,15 @@ const submitAdjust = () => {
                         </p>
                         <p v-else-if="wallet.is_low_balance" class="mt-2 text-xs font-medium text-amber-700">
                             {{ t('Balance is at or below the low threshold.') }}
+                        </p>
+                        <p class="mt-2 text-xs text-slate-600">
+                            {{ t('Available') }}: {{ formatMoney(wallet.available_balance, wallet.currency) }}
+                        </p>
+                        <p class="mt-1 text-xs text-slate-600">
+                            {{ t('Credit limit') }}: {{ formatMoney(wallet.credit_limit, wallet.currency) }}
+                        </p>
+                        <p class="mt-1 text-xs" :class="wallet.is_active ? 'text-emerald-700' : 'text-rose-700'">
+                            {{ wallet.is_active ? t('Status: Active') : t('Status: Suspended') }}
                         </p>
                     </div>
                 </div>

@@ -54,9 +54,10 @@ class PassengerNotificationsApiTest extends TestCase
             ->assertJsonPath('meta.unread_count', 1)
             ->assertJsonPath('data.0.id', (string) $unread->id)
             ->assertJsonPath('data.0.body', 'Your flight booking has been confirmed')
-            ->assertJsonPath('data.0.deep_link', '/orders/99')
+            ->assertJsonPath('data.0.deep_link', '/my-orders/99')
             ->assertJsonPath('data.0.meta.product_type', 'flight')
-            ->assertJsonPath('data.0.is_read', false);
+            ->assertJsonPath('data.0.is_read', false)
+            ->assertJsonPath('meta.unread_by_category.flights', 1);
 
         $this->getJson('/api/v1/notifications?unread_only=true')
             ->assertOk()
@@ -113,6 +114,57 @@ class PassengerNotificationsApiTest extends TestCase
             ->assertJsonPath('data.deleted', 1);
 
         $this->assertSame(0, UserNotification::query()->where('user_id', $user->id)->count());
+    }
+
+    public function test_inbox_exposes_action_engine_fields(): void
+    {
+        $user = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        UserNotification::query()->create([
+            'user_id' => $user->id,
+            'type' => 'flight',
+            'title' => 'Your flight was cancelled',
+            'message' => 'You can choose an alternative or request a refund.',
+            'template_code' => 'FLIGHT_CANCELLED',
+            'related_type' => 'order',
+            'related_id' => 123,
+            'delivered_at' => now(),
+            'data' => [
+                'variables' => [
+                    'order_id' => 123,
+                    'service_type' => 'flight',
+                    'family' => 'operational',
+                    'category' => 'flights',
+                    'severity' => 'critical',
+                    'recipient' => 'passenger',
+                    'channels' => ['push', 'in_app'],
+                    'expires_at' => now()->addHours(6)->toIso8601String(),
+                    'action_engine' => true,
+                    'actions' => [
+                        [
+                            'code' => 'view_alternatives',
+                            'label' => 'View alternative flights',
+                            'label_ar' => 'عرض الرحلات البديلة',
+                            'deep_link' => '/flights',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/v1/notifications')
+            ->assertOk()
+            ->assertJsonPath('data.0.meta.family', 'operational')
+            ->assertJsonPath('data.0.meta.severity', 'critical')
+            ->assertJsonPath('data.0.meta.recipient', 'passenger')
+            ->assertJsonPath('data.0.meta.action_engine', true)
+            ->assertJsonPath('data.0.meta.actions.0.code', 'view_alternatives')
+            ->assertJsonPath('meta.unread_by_category.flights', 1);
     }
 
     public function test_device_registration_and_simulated_push_test(): void

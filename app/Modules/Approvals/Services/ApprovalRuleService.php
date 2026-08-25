@@ -23,6 +23,7 @@ class ApprovalRuleService
             'refund' => $this->requiresRefundApproval($requester, $context),
             'cancel' => $this->requiresCancelApproval($context),
             'wallet_deposit', 'wallet_adjustment' => (bool) config('approvals.wallet_always_requires_approval', true),
+            'settlement_adjustment' => (bool) config('approvals.settlement_adjustment_always_requires_approval', true),
             default => true,
         };
     }

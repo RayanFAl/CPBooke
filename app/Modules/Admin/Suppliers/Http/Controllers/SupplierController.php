@@ -3,9 +3,12 @@
 namespace App\Modules\Admin\Suppliers\Http\Controllers;
 
 use App\Models\Provider;
+use App\Models\ProviderApiConfig;
 use App\Modules\Admin\Suppliers\Http\Requests\StoreSupplierRequest;
 use App\Modules\Admin\Suppliers\Http\Requests\UpdateSupplierRequest;
 use App\Modules\Admin\Suppliers\Services\SupplierService;
+use App\Modules\Providers\Services\ProviderApiConfigPresenter;
+use App\Modules\Providers\Services\ProviderApiMonitoringService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -15,6 +18,8 @@ class SupplierController
 {
     public function __construct(
         private readonly SupplierService $supplierService,
+        private readonly ProviderApiConfigPresenter $apiConfigPresenter,
+        private readonly ProviderApiMonitoringService $providerApiMonitoringService,
     ) {
     }
 
@@ -58,11 +63,51 @@ class SupplierController
 
     public function show(Request $request, Provider $supplier): Response
     {
-        $supplier->load(['wallets' => fn ($query) => $query->orderBy('currency')->orderBy('environment')]);
+        $supplier->load([
+            'wallets' => fn ($query) => $query->orderBy('currency')->orderBy('environment'),
+            'apiConfigs',
+            'providerServices',
+        ]);
+
+        $canViewCredentials = $request->user()?->can('suppliers.credentials.view') ?? false;
+        $logFilters = [
+            'service' => $request->input('service', ''),
+            'endpoint' => $request->input('endpoint', ''),
+            'success' => $request->input('success', ''),
+            'status_code' => $request->input('status_code', ''),
+            'date_from' => $request->input('date_from', ''),
+            'date_to' => $request->input('date_to', ''),
+        ];
 
         return Inertia::render('admin/suppliers/pages/Show', [
             'supplier' => $this->serialize($supplier, true),
+            'api_configs' => $supplier->apiConfigs
+                ->map(fn ($config) => $this->apiConfigPresenter->serializeConfig($config, $canViewCredentials))
+                ->values()
+                ->all(),
+            'services' => $this->apiConfigPresenter->serializeServices($supplier),
+            'api_monitoring' => $this->providerApiMonitoringService->endpointMetrics($supplier, $logFilters),
+            'api_logs' => $this->providerApiMonitoringService->recentLogs($supplier, 60, $logFilters),
+            'api_log_filters' => $logFilters,
+            'api_options' => [
+                'environments' => ProviderApiConfig::environments(),
+                'auth_types' => ProviderApiConfig::authTypes(),
+                'statuses' => [
+                    ProviderApiConfig::STATUS_ACTIVE,
+                    ProviderApiConfig::STATUS_DISABLED,
+                ],
+                'endpoint_catalog' => collect(config('provider_api.endpoint_catalog', []))
+                    ->map(fn (array $meta, string $key): array => [
+                        'key' => $key,
+                        'label' => (string) ($meta['label'] ?? $key),
+                        'service' => (string) ($meta['service'] ?? 'unknown'),
+                    ])
+                    ->values()
+                    ->all(),
+            ],
             'can_manage' => $request->user()?->can('suppliers.manage') ?? false,
+            'can_manage_api_config' => $request->user()?->can('suppliers.api-config.manage') ?? false,
+            'can_view_credentials' => $canViewCredentials,
             'can_view_wallets' => $request->user()?->can('provider-wallets.view') ?? false,
         ]);
     }

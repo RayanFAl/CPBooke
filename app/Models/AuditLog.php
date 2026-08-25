@@ -47,9 +47,15 @@ class AuditLog extends Model
 
     public const ENTITY_PROVIDER_WALLET = 'provider_wallet';
 
+    public const ENTITY_CUSTOMER_WALLET = 'customer_wallet';
+
     public const ENTITY_SETTLEMENT = 'settlement';
 
     public const ENTITY_APPROVAL = 'approval';
+
+    public const ENTITY_PROVIDER = 'provider';
+
+    public const MODULE_PROVIDERS = 'providers';
 
     /**
      * @return array<string, string>

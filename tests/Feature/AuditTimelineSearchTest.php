@@ -77,6 +77,36 @@ class AuditTimelineSearchTest extends TestCase
                 ->has('result.groups.orders'));
     }
 
+    public function test_support_agent_can_use_global_search_suggest_endpoint(): void
+    {
+        $actor = $this->makeAdmin('support_agent');
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+            'full_name' => 'Suggest Me',
+            'email' => 'suggest.me@example.com',
+        ]);
+
+        Order::query()->create([
+            'customer_id' => $customer->id,
+            'provider_name' => 'BookNow',
+            'booking_reference' => 'BN-SUGGEST-001',
+            'status' => Order::STATUS_CONFIRMED,
+            'payment_status' => Order::PAYMENT_STATUS_PAID,
+            'service_type' => Order::SERVICE_TYPE_FLIGHT,
+            'details' => ['pnr' => 'PNRSUG'],
+            'currency' => 'LYD',
+            'total_amount' => '150.00',
+            'request_payload' => [],
+        ]);
+
+        $this->actingAs($actor)
+            ->getJson(route('admin.search.suggest', ['q' => 'BN-SUGGEST-001'], absolute: false))
+            ->assertOk()
+            ->assertJsonPath('total', fn ($total) => $total >= 1)
+            ->assertJsonStructure(['groups' => ['orders']]);
+    }
+
     public function test_wallet_deposit_writes_audit_log_and_timeline(): void
     {
         $actor = $this->makeAdmin('finance_manager');

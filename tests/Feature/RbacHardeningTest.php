@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\LoyaltyTier;
 use App\Models\NotificationTemplate;
-use App\Models\Order;
 use App\Models\RbacAuditLog;
 use App\Models\User;
 use App\Modules\Admin\Finance\Services\FinanceReportingService;
@@ -146,8 +145,11 @@ class RbacHardeningTest extends TestCase
         $this->actingAs($superAdmin)
             ->put(route('admin.notifications.templates.update', $template, absolute: false), [
                 'name' => 'RBAC Template Updated',
+                'category' => 'general',
+                'description' => null,
                 'subject' => 'Updated Subject',
                 'body' => 'Updated Body',
+                'translations' => null,
                 'channels' => ['email'],
                 'variables' => [],
                 'is_active' => true,

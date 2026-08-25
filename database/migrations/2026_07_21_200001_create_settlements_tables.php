@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -53,6 +54,22 @@ return new class extends Migration
             $table->index(['settlement_id', 'status']);
             $table->unique(['settlement_id', 'order_id'], 'settlement_items_settlement_order_unique');
         });
+
+        $this->ensureInnoDb('settlements');
+        $this->ensureInnoDb('settlement_items');
+    }
+
+    private function ensureInnoDb(string $table): void
+    {
+        if (Schema::getConnection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
+        $status = DB::selectOne('SHOW TABLE STATUS WHERE Name = ?', [$table]);
+
+        if ($status && strtolower((string) ($status->Engine ?? '')) !== 'innodb') {
+            DB::statement("ALTER TABLE `{$table}` ENGINE=InnoDB");
+        }
     }
 
     public function down(): void

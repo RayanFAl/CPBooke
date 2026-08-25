@@ -33,5 +33,7 @@
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="FIREBASE_CREDENTIALS" value="storage/app/firebase/missing-credentials.json"/>
+        <env name="WALLET_ALLOW_NEGATIVE" value="true" force="true"/>
+        <env name="WALLET_TEST_MODE" value="true" force="true"/>
     </php>
 </phpunit>

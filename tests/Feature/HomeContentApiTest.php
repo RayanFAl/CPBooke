@@ -147,4 +147,40 @@ class HomeContentApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data', []);
     }
+
+    public function test_admin_schedule_times_are_interpreted_in_platform_timezone(): void
+    {
+        config(['app.timezone' => 'UTC']);
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('system_settings')) {
+            \App\Models\SystemSetting::query()->delete();
+            \App\Models\SystemSetting::query()->create([
+                ...\App\Models\SystemSetting::defaultAttributes(),
+                'timezone' => 'Africa/Tripoli',
+            ]);
+            app(\App\Modules\Settings\Services\SystemSettingsService::class)->forgetCache();
+        }
+
+        // 12:00 Tripoli == 10:00 UTC. With "now" after that instant, banner must be visible.
+        $this->travelTo(\Carbon\Carbon::parse('2026-08-03 10:30:00', 'UTC'));
+
+        $service = app(\App\Modules\Admin\Home\Services\HomeAdminService::class);
+        $banner = $service->createBanner([
+            'title_en' => 'TZ Banner',
+            'action_type' => 'none',
+            'sort_order' => 1,
+            'is_active' => true,
+            'starts_at' => '2026-08-03T12:00',
+            'platforms' => [],
+        ]);
+
+        $this->assertSame(
+            '2026-08-03 10:00:00',
+            $banner->fresh()->starts_at?->timezone('UTC')->format('Y-m-d H:i:s'),
+        );
+
+        $this->getJson('/api/v1/home/banners')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $banner->public_id);
+    }
 }

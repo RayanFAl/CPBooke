@@ -5,10 +5,12 @@ namespace App\Modules\Approvals\Services;
 use App\Models\Approval;
 use App\Models\Order;
 use App\Models\ProviderWallet;
+use App\Models\SettlementItem;
 use App\Models\SupportTicket;
 use App\Models\User;
 use App\Modules\Api\Orders\Services\OrderActionService;
 use App\Modules\Admin\ProviderWallets\Services\ProviderWalletService;
+use App\Modules\Settlements\Services\SettlementResolutionService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -35,6 +37,7 @@ class ApprovalActionExecutor
             Approval::TYPE_CANCEL => $this->executeCancel($approval, $payload),
             Approval::TYPE_WALLET_DEPOSIT => $this->executeWalletDeposit($approval, $payload),
             Approval::TYPE_WALLET_ADJUSTMENT => $this->executeWalletAdjustment($approval, $payload),
+            Approval::TYPE_SETTLEMENT_ADJUSTMENT => $this->executeSettlementAdjustment($approval, $payload),
             default => throw ValidationException::withMessages([
                 'type' => 'Unsupported approval type.',
             ]),
@@ -123,6 +126,25 @@ class ApprovalActionExecutor
             'wallet_id' => $wallet->id,
             'transaction_id' => $transaction->id,
             'balance_after' => $transaction->balance_after,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function executeSettlementAdjustment(Approval $approval, array $payload): array
+    {
+        $item = SettlementItem::query()->findOrFail($payload['settlement_item_id'] ?? 0);
+        $actor = $approval->approver ?: $approval->requester;
+
+        $item = app(SettlementResolutionService::class)->applyApprovedVariance($item, $actor, $payload);
+
+        return [
+            'settlement_id' => $item->settlement_id,
+            'settlement_item_id' => $item->id,
+            'financial_transaction_id' => $item->financial_transaction_id,
+            'status' => $item->status,
         ];
     }
 

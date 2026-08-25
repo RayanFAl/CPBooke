@@ -29,6 +29,10 @@ class ProviderWalletTransaction extends Model
 
     public const TYPE_REFUND = 'refund';
 
+    public const TYPE_CREDIT = 'credit';
+
+    public const TYPE_REVERSAL = 'reversal';
+
     public const REFERENCE_MANUAL = 'manual';
 
     public const REFERENCE_ORDER = 'order';

@@ -7,9 +7,17 @@ use App\Models\NotificationTemplate;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Modules\Admin\Notifications\Http\Requests\SendTestPushRequest;
+use App\Modules\Admin\Notifications\Http\Requests\SendTestTemplateRequest;
 use App\Modules\Admin\Notifications\Http\Requests\UpdateNotificationTemplateRequest;
 use App\Modules\Notifications\Services\NotificationChannelManager;
 use App\Modules\Notifications\Services\NotificationService;
+use App\Modules\Notifications\Services\NotificationTemplateSyncService;
+use App\Modules\Notifications\Support\NotificationChannels;
+use App\Modules\Notifications\Support\NotificationLocales;
+use App\Modules\Notifications\Support\NotificationTemplateCategories;
+use App\Modules\Notifications\Support\NotificationTemplateSamples;
+use App\Modules\Notifications\Support\NotificationTemplateStaffLabels;
+use App\Modules\Notifications\Support\WhatsAppSandboxInbox;
 use App\Support\Rbac\RbacAuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,9 +31,9 @@ class NotificationsController
     public function __construct(
         private readonly NotificationService $notificationService,
         private readonly NotificationChannelManager $channelManager,
+        private readonly NotificationTemplateSyncService $templateSyncService,
         private readonly RbacAuditLogger $rbacAuditLogger,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -45,7 +53,13 @@ class NotificationsController
                     'logs' => [],
                     'failed_logs' => [],
                     'templates' => [],
+                    'template_categories' => NotificationTemplateCategories::options(),
+                    'template_locales' => NotificationLocales::labels(),
+                    'sample_variables' => NotificationTemplateSamples::defaults(),
+                    'available_channels' => NotificationChannels::all(),
                     'push_targets' => $this->pushTargets(),
+                    'test_targets' => $this->testTargets(),
+                    'whatsapp_sandbox' => app(WhatsAppSandboxInbox::class)->all(),
                 ],
             ]);
         }
@@ -64,7 +78,8 @@ class NotificationsController
             ->get();
 
         $templates = NotificationTemplate::query()
-            ->orderBy('code')
+            ->orderBy('category')
+            ->orderBy('name')
             ->get();
 
         return Inertia::render('admin/notifications/pages/Index', [
@@ -81,20 +96,36 @@ class NotificationsController
                 'channel_statuses' => $this->channelManager->statuses(),
                 'logs' => $logs->map(fn (NotificationLog $log): array => $this->logPayload($log))->values()->all(),
                 'failed_logs' => $failedLogs->map(fn (NotificationLog $log): array => $this->logPayload($log))->values()->all(),
-                'templates' => $templates->map(fn (NotificationTemplate $template): array => [
-                    'id' => $template->id,
-                    'code' => $template->code,
-                    'name' => $template->name,
-                    'subject' => $template->subject,
-                    'body' => $template->body,
-                    'channels' => $template->channels ?? [],
-                    'variables' => $template->variables ?? [],
-                    'version' => $template->version,
-                    'is_active' => $template->is_active,
-                ])->values()->all(),
+                'templates' => $templates->map(fn (NotificationTemplate $template): array => $this->templatePayload($template))->values()->all(),
+                'template_categories' => NotificationTemplateCategories::options(),
+                'template_locales' => NotificationLocales::labels(),
+                'sample_variables' => NotificationTemplateSamples::defaults(),
+                'available_channels' => NotificationChannels::all(),
                 'push_targets' => $this->pushTargets(),
+                'test_targets' => $this->testTargets(),
+                'whatsapp_sandbox' => app(WhatsAppSandboxInbox::class)->all(),
             ],
         ]);
+    }
+
+    public function syncTemplates(): RedirectResponse
+    {
+        Gate::authorize('notifications.manage-templates');
+
+        $result = $this->templateSyncService->syncMissing();
+
+        $this->rbacAuditLogger->log(
+            'notifications.templates.synced',
+            'notifications.manage-templates',
+            auth()->user(),
+            'notification_template',
+            null,
+            $result,
+        );
+
+        return redirect()
+            ->route('admin.notifications.index')
+            ->with('success', "Templates synced — created {$result['created']}, existing {$result['existing']}, Arabic seeded {$result['translations_seeded']}, metadata updated {$result['metadata_updated']}.");
     }
 
     public function sendTestPush(SendTestPushRequest $request): RedirectResponse
@@ -136,8 +167,67 @@ class NotificationsController
                 .'.';
 
         return redirect()
-            ->route('admin.notifications.index')
+            ->route('admin.notifications.index', ['tab' => 'tools'])
             ->with($delivered ? 'success' : 'error', $message);
+    }
+
+    public function sendTestTemplate(SendTestTemplateRequest $request): RedirectResponse
+    {
+        Gate::authorize('notifications.view');
+
+        $user = User::query()->findOrFail((int) $request->validated('user_id'));
+        $templateCode = strtoupper((string) $request->validated('template_code'));
+        $includeEmail = $request->boolean('include_email');
+        $includeWhatsapp = $request->boolean('include_whatsapp');
+
+        $channels = [
+            NotificationChannels::IN_APP,
+            NotificationChannels::PUSH,
+        ];
+
+        if ($includeEmail) {
+            $channels[] = NotificationChannels::EMAIL;
+        }
+
+        if ($includeWhatsapp) {
+            $channels[] = NotificationChannels::WHATSAPP;
+        }
+
+        $result = $this->notificationService->sendTestTemplates(
+            $user,
+            $templateCode === 'ALL' ? null : $templateCode,
+            $channels,
+        );
+
+        $this->rbacAuditLogger->log(
+            'notifications.template_test.sent',
+            'notifications.view',
+            auth()->user(),
+            'user',
+            $user->id,
+            [
+                'template_code' => $templateCode,
+                'count' => $result['count'],
+                'include_email' => $includeEmail,
+                'include_whatsapp' => $includeWhatsapp,
+            ],
+        );
+
+        $label = $templateCode === 'ALL'
+            ? "{$result['count']} templates"
+            : $templateCode;
+
+        $via = 'in-app + push';
+        if ($includeEmail) {
+            $via .= ' + email';
+        }
+        if ($includeWhatsapp) {
+            $via .= ' + WhatsApp sandbox';
+        }
+
+        return redirect()
+            ->route('admin.notifications.index', ['tab' => 'tools'])
+            ->with('success', "Test sent to {$user->email}: {$label} ({$via}). Check Logs, and Tools for the WhatsApp sandbox.");
     }
 
     public function retry(NotificationLog $notificationLog): RedirectResponse
@@ -161,7 +251,7 @@ class NotificationsController
 
         $notificationTemplate->forceFill($request->validated());
 
-        if ($notificationTemplate->isDirty(['name', 'subject', 'body', 'channels', 'variables', 'is_active'])) {
+        if ($notificationTemplate->isDirty(['name', 'category', 'description', 'subject', 'body', 'translations', 'channels', 'variables', 'is_active'])) {
             $notificationTemplate->version = max(1, (int) $notificationTemplate->version) + 1;
         }
 
@@ -210,6 +300,68 @@ class NotificationsController
     }
 
     /**
+     * Recent users that can receive a template test (in-app works without a device).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function testTargets(): array
+    {
+        $query = User::query()->orderByDesc('id')->limit(50);
+
+        if (Schema::hasTable('user_notification_devices')) {
+            $query->withCount([
+                'notificationDevices as active_devices_count' => function ($query): void {
+                    $query->where('is_active', true);
+                },
+            ]);
+        }
+
+        return $query
+            ->get(['id', 'name', 'full_name', 'email', 'phone'])
+            ->map(fn (User $user): array => [
+                'id' => $user->id,
+                'name' => $user->full_name ?: $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'devices' => (int) ($user->active_devices_count ?? 0),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function templatePayload(NotificationTemplate $template): array
+    {
+        $categoryLabels = NotificationTemplateCategories::labels();
+        $categoryLabelsAr = NotificationTemplateCategories::labelsAr();
+        $staff = NotificationTemplateStaffLabels::for((string) $template->code);
+
+        return [
+            'id' => $template->id,
+            'code' => $template->code,
+            'name' => $template->name,
+            'label' => $staff['en'],
+            'label_ar' => $staff['ar'],
+            'category' => $template->category,
+            'category_label' => $categoryLabels[$template->category] ?? $template->category,
+            'category_label_ar' => $categoryLabelsAr[$template->category] ?? $template->category,
+            'description' => $template->description,
+            'subject' => $template->subject,
+            'body' => $template->body,
+            'translations' => $template->translations ?? [],
+            'has_arabic' => $template->hasLocale(NotificationLocales::AR),
+            'has_english' => $template->hasLocale(NotificationLocales::EN),
+            'channels' => $template->channels ?? [],
+            'variables' => $template->variables ?? [],
+            'sample_variables' => NotificationTemplateSamples::forCode($template->code),
+            'version' => $template->version,
+            'is_active' => $template->is_active,
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function logPayload(NotificationLog $log): array
@@ -223,6 +375,12 @@ class NotificationsController
             ],
             'channel' => $log->channel,
             'template_code' => $log->template_code,
+            'template_label' => $log->template_code
+                ? NotificationTemplateStaffLabels::english((string) $log->template_code)
+                : null,
+            'template_label_ar' => $log->template_code
+                ? NotificationTemplateStaffLabels::arabic((string) $log->template_code)
+                : null,
             'template_version' => $log->template_version,
             'notification_type' => $log->notification_type,
             'status' => $log->status,

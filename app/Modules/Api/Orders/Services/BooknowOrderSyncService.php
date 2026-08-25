@@ -8,14 +8,21 @@ use App\Models\Provider;
 use App\Models\User;
 use App\Modules\Admin\ProviderWallets\Services\ProviderWalletService;
 use App\Modules\Api\DTO\SyncBooknowOrderDTO;
+use App\Modules\CustomerWallets\Services\CustomerWalletService;
+use App\Modules\Orders\Events\FlightStatusUpdated as FlightStatusUpdatedEvent;
+use App\Modules\Orders\Events\HotelStatusUpdated as HotelStatusUpdatedEvent;
+use App\Modules\Orders\Events\OrderCancelled as OrderCancelledEvent;
 use App\Modules\Orders\Events\OrderConfirmed as OrderConfirmedEvent;
 use App\Modules\Orders\Events\OrderCreated as OrderCreatedEvent;
+use App\Modules\Orders\Events\PaymentFailed as PaymentFailedEvent;
 use App\Modules\Orders\Services\OrderCostService;
 use App\Modules\ProviderHealth\Services\ProviderApiEventRecorder;
+use App\Modules\Providers\Services\ProviderApiLogService;
 use App\Modules\Wallets\Services\WalletService;
 use App\Support\Orders\BooknowOrderStatusMapper;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -24,11 +31,12 @@ class BooknowOrderSyncService
     public function __construct(
         private readonly OrderService $orderService,
         private readonly ProviderWalletService $providerWalletService,
+        private readonly CustomerWalletService $customerWalletService,
         private readonly WalletService $walletService,
         private readonly OrderCostService $orderCostService,
         private readonly ProviderApiEventRecorder $apiEventRecorder,
-    ) {
-    }
+        private readonly ProviderApiLogService $providerApiLogService,
+    ) {}
 
     /**
      * Idempotent upsert keyed by provider booking id. Customer is always taken from the auth token.
@@ -39,16 +47,52 @@ class BooknowOrderSyncService
     {
         $started = microtime(true);
         $provider = $this->resolveProvider($data);
+        $correlationId = $this->buildCorrelationId($data->externalBookingId());
 
         try {
             $result = $this->upsertOrder($authenticatedUser, $data, $provider);
             $latencyMs = (int) max(0, round((microtime(true) - $started) * 1000));
             $this->apiEventRecorder->recordSyncSuccess($provider, $latencyMs, $result['order']->id);
+            $this->providerApiLogService->record(
+                provider: $provider,
+                endpointKey: $this->syncEndpointKey($data),
+                statusCode: 200,
+                success: true,
+                responseTimeMs: $latencyMs,
+                requestBody: $data->rawPayload,
+                responseBody: is_array($result['order']->response_payload) ? $result['order']->response_payload : null,
+                correlationId: $correlationId,
+                referenceType: 'order',
+                referenceId: (string) $result['order']->id,
+                context: [
+                    'provider_key' => $provider->key,
+                    'product_type' => $data->productType,
+                    'booking_id' => $data->externalBookingId(),
+                ],
+            );
 
             return $result;
         } catch (Throwable $exception) {
             $latencyMs = (int) max(0, round((microtime(true) - $started) * 1000));
             $this->apiEventRecorder->recordSyncFailure($provider, $latencyMs, $exception);
+            $this->providerApiLogService->record(
+                provider: $provider,
+                endpointKey: $this->syncEndpointKey($data),
+                statusCode: null,
+                success: false,
+                responseTimeMs: $latencyMs,
+                requestBody: $data->rawPayload,
+                responseBody: null,
+                errorMessage: $exception->getMessage(),
+                correlationId: $correlationId,
+                referenceType: 'booking',
+                referenceId: $data->externalBookingId(),
+                context: [
+                    'provider_key' => $provider->key,
+                    'product_type' => $data->productType,
+                    'booking_id' => $data->externalBookingId(),
+                ],
+            );
 
             throw $exception;
         }
@@ -90,12 +134,19 @@ class BooknowOrderSyncService
 
             $created = ! $order->exists;
             $previousStatus = $order->exists ? $order->status : null;
+            $previousDetails = $order->exists && is_array($order->details) ? $order->details : [];
 
             if ($order->exists) {
                 $this->assertSameCustomer($order, $customer);
             }
 
             $mapped = $this->mapOrderAttributes($data);
+            $wantsCustomerWalletPayment = $this->wantsCustomerWalletPayment($data);
+
+            // Do not trust client "paid" for wallet until customer balance is collected.
+            if ($wantsCustomerWalletPayment && ($data->payment['status'] ?? null) === 'paid') {
+                $mapped['payment_status'] = Order::PAYMENT_STATUS_UNPAID;
+            }
 
             if ($order->exists) {
                 unset($mapped['booking_reference']);
@@ -121,8 +172,16 @@ class BooknowOrderSyncService
                 'base_amount' => $data->baseAmount,
             ]);
 
+            if ($wantsCustomerWalletPayment && ($data->payment['status'] ?? null) === 'paid') {
+                $this->customerWalletService->payForOrder($order->fresh(), $customer);
+                $order = $order->fresh();
+            }
+
             if ($created) {
-                if ($order->payment_status === Order::PAYMENT_STATUS_PAID) {
+                if (
+                    $order->payment_status === Order::PAYMENT_STATUS_PAID
+                    && $order->payment_method !== Order::PAYMENT_METHOD_WALLET
+                ) {
                     $this->orderService->recordFinancialTransactionOnce(
                         $order,
                         FinancialTransaction::TYPE_PAYMENT,
@@ -144,6 +203,60 @@ class BooknowOrderSyncService
                 $this->dispatchAfterCommit(fn () => event(new OrderConfirmedEvent($order->fresh()->load('customer'))));
             }
 
+            if (
+                $order->status === Order::STATUS_FAILED
+                && $previousStatus !== Order::STATUS_FAILED
+            ) {
+                $reason = $order->error_message ?: 'Payment or booking failed.';
+                $this->dispatchAfterCommit(fn () => event(new PaymentFailedEvent($order->fresh()->load('customer'), $reason)));
+            }
+
+            if (
+                $order->status === Order::STATUS_CANCELLED
+                && $previousStatus !== Order::STATUS_CANCELLED
+            ) {
+                $this->dispatchAfterCommit(fn () => event(new OrderCancelledEvent(
+                    $order->fresh()->load('customer'),
+                    OrderCancelledEvent::SOURCE_AIRLINE,
+                    $order->error_message,
+                )));
+            }
+
+            if (
+                ! $created
+                && $order->service_type === Order::SERVICE_TYPE_FLIGHT
+                && $order->status !== Order::STATUS_CANCELLED
+                && in_array($order->status, [Order::STATUS_CONFIRMED, Order::STATUS_TICKETED, Order::STATUS_COMPLETED], true)
+            ) {
+                $flightChanges = $this->detectFlightDetailChanges($previousDetails, is_array($order->details) ? $order->details : []);
+
+                if ($flightChanges !== []) {
+                    $summary = $this->summarizeFlightChanges($flightChanges);
+                    $this->dispatchAfterCommit(fn () => event(new FlightStatusUpdatedEvent(
+                        $order->fresh()->load('customer'),
+                        $flightChanges,
+                        $summary,
+                    )));
+                }
+            }
+
+            if (
+                ! $created
+                && $order->service_type === Order::SERVICE_TYPE_HOTEL
+                && $order->status !== Order::STATUS_CANCELLED
+                && in_array($order->status, [Order::STATUS_CONFIRMED, Order::STATUS_COMPLETED], true)
+            ) {
+                $hotelChanges = $this->detectHotelDetailChanges($previousDetails, is_array($order->details) ? $order->details : []);
+
+                if ($hotelChanges !== []) {
+                    $this->dispatchAfterCommit(fn () => event(new HotelStatusUpdatedEvent(
+                        $order->fresh()->load('customer'),
+                        $hotelChanges,
+                        'Your hotel booking was updated.',
+                    )));
+                }
+            }
+
             return [
                 'order' => $order->refresh()->load('customer'),
                 'created' => $created,
@@ -158,6 +271,13 @@ class BooknowOrderSyncService
         }
 
         return $authenticatedUser;
+    }
+
+    private function wantsCustomerWalletPayment(SyncBooknowOrderDTO $data): bool
+    {
+        $method = strtolower(trim((string) ($data->payment['method'] ?? '')));
+
+        return in_array($method, ['wallet', 'customer_wallet'], true);
     }
 
     private function assertSameCustomer(Order $existing, User $customer): void
@@ -560,8 +680,127 @@ class BooknowOrderSyncService
         return $order->refresh();
     }
 
+    /**
+     * @param  array<string, mixed>  $previous
+     * @param  array<string, mixed>  $current
+     * @return array<string, array{from: mixed, to: mixed}>
+     */
+    private function detectFlightDetailChanges(array $previous, array $current): array
+    {
+        $keys = [
+            'departure_time', 'arrival_time', 'origin', 'destination', 'pnr',
+            'gate', 'terminal', 'seat', 'cabin_class', 'class', 'flight_number',
+            'flight_status', 'status', 'boarding_status', 'boarding_pass_url',
+        ];
+        $notifyOnFirstFill = ['gate', 'terminal', 'seat', 'boarding_status', 'boarding_pass_url'];
+        $changes = [];
+
+        foreach ($keys as $key) {
+            $from = $previous[$key] ?? null;
+            $to = $current[$key] ?? null;
+
+            if ($from === $to) {
+                continue;
+            }
+
+            if ($from === null && $to === null) {
+                continue;
+            }
+
+            // Ignore first-time population except operational fields the traveler must act on.
+            if (($from === null || $from === '') && $to !== null && $to !== '' && ! in_array($key, $notifyOnFirstFill, true)) {
+                continue;
+            }
+
+            $changes[$key] = ['from' => $from, 'to' => $to];
+        }
+
+        return $changes;
+    }
+
+    /**
+     * @param  array<string, array{from: mixed, to: mixed}>  $changes
+     */
+    private function summarizeFlightChanges(array $changes): string
+    {
+        if (isset($changes['departure_time'])) {
+            return 'Your departure time was updated.';
+        }
+
+        if (isset($changes['gate'])) {
+            return 'Your gate information was updated.';
+        }
+
+        if (isset($changes['seat'])) {
+            return 'Your seat was updated.';
+        }
+
+        if (isset($changes['boarding_status'])) {
+            return 'Boarding status was updated.';
+        }
+
+        if (isset($changes['boarding_pass_url'])) {
+            return 'Your boarding pass is ready.';
+        }
+
+        if (isset($changes['flight_status']) || isset($changes['status'])) {
+            return 'Your flight status was updated.';
+        }
+
+        if (isset($changes['origin']) || isset($changes['destination'])) {
+            return 'Your flight route was updated.';
+        }
+
+        return 'There is an update on your flight.';
+    }
+
+    /**
+     * @param  array<string, mixed>  $previous
+     * @param  array<string, mixed>  $current
+     * @return array<string, array{from: mixed, to: mixed}>
+     */
+    private function detectHotelDetailChanges(array $previous, array $current): array
+    {
+        $keys = ['check_in', 'check_out', 'hotel_name', 'room_name', 'board', 'cancellation_deadline'];
+        $changes = [];
+
+        foreach ($keys as $key) {
+            $from = $previous[$key] ?? data_get($previous, 'item_details.'.$key);
+            $to = $current[$key] ?? data_get($current, 'item_details.'.$key);
+
+            if ($from === $to || (($from === null || $from === '') && $to !== null && $to !== '')) {
+                continue;
+            }
+
+            $changes[$key] = ['from' => $from, 'to' => $to];
+        }
+
+        return $changes;
+    }
+
     private function dispatchAfterCommit(callable $callback): void
     {
         DB::afterCommit($callback);
+    }
+
+    private function syncEndpointKey(SyncBooknowOrderDTO $data): string
+    {
+        if ($data->isBundle()) {
+            return 'sync.bundle';
+        }
+
+        return match ($data->productType) {
+            'hotel' => 'sync.hotel',
+            'insurance' => 'sync.insurance',
+            'esim' => 'sync.esim',
+            default => 'sync.flight',
+        };
+    }
+
+    private function buildCorrelationId(string $seed): string
+    {
+        $prefix = strtoupper(Str::substr(preg_replace('/[^A-Za-z0-9]+/', '', $seed) ?: 'SYNC', 0, 6));
+
+        return 'CP-'.$prefix.'-'.strtoupper(Str::random(5));
     }
 }

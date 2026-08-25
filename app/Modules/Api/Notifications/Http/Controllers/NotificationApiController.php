@@ -20,18 +20,19 @@ class NotificationApiController extends Controller
 {
     public function __construct(
         private readonly NotificationService $notificationService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
         $perPage = (int) min(max($request->integer('per_page', 15), 1), 50);
         $unreadOnly = $request->boolean('unread_only');
+        $category = $request->string('category')->toString() ?: null;
 
         $notifications = $this->notificationService->paginateForUser(
             $request->user(),
             $perPage,
             $unreadOnly,
+            $category,
         );
 
         $items = collect($notifications->items())
@@ -47,6 +48,7 @@ class NotificationApiController extends Controller
                 'per_page' => $notifications->perPage(),
                 'total' => $notifications->total(),
                 'unread_count' => $this->notificationService->unreadCountForUser($request->user()),
+                'unread_by_category' => $this->notificationService->unreadCountByCategory($request->user()),
             ],
         );
     }
@@ -149,12 +151,14 @@ class NotificationApiController extends Controller
             $request->validated('device_token'),
             $request->validated('platform'),
             $request->validated('channel', NotificationChannels::PUSH),
+            $request->validated('app_version'),
         );
 
         return ApiResponse::success(
             [
                 'id' => $device->id,
                 'platform' => $device->platform,
+                'app_version' => $device->app_version,
                 'channel' => $device->channel,
                 'is_active' => $device->is_active,
                 'last_seen_at' => $device->last_seen_at?->toIso8601String(),

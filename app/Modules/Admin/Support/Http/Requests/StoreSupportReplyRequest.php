@@ -2,7 +2,7 @@
 
 namespace App\Modules\Admin\Support\Http\Requests;
 
-use App\Modules\Support\SupportAttachmentRules;
+use App\Modules\Support\Storage\SupportAttachmentRules;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreSupportReplyRequest extends FormRequest
@@ -24,7 +24,7 @@ class StoreSupportReplyRequest extends FormRequest
     {
         return [
             'message' => ['nullable', 'string', 'max:10000', 'required_without:attachment'],
-            'attachment' => SupportAttachmentRules::attachmentFieldRules(),
+            'attachment' => SupportAttachmentRules::fileRules(),
         ];
     }
 }

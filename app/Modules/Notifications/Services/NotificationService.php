@@ -7,9 +7,12 @@ use App\Models\NotificationTemplate;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Models\UserNotificationDevice;
+use App\Models\UserNotificationPreference;
 use App\Modules\Notifications\Channels\PushNotificationChannel;
 use App\Modules\Notifications\Jobs\SendNotificationChannelJob;
 use App\Modules\Notifications\Support\NotificationChannels;
+use App\Modules\Notifications\Support\NotificationInboxContract;
+use App\Modules\Notifications\Support\NotificationTemplateSamples;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class NotificationService
@@ -18,15 +21,14 @@ class NotificationService
         private readonly NotificationEngine $notificationEngine,
         private readonly NotificationPreferenceResolver $notificationPreferenceResolver,
         private readonly PushNotificationChannel $pushNotificationChannel,
-    ) {
-    }
+    ) {}
 
     public function dispatchForEvent(object $event, ?User $actor = null): void
     {
         $this->notificationEngine->dispatch($event, $actor);
     }
 
-    public function paginateForUser(User $user, int $perPage = 15, bool $unreadOnly = false): LengthAwarePaginator
+    public function paginateForUser(User $user, int $perPage = 15, bool $unreadOnly = false, ?string $category = null): LengthAwarePaginator
     {
         $query = UserNotification::query()
             ->whereBelongsTo($user)
@@ -36,7 +38,41 @@ class NotificationService
             $query->whereNull('read_at');
         }
 
+        if (is_string($category) && $category !== '') {
+            $query->where(function ($inner) use ($category): void {
+                $inner->where('data->variables->category', $category)
+                    ->orWhereIn('template_code', NotificationInboxContract::codesForCategory($category));
+            });
+        }
+
         return $query->paginate($perPage);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    public function unreadCountByCategory(User $user): array
+    {
+        $counts = array_fill_keys(NotificationInboxContract::categories(), 0);
+
+        UserNotification::query()
+            ->whereBelongsTo($user)
+            ->whereNull('read_at')
+            ->get(['template_code', 'type', 'data'])
+            ->each(function (UserNotification $notification) use (&$counts): void {
+                $variables = (array) data_get($notification->data, 'variables', []);
+                $category = $variables['category']
+                    ?? NotificationInboxContract::category(
+                        (string) $notification->template_code,
+                        $variables,
+                    );
+
+                if (isset($counts[$category])) {
+                    $counts[$category]++;
+                }
+            });
+
+        return $counts;
     }
 
     public function unreadCountForUser(User $user): int
@@ -130,6 +166,7 @@ class NotificationService
         string $deviceToken,
         string $platform,
         string $channel = NotificationChannels::PUSH,
+        ?string $appVersion = null,
     ): UserNotificationDevice {
         $device = UserNotificationDevice::query()->updateOrCreate(
             ['device_token' => $deviceToken],
@@ -137,6 +174,7 @@ class NotificationService
                 'user_id' => $user->id,
                 'channel' => $channel,
                 'platform' => $platform,
+                'app_version' => $appVersion,
                 'is_active' => true,
                 'last_seen_at' => now(),
             ],
@@ -148,6 +186,7 @@ class NotificationService
                 'user_id' => $user->id,
                 'channel' => $channel,
                 'platform' => $platform,
+                'app_version' => $appVersion,
                 'is_active' => true,
                 'last_seen_at' => now(),
             ])->save();
@@ -238,18 +277,20 @@ class NotificationService
             ];
         }
 
+        $templateCode = (string) ($variables['template_code'] ?? 'MANUAL_PUSH');
+
         $log = new NotificationLog([
             'subject' => $title,
             'body' => $body,
             'related_type' => null,
             'related_id' => null,
             'event_class' => (string) ($variables['topic'] ?? 'manual_push'),
-            'notification_type' => 'system',
+            'notification_type' => (string) ($variables['notification_type'] ?? 'system'),
         ]);
 
         $template = new NotificationTemplate([
-            'code' => 'MANUAL_PUSH',
-            'name' => 'Manual Push',
+            'code' => $templateCode,
+            'name' => $templateCode,
         ]);
 
         return $this->pushNotificationChannel->send($log, $template, $user, $variables);
@@ -307,6 +348,65 @@ class NotificationService
         ];
     }
 
+    /**
+     * Send one or all catalog templates through the real engine (in-app + push by default).
+     *
+     * @param  array<int, string>  $channels
+     * @return array<string, mixed>
+     */
+    public function sendTestTemplates(User $user, ?string $templateCode = null, array $channels = []): array
+    {
+        $query = NotificationTemplate::query()->where('is_active', true)->orderBy('code');
+
+        if (is_string($templateCode) && $templateCode !== '' && strtoupper($templateCode) !== 'ALL') {
+            $query->where('code', $templateCode);
+        }
+
+        $templates = $query->get();
+
+        if ($templates->isEmpty()) {
+            abort(422, 'No active notification templates were found to test.');
+        }
+
+        $results = [];
+
+        foreach ($templates as $template) {
+            $payload = NotificationTemplateSamples::forCode($template->code);
+            $payload['user_name'] = $user->full_name ?: $user->name ?: $payload['user_name'];
+            $payload['notification_type'] = NotificationTemplateSamples::notificationType(
+                $template->code,
+                $template->category,
+            );
+
+            $requested = $channels !== []
+                ? $channels
+                : array_values(array_intersect(
+                    $template->enabledChannels(),
+                    [NotificationChannels::IN_APP, NotificationChannels::PUSH],
+                ));
+
+            $logs = $this->notificationEngine->dispatchTemplate(
+                $user,
+                $template,
+                $payload,
+                $requested,
+                true,
+            );
+
+            $results[] = [
+                'code' => $template->code,
+                'channels' => array_map(static fn (NotificationLog $log): string => $log->channel, $logs),
+                'in_app' => collect($logs)->firstWhere('channel', NotificationChannels::IN_APP)?->status,
+                'push' => collect($logs)->firstWhere('channel', NotificationChannels::PUSH)?->status,
+            ];
+        }
+
+        return [
+            'count' => count($results),
+            'templates' => $results,
+        ];
+    }
+
     public function retry(NotificationLog $log): NotificationLog
     {
         $log->forceFill([
@@ -320,7 +420,7 @@ class NotificationService
         return $log->refresh();
     }
 
-    public function preferencesForUser(User $user): \App\Models\UserNotificationPreference
+    public function preferencesForUser(User $user): UserNotificationPreference
     {
         return $this->notificationPreferenceResolver->preferencesFor($user);
     }

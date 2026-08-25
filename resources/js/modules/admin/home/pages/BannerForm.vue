@@ -1,5 +1,7 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import HomeActionPayloadEditor from '../components/HomeActionPayloadEditor.vue';
+import HomeImagePicker from '../components/HomeImagePicker.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
@@ -32,6 +34,28 @@ const form = useForm({
 const needsRouteOrUrl = computed(() => ['route', 'url'].includes(form.action_type));
 const needsPayload = computed(() => form.action_type.startsWith('search_'));
 
+const actionTypeLabel = (type) => t(`home.action.${type}`);
+
+const actionTypeHint = computed(() => t(`home.action.hint.${form.action_type}`));
+
+const actionValueLabel = computed(() => (
+    form.action_type === 'url'
+        ? t('External link (URL)')
+        : t('App screen path')
+));
+
+const actionValuePlaceholder = computed(() => (
+    form.action_type === 'url'
+        ? 'https://example.com/offer'
+        : '/offers'
+));
+
+const fillActionValueExample = () => {
+    if (!form.action_value) {
+        form.action_value = actionValuePlaceholder.value;
+    }
+};
+
 const submit = () => {
     const options = { forceFormData: true };
 
@@ -41,10 +65,6 @@ const submit = () => {
     }
 
     form.post(route('admin.home.banners.store'), options);
-};
-
-const onImageChange = (event) => {
-    form.image = event.target.files?.[0] ?? null;
 };
 </script>
 
@@ -86,43 +106,54 @@ const onImageChange = (event) => {
                     </div>
                 </div>
 
-                <div class="grid gap-4 md:grid-cols-2">
-                    <div>
-                        <label class="mb-1.5 block text-sm font-medium">{{ t('Upload image') }}</label>
-                        <input type="file" accept="image/jpeg,image/png,image/webp" class="w-full text-sm" @change="onImageChange">
-                        <p class="mt-1 text-xs text-slate-500">{{ t('Prefer WebP/JPG ~1600px wide.') }}</p>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-sm font-medium">{{ t('Or CDN image URL') }}</label>
-                        <input v-model="form.image_url" type="url" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="https://cdn.example.com/...">
-                    </div>
-                </div>
+                <HomeImagePicker
+                    v-model:image="form.image"
+                    v-model:image-url="form.image_url"
+                    :current-image-url="banner?.image_url || ''"
+                    :hint="t('Prefer WebP/JPG ~1600px wide.')"
+                    :error="form.errors.image || form.errors.image_url || ''"
+                />
 
-                <div v-if="banner?.image_url" class="rounded-xl border border-slate-200 p-3">
-                    <p class="mb-2 text-xs text-slate-500">{{ t('Current image') }}</p>
-                    <img :src="banner.image_url" alt="" class="h-24 rounded-lg object-cover">
-                </div>
-
-                <div class="grid gap-4 md:grid-cols-2">
+                <div class="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div>
-                        <label class="mb-1.5 block text-sm font-medium">{{ t('Action type') }}</label>
-                        <select v-model="form.action_type" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
-                            <option v-for="type in options.action_types" :key="type" :value="type">{{ type }}</option>
+                        <label class="mb-1.5 block text-sm font-medium">{{ t('When user taps the banner') }}</label>
+                        <select v-model="form.action_type" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
+                            <option v-for="type in options.action_types" :key="type" :value="type">
+                                {{ actionTypeLabel(type) }}
+                            </option>
                         </select>
+                        <p class="mt-2 text-xs leading-5 text-slate-600">{{ actionTypeHint }}</p>
                     </div>
-                    <div v-if="needsRouteOrUrl">
-                        <label class="mb-1.5 block text-sm font-medium">{{ t('Action value') }}</label>
-                        <input v-model="form.action_value" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="/esim-offer or https://...">
-                    </div>
-                </div>
 
-                <div v-if="needsPayload">
-                    <label class="mb-1.5 block text-sm font-medium">{{ t('Action payload (JSON)') }}</label>
-                    <textarea
+                    <div v-if="needsRouteOrUrl">
+                        <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                            <label class="block text-sm font-medium">{{ actionValueLabel }}</label>
+                            <button
+                                type="button"
+                                class="text-xs font-medium text-cyan-700 hover:underline"
+                                @click="fillActionValueExample"
+                            >
+                                {{ t('Insert example') }}
+                            </button>
+                        </div>
+                        <input
+                            v-model="form.action_value"
+                            type="text"
+                            class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                            :placeholder="actionValuePlaceholder"
+                        >
+                        <p class="mt-1 text-xs text-slate-500">
+                            {{ form.action_type === 'url'
+                                ? t('Paste a full web link starting with https://')
+                                : t('Ask the mobile team for the exact screen path.') }}
+                        </p>
+                    </div>
+
+                    <HomeActionPayloadEditor
+                        v-if="needsPayload"
                         v-model="form.action_payload"
-                        rows="4"
-                        class="w-full rounded-xl border border-slate-300 px-3 py-2.5 font-mono text-sm"
-                        placeholder='{"origin":"BAH","destination":"IST"}'
+                        :action-type="form.action_type"
+                        :error="form.errors.action_payload || ''"
                     />
                 </div>
 
@@ -140,17 +171,32 @@ const onImageChange = (event) => {
                         <input v-model="form.ends_at" type="datetime-local" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
                     </div>
                 </div>
+                <p class="text-xs text-slate-500">
+                    {{ t('Schedule times use platform timezone') }}:
+                    <span class="font-medium text-slate-700">{{ options.schedule_timezone || banner?.schedule_timezone || 'Africa/Tripoli' }}</span>.
+                    {{ t('Leave Starts at empty to publish immediately.') }}
+                </p>
 
-                <div class="flex flex-wrap items-center gap-4">
+                <div class="space-y-3">
                     <label class="inline-flex items-center gap-2 text-sm">
                         <input v-model="form.is_active" type="checkbox" class="rounded border-slate-300">
                         {{ t('Active') }}
                     </label>
-                    <label v-for="platform in options.platforms" :key="platform" class="inline-flex items-center gap-2 text-sm">
-                        <input v-model="form.platforms" type="checkbox" :value="platform" class="rounded border-slate-300">
-                        {{ platform }}
-                    </label>
-                    <p class="text-xs text-slate-500">{{ t('Leave platforms unchecked for all devices.') }}</p>
+
+                    <div class="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <span class="text-sm font-medium text-slate-800">{{ t('Platforms') }}</span>
+                        <label
+                            v-for="platform in options.platforms"
+                            :key="platform"
+                            class="inline-flex items-center gap-2 rounded-lg bg-white px-2.5 py-1 text-sm capitalize text-slate-700 ring-1 ring-slate-200"
+                        >
+                            <input v-model="form.platforms" type="checkbox" :value="platform" class="rounded border-slate-300">
+                            {{ platform }}
+                        </label>
+                        <span class="text-xs text-slate-500">
+                            {{ t('Leave platforms unchecked for all devices.') }}
+                        </span>
+                    </div>
                 </div>
 
                 <div class="flex justify-end gap-3 pt-2">

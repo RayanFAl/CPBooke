@@ -2,8 +2,7 @@
 
 namespace App\Modules\Api\Support\Http\Requests;
 
-use App\Modules\Api\Support\Http\Requests\ApiFormRequest;
-use App\Modules\Support\SupportAttachmentRules;
+use App\Modules\Support\Storage\SupportAttachmentRules;
 use Illuminate\Validation\Rule;
 
 class CreateSupportTicketRequest extends ApiFormRequest
@@ -35,7 +34,7 @@ class CreateSupportTicketRequest extends ApiFormRequest
             'priority' => ['required', 'string', Rule::in(['low', 'medium', 'high', 'urgent'])],
             'subject' => ['required', 'string', 'max:255'],
             'message' => ['required_without:attachment', 'nullable', 'string', 'max:5000'],
-            'attachment' => SupportAttachmentRules::attachmentFieldRules(),
+            'attachment' => SupportAttachmentRules::fileRules(),
         ];
     }
 }

@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Modules\Notifications\Contracts\NotificationChannel;
 use App\Modules\Notifications\Services\FcmHttpV1Client;
 use App\Modules\Notifications\Support\NotificationChannels;
+use App\Modules\Settings\Services\SystemSettingsService;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -15,8 +16,8 @@ class PushNotificationChannel implements NotificationChannel
 {
     public function __construct(
         private readonly FcmHttpV1Client $fcmHttpV1Client,
-    ) {
-    }
+        private readonly SystemSettingsService $systemSettingsService,
+    ) {}
 
     public function channel(): string
     {
@@ -29,6 +30,14 @@ class PushNotificationChannel implements NotificationChannel
      */
     public function send(NotificationLog $log, NotificationTemplate $template, User $user, array $variables): array
     {
+        if (! $this->systemSettingsService->isChannelEnabled(NotificationChannels::PUSH)) {
+            return [
+                'provider' => 'fcm',
+                'delivered' => false,
+                'reason' => 'channel_disabled',
+            ];
+        }
+
         $devices = $user->notificationDevices()
             ->where('channel', NotificationChannels::PUSH)
             ->where('is_active', true)
@@ -43,16 +52,30 @@ class PushNotificationChannel implements NotificationChannel
             ];
         }
 
-        $title = $log->subject ?: config('app.name', 'Notification');
+        $title = $log->subject ?: $this->systemSettingsService->companyName();
         $body = (string) $log->body;
 
+        $productType = isset($variables['product_type'])
+            ? (string) $variables['product_type']
+            : (isset($variables['service_type']) ? (string) $variables['service_type'] : null);
+
         $data = array_filter([
+            'title' => $title,
+            'body' => $body,
             'related_type' => $log->related_type,
             'related_id' => (string) ($log->related_id ?? ''),
             'event_class' => $log->event_class,
+            'type' => isset($variables['notification_type'])
+                ? (string) $variables['notification_type']
+                : (string) ($log->notification_type ?? 'system'),
+            'template_code' => $template->code,
+            'order_id' => $log->related_type === 'order' && $log->related_id
+                ? (string) $log->related_id
+                : (isset($variables['order_id']) ? (string) $variables['order_id'] : null),
+            'product_type' => $productType,
             'deep_link' => isset($variables['deep_link']) ? (string) $variables['deep_link'] : (
                 $log->related_type === 'order' && $log->related_id
-                    ? '/orders/'.$log->related_id
+                    ? '/my-orders'
                     : null
             ),
             'notification_id' => isset($variables['notification_id']) ? (string) $variables['notification_id'] : null,
@@ -63,6 +86,15 @@ class PushNotificationChannel implements NotificationChannel
         $data = array_map(static fn (mixed $value): string => (string) $value, $data);
 
         if (! $this->fcmHttpV1Client->isConfigured()) {
+            if (app()->environment('production')) {
+                return [
+                    'provider' => 'fcm',
+                    'delivered' => false,
+                    'reason' => 'channel_not_configured',
+                    'tokens_count' => count($devices),
+                ];
+            }
+
             return [
                 'provider' => 'push-simulated',
                 'delivered' => true,

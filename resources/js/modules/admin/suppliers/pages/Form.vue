@@ -46,11 +46,11 @@ const submit = () => {
 
 <template>
     <AdminLayout>
-        <Head :title="isEdit ? t('Edit supplier') : t('Add supplier')" />
+        <Head :title="isEdit ? t('Edit provider') : t('Add provider')" />
 
         <section class="mx-auto max-w-3xl space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 class="text-2xl font-semibold text-slate-950">{{ isEdit ? t('Edit supplier') : t('Add supplier') }}</h2>
+                <h2 class="text-2xl font-semibold text-slate-950">{{ isEdit ? t('Edit provider') : t('Add provider') }}</h2>
                 <p class="mt-2 text-sm text-slate-600">{{ t('Commercial profile used for wallets, cost calculation, and future settlements.') }}</p>
             </div>
 
@@ -153,7 +153,7 @@ const submit = () => {
 
                 <div class="flex gap-3 pt-2">
                     <button type="submit" class="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800" :disabled="form.processing">
-                        {{ isEdit ? t('Save changes') : t('Create supplier') }}
+                        {{ isEdit ? t('Save changes') : t('Create provider') }}
                     </button>
                     <Link :href="route('admin.suppliers.index')" class="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">
                         {{ t('Cancel') }}

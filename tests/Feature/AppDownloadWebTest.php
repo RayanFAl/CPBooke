@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
-use App\Modules\Content\Services\MobileAppReleaseService;
+use App\Models\AppDownloadEvent;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class AppDownloadWebTest extends TestCase
 {
+    use RefreshDatabase;
+
     private string $releasesDirectory;
 
     protected function setUp(): void
@@ -56,5 +59,23 @@ class AppDownloadWebTest extends TestCase
         $this->get('/app/download')
             ->assertOk()
             ->assertDownload('booke-1.1.0+110.apk');
+
+        $this->assertDatabaseHas('app_download_events', [
+            'event_type' => AppDownloadEvent::TYPE_APK_DOWNLOAD,
+            'apk_filename' => 'booke-1.1.0+110.apk',
+            'version' => '1.1.0',
+        ]);
+    }
+
+    public function test_app_download_page_records_a_page_view(): void
+    {
+        File::put($this->releasesDirectory.'/booke-1.0.0+100.apk', 'fake-apk-binary');
+
+        $this->get('/app?locale=ar')->assertOk();
+
+        $this->assertDatabaseHas('app_download_events', [
+            'event_type' => AppDownloadEvent::TYPE_PAGE_VIEW,
+            'locale' => 'ar',
+        ]);
     }
 }

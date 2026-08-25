@@ -26,7 +26,7 @@ const props = defineProps({
 
 const emit = defineEmits(['booked-by-click', 'action-click']);
 
-const { locale, t } = useAdminLocale();
+const { locale, t, forwardArrow } = useAdminLocale();
 const { defaultCurrency } = usePlatformCurrency();
 const logoFailed = ref(false);
 const hotelImageFailed = ref(false);
@@ -473,7 +473,7 @@ const passengerName = (passenger) => {
 
 const routeLabel = (row) => {
     if (row.departure_airport && row.arrival_airport) {
-        return `${row.departure_airport} → ${row.arrival_airport}`;
+        return `${row.departure_airport} ${forwardArrow.value} ${row.arrival_airport}`;
     }
 
     return row.departure_airport || row.arrival_airport || t('Not available');

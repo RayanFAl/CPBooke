@@ -20,6 +20,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'abandoned_notified_at',
     'price_drop_notified_at',
     'converted_at',
+    'search_count',
+    'results_viewed_at',
 ])]
 class TravelSearchIntent extends Model
 {
@@ -37,6 +39,8 @@ class TravelSearchIntent extends Model
             'abandoned_notified_at' => 'datetime',
             'price_drop_notified_at' => 'datetime',
             'converted_at' => 'datetime',
+            'search_count' => 'integer',
+            'results_viewed_at' => 'datetime',
         ];
     }
 

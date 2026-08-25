@@ -62,7 +62,7 @@ const openWallet = (wallet) => {
                     <div>
                         <h2 class="text-2xl font-semibold text-slate-950">{{ t('Customer Wallets') }}</h2>
                         <p class="mt-2 text-sm text-slate-600">
-                            {{ t('Manage customer balances, manual credits, and wallet payment history.') }}
+                            {{ t('Search customer wallets, then open a ledger to record an admin top-up.') }}
                         </p>
                     </div>
                     <p class="text-sm font-medium text-slate-500">{{ walletsCountLabel }}</p>

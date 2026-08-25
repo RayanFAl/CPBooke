@@ -27,13 +27,19 @@ const props = defineProps({
 });
 
 const page = usePage();
-const { locale, t } = useAdminLocale();
+const { locale, t, paginationLabel } = useAdminLocale();
 const { defaultCurrency } = usePlatformCurrency();
 const { navigating } = useAdminNavigation();
 
 const filterForm = reactive({
     search: props.filters.search ?? '',
     status: props.filters.status ?? '',
+});
+
+const canCreateOrders = computed(() => {
+    const permissions = page.props.auth.user?.permissions ?? [];
+
+    return permissions.includes('orders.create');
 });
 
 const canViewFinancials = computed(() => {
@@ -118,8 +124,17 @@ const openOrderPage = (order) => {
                         </p>
                     </div>
 
-                    <div class="rounded-2xl bg-slate-950 px-4 py-3 text-sm text-white">
-                        {{ ordersCountLabel }}
+                    <div class="flex flex-wrap items-center gap-3">
+                        <Link
+                            v-if="canCreateOrders"
+                            :href="route('admin.orders.create')"
+                            class="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
+                        >
+                            {{ t('Record booking') }}
+                        </Link>
+                        <div class="rounded-2xl bg-slate-950 px-4 py-3 text-sm text-white">
+                            {{ ordersCountLabel }}
+                        </div>
                     </div>
                 </div>
 
@@ -298,7 +313,7 @@ const openOrderPage = (order) => {
                             :href="link.url"
                             class="rounded-xl px-3 py-2 text-sm font-medium transition"
                             :class="link.active ? 'bg-slate-950 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'"
-                            v-html="link.label"
+                            v-html="paginationLabel(link.label)"
                         />
                     </nav>
                 </div>

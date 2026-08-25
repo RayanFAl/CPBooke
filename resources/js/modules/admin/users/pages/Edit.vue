@@ -161,7 +161,7 @@ const submit = () => {
                             {{ t('Save changes') }}
                         </PrimaryButton>
                         <Link
-                            :href="route('admin.users.show', user.id)"
+                            :href="route('admin.team.show', user.id)"
                             class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                         >
                             {{ t('Cancel') }}

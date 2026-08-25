@@ -60,7 +60,12 @@ class CustomerWalletService
     }
 
     /**
-     * @param  array{description?: string|null, metadata?: array<string, mixed>|null}  $options
+     * @param  array{
+     *     reason?: string|null,
+     *     note?: string|null,
+     *     description?: string|null,
+     *     metadata?: array<string, mixed>|null
+     * }  $options
      */
     public function adminCredit(
         CustomerWallet $wallet,
@@ -69,6 +74,8 @@ class CustomerWalletService
         array $options = [],
     ): CustomerWalletTransaction {
         $amount = $this->normalizePositiveAmount($amount, 'amount');
+        $reason = $this->normalizeAdminCreditReason($options['reason'] ?? null);
+        $note = trim((string) ($options['note'] ?? $options['description'] ?? ''));
 
         return $this->credit(
             $wallet,
@@ -76,10 +83,18 @@ class CustomerWalletService
             CustomerWalletTransaction::TYPE_ADMIN_CREDIT,
             CustomerWalletTransaction::REFERENCE_MANUAL,
             (string) Str::ulid(),
-            array_merge($options, [
+            [
                 'actor' => $actor,
-                'metadata' => array_merge($options['metadata'] ?? [], ['source' => 'admin_credit']),
-            ]),
+                'description' => $this->buildAdminCreditDescription($reason, $note),
+                'metadata' => array_merge($options['metadata'] ?? [], [
+                    'source' => 'admin_credit',
+                    'operation' => 'admin_topup',
+                    'reason' => $reason,
+                    'reason_label' => CustomerWalletTransaction::adminCreditReasonLabel($reason),
+                    'note' => $note !== '' ? $note : null,
+                    'actor_name' => $actor?->full_name ?: $actor?->name,
+                ]),
+            ],
         );
     }
 
@@ -636,6 +651,36 @@ class CustomerWalletService
         } while (CustomerWallet::query()->where('wallet_number', $number)->exists());
 
         return $number;
+    }
+
+    private function normalizeAdminCreditReason(mixed $reason): string
+    {
+        $reason = is_string($reason) ? trim($reason) : '';
+
+        if ($reason === '') {
+            return CustomerWalletTransaction::REASON_OTHER;
+        }
+
+        if (! in_array($reason, CustomerWalletTransaction::adminCreditReasons(), true)) {
+            throw ValidationException::withMessages([
+                'reason' => 'Select a valid reason for this wallet top-up.',
+            ]);
+        }
+
+        return $reason;
+    }
+
+    private function buildAdminCreditDescription(string $reason, string $note): string
+    {
+        $parts = [
+            'Admin top-up — '.CustomerWalletTransaction::adminCreditReasonLabel($reason),
+        ];
+
+        if ($note !== '') {
+            $parts[] = $note;
+        }
+
+        return implode('. ', $parts);
     }
 
     private function normalizePositiveAmount(mixed $amount, string $field): float

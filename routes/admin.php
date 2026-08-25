@@ -29,6 +29,7 @@ Route::prefix('admin')
         require base_path('routes/admin/partners.php');
         require base_path('routes/admin/ai.php');
         require base_path('routes/admin/home.php');
+        require base_path('routes/admin/catalog.php');
         require base_path('routes/admin/content.php');
         require base_path('routes/admin/airports.php');
         require base_path('routes/admin/mobile-app.php');

@@ -6,14 +6,16 @@ import AdminBreadcrumbs from '../components/AdminBreadcrumbs.vue';
 import AdminToastHost from '../components/AdminToastHost.vue';
 import AdminConfirmDialog from '../components/AdminConfirmDialog.vue';
 import AdminGlobalSearch from '../components/AdminGlobalSearch.vue';
+import AdminInfoTip from '../components/AdminInfoTip.vue';
 import { bindAdminNavigation } from '../composables/useAdminNavigation';
 import { useAdminLocale } from '../composables/useAdminLocale';
+import { useAdminPageHelp } from '../composables/useAdminPageHelp';
 import { useAdminToast } from '../composables/useAdminToast';
 
 const props = defineProps({
     title: {
         type: String,
-        required: true,
+        default: '',
     },
     description: {
         type: String,
@@ -36,7 +38,8 @@ const user = computed(() => page.props.auth.user);
 const flash = computed(() => page.props.flash ?? {});
 const toast = useAdminToast();
 const { locale, isArabic, setLocale, t } = useAdminLocale();
-const translatedTitle = computed(() => t(props.title));
+const { helpText } = useAdminPageHelp();
+const translatedTitle = computed(() => (props.title ? t(props.title) : ''));
 const translatedDescription = computed(() => t(props.description));
 
 const displayName = computed(() => user.value?.full_name ?? user.value?.name ?? '');
@@ -89,11 +92,11 @@ watch(
     flash,
     (value) => {
         if (value.success) {
-            toast.success(value.success);
+            toast.success(t(value.success));
         }
 
         if (value.error) {
-            toast.error(value.error);
+            toast.error(t(value.error));
         }
     },
     { immediate: true },
@@ -115,7 +118,7 @@ onMounted(() => {
 
         <div class="flex min-h-screen">
             <div
-                class="hidden shrink-0 transition-[width] duration-300 lg:block"
+                class="sticky top-0 z-30 hidden h-screen shrink-0 self-start transition-[width] duration-300 lg:block"
                 :class="desktopSidebarCollapsed ? 'w-[4.5rem]' : 'w-72'"
             >
                 <AdminSidebar
@@ -180,7 +183,12 @@ onMounted(() => {
                                 <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
                                     {{ t('Admin Module') }}
                                 </p>
-                                <h1 class="truncate text-xl font-semibold text-slate-950">{{ translatedTitle }}</h1>
+                                <div class="flex min-w-0 items-center gap-2">
+                                    <h1 class="truncate text-xl font-semibold text-slate-950">
+                                        {{ translatedTitle || t('Control Panel') }}
+                                    </h1>
+                                    <AdminInfoTip v-if="helpText" :text="helpText" />
+                                </div>
                                 <p v-if="props.description" class="mt-1 truncate text-sm text-slate-600">
                                     {{ translatedDescription }}
                                 </p>

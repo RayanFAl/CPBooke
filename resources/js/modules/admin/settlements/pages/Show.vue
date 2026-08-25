@@ -18,7 +18,7 @@ const props = defineProps({
     system_timeline: { type: Array, default: () => [] },
 });
 
-const { t } = useAdminLocale();
+const { t, backArrow, forwardArrow } = useAdminLocale();
 const resolvingId = ref(null);
 
 const filterForm = reactive({
@@ -145,13 +145,13 @@ const formatStatus = (status) => status.replaceAll('_', ' ');
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <Link :href="route('admin.settlements.index')" class="text-sm font-medium text-cyan-700 hover:text-cyan-800">
-                    ← {{ t('Settlements') }}
+                    {{ backArrow }} {{ t('Settlements') }}
                 </Link>
                 <div class="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ settlement.provider_name }}</p>
                         <h2 class="mt-2 text-2xl font-semibold text-slate-950">
-                            {{ settlement.period_start }} → {{ settlement.period_end }}
+                            {{ settlement.period_start }} {{ forwardArrow }} {{ settlement.period_end }}
                         </h2>
                         <p class="mt-2 text-sm text-slate-600">
                             {{ settlement.currency }} · {{ settlement.status }} · {{ settlement.orders_count }} {{ t('orders') }}

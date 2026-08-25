@@ -19,7 +19,7 @@ const props = defineProps({
     expected_filename: { type: String, required: true },
 });
 
-const { t } = useAdminLocale();
+const { t, forwardArrow } = useAdminLocale();
 const page = usePage();
 const apkInput = ref(null);
 
@@ -160,10 +160,10 @@ const selectApkFile = (filename) => {
 
                         <div class="space-y-2 pt-2">
                             <a :href="download_page_url" target="_blank" rel="noopener noreferrer" class="block text-cyan-700 hover:underline">
-                                {{ t('Public download page') }} →
+                                {{ t('Public download page') }} {{ forwardArrow }}
                             </a>
                             <a :href="download_file_url" target="_blank" rel="noopener noreferrer" class="block text-cyan-700 hover:underline">
-                                {{ t('Direct APK download') }} →
+                                {{ t('Direct APK download') }} {{ forwardArrow }}
                             </a>
                             <p class="text-xs text-slate-500">{{ t('Update API') }}: {{ update_check_url }}</p>
                         </div>

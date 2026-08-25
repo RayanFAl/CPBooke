@@ -17,13 +17,14 @@ const props = defineProps({
     },
 });
 
-const { locale, t } = useAdminLocale();
+const { locale, t, backArrow, forwardArrow } = useAdminLocale();
 const { defaultCurrency } = usePlatformCurrency();
 const { confirm } = useAdminConfirm();
 
 const page = usePage();
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
 const canUpdateUsers = computed(() => permissions.value.includes('users.update'));
+const canCreateOrders = computed(() => permissions.value.includes('orders.create'));
 const canViewOrders = computed(() => permissions.value.includes('orders.view'));
 const canViewLoyalty = computed(() => permissions.value.includes('loyalty.view'));
 const canViewSupport = computed(() => permissions.value.includes('support.view'));
@@ -61,16 +62,6 @@ const crm = computed(() => props.user.crm ?? {
     ai_searches: [],
 });
 const activityFilter = ref('all');
-const activityFilters = computed(() => [
-    { id: 'all', label: t('All') },
-    { id: 'login', label: t('Logins') },
-    { id: 'search', label: t('Searches') },
-    { id: 'notification', label: t('Notifications') },
-    { id: 'order', label: t('Orders') },
-    { id: 'support', label: t('Support') },
-    { id: 'finance', label: t('Finance') },
-    { id: 'profile', label: t('Profile') },
-]);
 const filteredTimeline = computed(() => {
     const events = crm.value.timeline ?? [];
 
@@ -82,6 +73,48 @@ const filteredTimeline = computed(() => {
         || (activityFilter.value === 'notification' && event.category === 'alert'));
 });
 const canViewCustomerWallets = computed(() => permissions.value.includes('customer-wallets.view'));
+const canManageCustomerWallets = computed(() => permissions.value.includes('customer-wallets.manage'));
+const isCustomerProfile = computed(() => props.user.account_type === 'customer');
+const activityFilters = computed(() => {
+    if (!isCustomerProfile.value) {
+        return [
+            { id: 'all', label: t('All') },
+            { id: 'login', label: t('Logins') },
+        ];
+    }
+
+    return [
+        { id: 'all', label: t('All') },
+        { id: 'login', label: t('Logins') },
+        { id: 'search', label: t('Searches') },
+        { id: 'notification', label: t('Notifications') },
+        { id: 'order', label: t('Orders') },
+        { id: 'support', label: t('Support') },
+        { id: 'finance', label: t('Finance') },
+        { id: 'profile', label: t('Profile') },
+    ];
+});
+const directoryRoute = computed(() => (isCustomerProfile.value ? 'admin.customers.index' : 'admin.team.index'));
+const directoryLabel = computed(() => (isCustomerProfile.value ? t('Back to customers') : t('Back to team')));
+const profileTitle = computed(() => (isCustomerProfile.value ? 'Customer profile' : 'Team member'));
+const profileDescription = computed(() => (isCustomerProfile.value
+    ? 'CRM snapshot with wallet, bookings, and support in one place.'
+    : 'Control Panel staff profile with roles and permissions. No customer wallet.'));
+const canDepositToWallet = computed(() => isCustomerProfile.value && canManageCustomerWallets.value);
+const primaryWallet = computed(() => crm.value.wallets?.[0] ?? null);
+
+const formatWalletMoney = (amount, currency = 'LYD') => new Intl.NumberFormat(locale.value, {
+    style: 'currency',
+    currency,
+}).format(Number(amount ?? 0));
+
+const primaryWalletBalanceLabel = computed(() => {
+    if (!primaryWallet.value) {
+        return formatWalletMoney(0, defaultCurrency.value);
+    }
+
+    return formatWalletMoney(primaryWallet.value.balance, primaryWallet.value.currency);
+});
 const loyalty = computed(() => props.user.loyalty ?? {
     current_level: 0,
     current_tier: null,
@@ -107,6 +140,15 @@ const activeSupportTicketLink = computed(() => activeSupportTicket.value
 const activeTab = ref('overview');
 
 const workspaceTabs = computed(() => {
+    if (!isCustomerProfile.value) {
+        return [
+            { id: 'overview', label: t('Overview'), count: 0 },
+            { id: 'activity', label: t('Activity'), count: crm.value.stats.timeline_count },
+            { id: 'sessions', label: t('Sessions'), count: crm.value.stats.login_count },
+            { id: 'access', label: t('Access'), count: props.user.permissions.length },
+        ];
+    }
+
     const tabs = [
         { id: 'overview', label: t('Overview'), count: 0 },
         { id: 'activity', label: t('Activity'), count: crm.value.stats.timeline_count },
@@ -125,8 +167,6 @@ const workspaceTabs = computed(() => {
     if (canViewLoyalty.value) {
         tabs.push({ id: 'loyalty', label: t('Loyalty'), count: loyalty.value.history.length });
     }
-
-    tabs.push({ id: 'access', label: t('Access'), count: props.user.permissions.length });
 
     return tabs;
 });
@@ -172,6 +212,24 @@ const walletBalanceLabel = computed(() => {
         currency,
     }).format(Number(balance));
 });
+
+const startAddMoney = (walletId = null) => {
+    if (walletId) {
+        router.visit(`${route('admin.customer-wallets.show', walletId)}?action=add-money`);
+
+        return;
+    }
+
+    const existingWalletId = crm.value.wallets?.[0]?.id ?? null;
+
+    if (existingWalletId) {
+        router.visit(`${route('admin.customer-wallets.show', existingWalletId)}?action=add-money`);
+
+        return;
+    }
+
+    router.post(route('admin.users.customer-wallet.add-money', props.user.id));
+};
 
 const formatDateTime = (value) => {
     if (!value) {
@@ -262,42 +320,60 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <Head :title="`${t('User')} ${user.full_name}`" />
+    <Head :title="`${t(isCustomerProfile ? 'Customer' : 'Team member')} ${user.full_name}`" />
 
     <AdminLayout
-        title="User Profile"
-        description="360-degree user snapshot with a clear separation between account classification and administrative access."
+        :title="profileTitle"
+        :description="profileDescription"
     >
         <section class="space-y-6">
             <div class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(6,182,212,0.10),_transparent_38%),linear-gradient(180deg,_#ffffff,_#f8fafc)] px-6 py-6">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
-                            <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('User Workspace') }}</p>
+                            <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
+                                {{ t(isCustomerProfile ? 'Customer Workspace' : 'Team Workspace') }}
+                            </p>
                             <h2 class="mt-2 text-3xl font-semibold text-slate-950">{{ user.full_name }}</h2>
                             <div class="mt-3 flex flex-wrap items-center gap-3">
                                 <UserStatusBadge :active="user.is_active" />
                                 <AccountTypeBadge :account-type="user.account_type" />
-                                <RoleBadge :role="user.role" />
+                                <RoleBadge v-if="!isCustomerProfile" :role="user.role" />
                             </div>
                             <p class="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
-                                {{ t('Every search, login, notification, booking, and profile action for this customer is collected in one CRM workspace.') }}
+                                {{ t(isCustomerProfile
+                                    ? 'Every search, login, notification, booking, and profile action for this customer is collected in one CRM workspace.'
+                                    : 'Roles and permissions for this Control Panel account. Customer wallet and travel CRM are not used here.') }}
                             </p>
                         </div>
 
                         <div class="flex flex-wrap gap-3">
                             <Link
-                                :href="route('admin.users.index')"
+                                :href="route(directoryRoute)"
                                 class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                             >
-                                {{ t('Back to users') }}
+                                {{ backArrow }} {{ directoryLabel }}
                             </Link>
                             <Link
-                                v-if="canUpdateUsers"
+                                v-if="canUpdateUsers && !isCustomerProfile"
                                 :href="route('admin.users.edit', user.id)"
                                 class="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-700 transition hover:bg-cyan-100"
                             >
                                 {{ t('Edit user') }}
+                            </Link>
+                            <Link
+                                v-if="canUpdateUsers && isCustomerProfile"
+                                :href="route('admin.customers.edit', user.id)"
+                                class="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-700 transition hover:bg-cyan-100"
+                            >
+                                {{ t('Edit identity') }}
+                            </Link>
+                            <Link
+                                v-if="canCreateOrders && isCustomerProfile"
+                                :href="route('admin.orders.create', { customer_id: user.id })"
+                                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                            >
+                                {{ t('Book for customer') }}
                             </Link>
                             <button
                                 v-if="canUpdateUsers"
@@ -310,23 +386,23 @@ onBeforeUnmount(() => {
                         </div>
                     </div>
 
-                    <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                    <div class="mt-5 grid gap-3 sm:grid-cols-2" :class="isCustomerProfile ? 'xl:grid-cols-6' : 'xl:grid-cols-3'">
                         <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Logins') }}</p>
                             <p class="mt-2 text-2xl font-semibold text-slate-950">{{ crm.stats.login_count }}</p>
                             <p class="mt-2 text-sm text-slate-600">{{ t('Recorded sign-ins and issued sessions.') }}</p>
                         </div>
-                        <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                        <div v-if="isCustomerProfile" class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Searches') }}</p>
                             <p class="mt-2 text-2xl font-semibold text-slate-950">{{ crm.stats.search_count }}</p>
                             <p class="mt-2 text-sm text-slate-600">{{ t('Flight searches and AI travel lookups.') }}</p>
                         </div>
-                        <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                        <div v-if="isCustomerProfile" class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Notifications') }}</p>
                             <p class="mt-2 text-2xl font-semibold text-slate-950">{{ crm.stats.notification_count }}</p>
                             <p class="mt-2 text-sm text-slate-600">{{ t(':count unread in the passenger inbox.', { count: crm.stats.unread_notification_count }) }}</p>
                         </div>
-                        <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                        <div v-if="isCustomerProfile" class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Orders') }}</p>
                             <p class="mt-2 text-2xl font-semibold text-slate-950">{{ user.recent_orders.length }}</p>
                             <p class="mt-2 text-sm text-slate-600">{{ t('Latest bookings on this customer profile.') }}</p>
@@ -334,12 +410,17 @@ onBeforeUnmount(() => {
                         <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Activity') }}</p>
                             <p class="mt-2 text-2xl font-semibold text-slate-950">{{ crm.stats.timeline_count }}</p>
-                            <p class="mt-2 text-sm text-slate-600">{{ t('Unified timeline of every tracked customer action.') }}</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ t(isCustomerProfile ? 'Unified timeline of every tracked customer action.' : 'Sign-in history and staff activity for this account.') }}</p>
                         </div>
-                        <div class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                        <div v-if="isCustomerProfile" class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Support') }}</p>
                             <p class="mt-2 text-2xl font-semibold text-slate-950">{{ crm.stats.ticket_count || activeSupportTicketCount }}</p>
                             <p class="mt-2 text-sm text-slate-600">{{ t('All support tickets opened by this customer.') }}</p>
+                        </div>
+                        <div v-else class="rounded-[1.6rem] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Access') }}</p>
+                            <p class="mt-2 text-2xl font-semibold text-slate-950">{{ user.permissions.length }}</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ t('Resolved permissions for this Control Panel account.') }}</p>
                         </div>
                     </div>
                 </div>
@@ -369,7 +450,16 @@ onBeforeUnmount(() => {
             <div v-if="activeTab === 'overview'" class="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
                 <div class="space-y-6">
                     <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-slate-950">{{ t('Personal details') }}</h3>
+                        <div class="flex items-start justify-between gap-3">
+                            <h3 class="text-lg font-semibold text-slate-950">{{ t('Personal details') }}</h3>
+                            <Link
+                                v-if="canUpdateUsers && isCustomerProfile"
+                                :href="route('admin.customers.edit', user.id)"
+                                class="text-sm font-medium text-cyan-700 hover:text-cyan-800"
+                            >
+                                {{ t('Edit identity') }}
+                            </Link>
+                        </div>
                         <dl class="mt-5 grid gap-5 sm:grid-cols-2">
                             <div>
                                 <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Full name') }}</dt>
@@ -391,7 +481,7 @@ onBeforeUnmount(() => {
                                 <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Account type') }}</dt>
                                 <dd class="mt-2 text-sm text-slate-900">{{ user.account_type === 'admin' ? t('Admin') : t('Customer') }}</dd>
                             </div>
-                            <div>
+                            <div v-if="!isCustomerProfile">
                                 <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Role') }}</dt>
                                 <dd class="mt-2 text-sm text-slate-900">{{ user.role?.label ? t(user.role.label) : t('No role assigned') }}</dd>
                             </div>
@@ -430,6 +520,7 @@ onBeforeUnmount(() => {
                                 <span class="font-medium text-slate-950">{{ crm.stats.timeline_count }}</span>
                             </button>
                             <button
+                                v-if="isCustomerProfile"
                                 type="button"
                                 class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
                                 @click="changeTab('searches')"
@@ -438,6 +529,7 @@ onBeforeUnmount(() => {
                                 <span class="font-medium text-slate-950">{{ crm.stats.search_count }}</span>
                             </button>
                             <button
+                                v-if="isCustomerProfile"
                                 type="button"
                                 class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
                                 @click="changeTab('notifications')"
@@ -454,6 +546,7 @@ onBeforeUnmount(() => {
                                 <span class="font-medium text-slate-950">{{ crm.stats.login_count }}</span>
                             </button>
                             <button
+                                v-if="isCustomerProfile"
                                 type="button"
                                 class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
                                 @click="changeTab('orders')"
@@ -462,6 +555,7 @@ onBeforeUnmount(() => {
                                 <span class="font-medium text-slate-950">{{ user.recent_orders.length }}</span>
                             </button>
                             <button
+                                v-if="isCustomerProfile"
                                 type="button"
                                 class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
                                 @click="changeTab('finance')"
@@ -469,11 +563,52 @@ onBeforeUnmount(() => {
                                 <span>{{ t('Open finance workspace') }}</span>
                                 <span class="font-medium text-slate-950">{{ walletBalanceLabel }}</span>
                             </button>
+                            <button
+                                v-if="!isCustomerProfile"
+                                type="button"
+                                class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                                @click="changeTab('access')"
+                            >
+                                <span>{{ t('Open access workspace') }}</span>
+                                <span class="font-medium text-slate-950">{{ user.permissions.length }}</span>
+                            </button>
                         </div>
                     </div>
                 </div>
 
                 <div class="space-y-6">
+                    <div
+                        v-if="isCustomerProfile && (canDepositToWallet || canViewCustomerWallets)"
+                        class="overflow-hidden rounded-3xl border border-emerald-100 bg-white shadow-sm"
+                    >
+                        <div class="bg-gradient-to-br from-emerald-50 via-white to-slate-50 px-6 py-6">
+                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">{{ t('Wallet') }}</p>
+                            <p class="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+                                {{ primaryWalletBalanceLabel }}
+                            </p>
+                            <p class="mt-2 text-sm text-slate-500">
+                                {{ primaryWallet ? `${primaryWallet.wallet_number} · ${formatValueLabel(primaryWallet.status)}` : t('No wallet yet') }}
+                            </p>
+                            <div class="mt-5 flex flex-col gap-2">
+                                <button
+                                    v-if="canDepositToWallet"
+                                    type="button"
+                                    class="inline-flex items-center justify-center rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
+                                    @click="startAddMoney(primaryWallet?.id)"
+                                >
+                                    {{ t('Deposit') }}
+                                </button>
+                                <Link
+                                    v-if="canViewCustomerWallets && primaryWallet"
+                                    :href="route('admin.customer-wallets.show', primaryWallet.id)"
+                                    class="inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-white hover:text-slate-950"
+                                >
+                                    {{ t('View ledger') }}
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                         <h3 class="text-lg font-semibold text-slate-950">{{ t('Account health') }}</h3>
                         <div class="mt-5 space-y-4">
@@ -495,7 +630,7 @@ onBeforeUnmount(() => {
                                     {{ user.account_type === 'admin' ? t('This account can access the admin panel according to its resolved permissions.') : t('This account is classified as a customer-facing user profile.') }}
                                 </p>
                             </div>
-                            <div v-if="canViewLoyalty" class="rounded-2xl bg-slate-50 p-4">
+                            <div v-if="isCustomerProfile && canViewLoyalty" class="rounded-2xl bg-slate-50 p-4">
                                 <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Loyalty tier') }}</p>
                                 <p class="mt-2 text-sm text-slate-900">
                                     {{ loyalty.current_tier ? `${loyalty.current_tier.name} / ${t('Level')} ${loyalty.current_level}` : t('No loyalty tier assigned yet.') }}
@@ -551,44 +686,69 @@ onBeforeUnmount(() => {
                     <div
                         v-for="wallet in crm.wallets"
                         :key="wallet.id"
-                        class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+                        class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
                     >
-                        <div class="flex flex-wrap items-start justify-between gap-4">
+                        <div class="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
                             <div>
-                                <h3 class="text-lg font-semibold text-slate-950">{{ t('Customer wallet') }}</h3>
-                                <p class="mt-2 text-sm text-slate-600">{{ wallet.wallet_number }} · {{ formatValueLabel(wallet.status) }}</p>
+                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">{{ t('Wallet') }}</p>
+                                <p class="mt-2 text-3xl font-semibold text-slate-950">{{ formatWalletMoney(wallet.balance, wallet.currency) }}</p>
+                                <p class="mt-2 text-sm text-slate-500">{{ wallet.wallet_number }} · {{ formatValueLabel(wallet.status) }}</p>
                             </div>
-                            <div class="text-right">
-                                <p class="text-2xl font-semibold text-slate-950">{{ wallet.balance }} {{ wallet.currency }}</p>
+                            <div class="flex flex-col gap-2 sm:items-end">
+                                <button
+                                    v-if="canManageCustomerWallets"
+                                    type="button"
+                                    class="inline-flex items-center justify-center rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
+                                    @click="startAddMoney(wallet.id)"
+                                >
+                                    {{ t('Deposit') }}
+                                </button>
                                 <Link
                                     v-if="canViewCustomerWallets"
                                     :href="route('admin.customer-wallets.show', wallet.id)"
-                                    class="mt-2 inline-flex text-sm font-medium text-cyan-700 hover:text-cyan-800"
+                                    class="text-center text-sm font-medium text-slate-500 hover:text-slate-800"
                                 >
-                                    {{ t('Open wallet ledger') }}
+                                    {{ t('View ledger') }}
                                 </Link>
                             </div>
                         </div>
-                        <div class="mt-5 space-y-3">
+                        <div class="space-y-3 border-t border-slate-100 px-6 py-5">
+                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ t('Recent activity') }}</p>
                             <div
                                 v-for="transaction in wallet.transactions"
                                 :key="transaction.id"
-                                class="rounded-2xl border border-slate-200 p-4"
+                                class="flex flex-wrap items-start justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-3"
                             >
-                                <div class="flex flex-wrap items-start justify-between gap-4">
-                                    <div>
-                                        <p class="font-medium text-slate-900">{{ formatValueLabel(transaction.type) }}</p>
-                                        <p class="mt-2 text-sm text-slate-600">{{ transaction.description || t('Wallet movement') }}</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <p class="text-sm font-medium text-slate-950">{{ transaction.signed_amount }} {{ transaction.currency }}</p>
-                                        <p class="mt-2 text-xs uppercase tracking-[0.16em] text-slate-500">{{ formatDateTime(transaction.created_at) }}</p>
-                                    </div>
+                                <div>
+                                    <p class="font-medium text-slate-900">{{ transaction.summary || formatValueLabel(transaction.type) }}</p>
+                                    <p v-if="transaction.note" class="mt-1 text-sm text-slate-500">{{ transaction.note }}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm font-semibold text-slate-950">{{ transaction.signed_amount }} {{ transaction.currency }}</p>
+                                    <p class="mt-1 text-xs text-slate-400">{{ formatDateTime(transaction.created_at) }}</p>
                                 </div>
                             </div>
                             <p v-if="wallet.transactions.length === 0" class="text-sm text-slate-500">{{ t('No wallet ledger rows yet.') }}</p>
                         </div>
                     </div>
+                </div>
+
+                <div
+                    v-else-if="canManageCustomerWallets"
+                    class="rounded-3xl border border-dashed border-emerald-200 bg-emerald-50/40 p-6"
+                >
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">{{ t('Wallet') }}</p>
+                    <p class="mt-3 text-lg font-semibold text-slate-950">{{ t('No wallet yet') }}</p>
+                    <p class="mt-2 max-w-md text-sm text-slate-600">
+                        {{ t('Deposit to create this customer wallet and record the first top-up.') }}
+                    </p>
+                    <button
+                        type="button"
+                        class="mt-5 inline-flex items-center justify-center rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
+                        @click="startAddMoney()"
+                    >
+                        {{ t('Deposit') }}
+                    </button>
                 </div>
 
                 <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -658,7 +818,7 @@ onBeforeUnmount(() => {
                                     <p class="font-medium text-slate-900">{{ search.route }}</p>
                                     <p class="mt-2 text-sm text-slate-600">
                                         {{ search.departure_date || t('No date') }}
-                                        <span v-if="search.return_date"> → {{ search.return_date }}</span>
+                                        <span v-if="search.return_date"> {{ forwardArrow }} {{ search.return_date }}</span>
                                         <span v-if="search.last_seen_price"> · {{ search.last_seen_price }} {{ search.currency }}</span>
                                     </p>
                                 </div>

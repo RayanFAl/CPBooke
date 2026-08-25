@@ -10,7 +10,7 @@ const props = defineProps({
     can_approve: { type: Boolean, default: false },
 });
 
-const { t } = useAdminLocale();
+const { t, backArrow } = useAdminLocale();
 
 const formatTime = (value) => {
     if (!value) return '—';
@@ -48,7 +48,7 @@ const retry = () => {
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <Link :href="route('admin.approvals.index')" class="text-sm font-medium text-cyan-700 hover:text-cyan-800">
-                    ← {{ t('Approvals') }}
+                    {{ backArrow }} {{ t('Approvals') }}
                 </Link>
                 <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Approval') }} #{{ approval.id }}</h2>
                 <p class="mt-2 text-sm text-slate-600">

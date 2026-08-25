@@ -81,7 +81,7 @@ class UserPermissionAssignmentTest extends TestCase
                     'support.view',
                 ],
             ])
-            ->assertRedirect(route('admin.users.show', $target));
+            ->assertRedirect(route('admin.team.show', $target));
 
         $target->refresh();
 
@@ -98,7 +98,7 @@ class UserPermissionAssignmentTest extends TestCase
             'account_type' => User::ACCOUNT_TYPE_ADMIN,
             'is_admin' => true,
         ]);
-        $actor->syncRolesByName([RbacRegistry::ROLE_TEAM_MEMBER]);
+        $actor->syncRolesByName([RbacRegistry::ROLE_ADMIN]);
         $actor->syncPermissionsByName([
             'users.view',
             'users.update',
@@ -158,6 +158,7 @@ class UserPermissionAssignmentTest extends TestCase
             'settings.manage',
             'orders.view',
             'support.view',
+            'search.view',
         ]);
 
         $target = User::factory()->create([

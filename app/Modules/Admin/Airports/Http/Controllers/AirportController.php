@@ -1,12 +1,13 @@
 <?php
 
 namespace App\Modules\Admin\Airports\Http\Controllers;
+
 use App\Jobs\ImportBooknowAirportsJob;
 use App\Models\Airport;
 use App\Models\FeaturedAirport;
 use App\Modules\Admin\Airports\Http\Requests\UpdateFeaturedAirportsRequest;
+use App\Modules\Admin\Airports\Queries\AirportIndexQuery;
 use App\Modules\Admin\Airports\Services\FeaturedAirportService;
-use App\Support\Airports\AirportSearchScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,77 +23,28 @@ class AirportController
 {
     public function __construct(
         private readonly FeaturedAirportService $featuredAirportService,
+        private readonly AirportIndexQuery $airportIndexQuery,
     ) {
     }
 
     public function index(Request $request): Response
     {
-        $search = $request->input('search');
-
-        if (Schema::hasTable('booknow_airports')) {
-            $codeExpr = "CASE WHEN NULLIF(iata_code, '') IS NOT NULL THEN CONCAT('IATA:', iata_code) WHEN NULLIF(icao_code, '') IS NOT NULL THEN CONCAT('ICAO:', icao_code) ELSE NULL END";
-
-            $query = DB::table('booknow_airports')
-                ->select([
-                    DB::raw("$codeExpr as id"),
-                    DB::raw("$codeExpr as airport_key"),
-                    'iata_code',
-                    'icao_code',
-                    'name_en',
-                    'city_en',
-                    'country_name_en',
-                    'country_iso2',
-                    'type',
-                ]);
-
-            if ($search) {
-                $query->where(function ($q) use ($search): void {
-                    AirportSearchScope::apply($q, $search);
-                    $q->orWhere('translation_status', 'like', "%{$search}%");
-                });
-            }
-
-            $airports = $query
-                ->orderBy('name_en')
-                ->paginate(20)
-                ->withQueryString();
-
-            return Inertia::render('admin/airports/pages/Index', [
-                'airports' => $airports,
-                'filters' => [
-                    'search' => $search,
-                ],
-                'usesFullSchema' => true,
-                'importStatus' => $this->importStatus(),
-                'featuredAirports' => $this->featuredAirportService->listWithDetails(),
-                'featuredAirportKeys' => $this->featuredAirportService->featuredKeys()->all(),
-                'maxFeaturedAirports' => FeaturedAirport::MAX_COUNT,
-            ]);
-        }
-
-        $query = Airport::query();
-
-        if ($search) {
-            $query->where('name', 'like', "%$search%")
-                ->orWhere('code', 'like', "%$search%")
-                ->orWhere('city', 'like', "%$search%")
-                ->orWhere('country', 'like', "%$search%");
-        }
-
-        $airports = $query
-            ->orderBy('name')
-            ->paginate(20)
-            ->withQueryString();
+        $listing = $this->airportIndexQuery->paginate($request);
 
         return Inertia::render('admin/airports/pages/Index', [
-            'airports' => $airports,
-            'filters' => [
-                'search' => $search,
-            ],
-            'usesFullSchema' => false,
-            'importStatus' => null,
-            'featuredAirports' => collect(),
-            'featuredAirportKeys' => [],
+            'airports' => $listing['airports'],
+            'filters' => $listing['filters'],
+            'country_options' => $listing['country_options'],
+            'type_options' => $listing['type_options'],
+            'per_page_options' => $listing['per_page_options'],
+            'usesFullSchema' => $listing['usesFullSchema'],
+            'importStatus' => $listing['usesFullSchema'] ? $this->importStatus() : null,
+            'featuredAirports' => $listing['usesFullSchema']
+                ? $this->featuredAirportService->listWithDetails()
+                : collect(),
+            'featuredAirportKeys' => $listing['usesFullSchema']
+                ? $this->featuredAirportService->featuredKeys()->all()
+                : [],
             'maxFeaturedAirports' => FeaturedAirport::MAX_COUNT,
         ]);
     }

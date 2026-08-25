@@ -13,7 +13,7 @@ const props = defineProps({
     can_manage: { type: Boolean, default: false },
 });
 
-const { t } = useAdminLocale();
+const { t, forwardArrow } = useAdminLocale();
 
 const filterForm = reactive({
     status: props.filters.status ?? '',
@@ -106,7 +106,7 @@ const openSettlement = (row) => {
                                 <p class="font-medium text-slate-950">{{ row.provider_name }}</p>
                                 <p class="text-xs text-slate-500">{{ row.provider_key }} · {{ row.currency }}</p>
                             </td>
-                            <td class="px-4 py-3 text-slate-700">{{ row.period_start }} → {{ row.period_end }}</td>
+                            <td class="px-4 py-3 text-slate-700">{{ row.period_start }} {{ forwardArrow }} {{ row.period_end }}</td>
                             <td class="px-4 py-3">{{ row.expected_cost }}</td>
                             <td class="px-4 py-3">{{ row.supplier_invoice_total }}</td>
                             <td class="px-4 py-3" :class="Number(row.difference) !== 0 ? 'text-amber-700' : 'text-slate-700'">

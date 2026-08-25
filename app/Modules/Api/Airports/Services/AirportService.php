@@ -55,6 +55,52 @@ class AirportService
     }
 
     /**
+     * Featured airports first, then the most traveled / searched airports from the app.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function browse(int $limit = 20): Collection
+    {
+        $featured = $this->featured();
+        $remaining = max(0, $limit - $featured->count());
+
+        if ($remaining === 0) {
+            return $featured;
+        }
+
+        $exclude = $featured
+            ->map(fn (array $airport): ?string => AirportKey::fromCodes($airport['iata_code'] ?? null, $airport['icao_code'] ?? null))
+            ->filter()
+            ->values()
+            ->all();
+
+        return $featured->concat($this->popular($remaining, $exclude))->values();
+    }
+
+    /**
+     * @param  list<string>  $excludeKeys
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function popular(int $limit, array $excludeKeys = []): Collection
+    {
+        if ($limit < 1 || ! Schema::hasTable('booknow_airports')) {
+            return collect();
+        }
+
+        $query = $this->baseAirportQuery();
+
+        if ($excludeKeys !== []) {
+            AirportKey::applyKeyExclusion($query, $excludeKeys);
+        }
+
+        $items = collect($query->limit($limit)->get())
+            ->map(fn (object $record): array => $this->formatBooknowRecord($record))
+            ->values();
+
+        return $items;
+    }
+
+    /**
      * @return array{items: Collection<int, array<string, mixed>>, total: int}
      */
     public function paginate(?string $search, int $page, int $perPage): array
@@ -67,19 +113,8 @@ class AirportService
             return $this->paginateLegacyAirports($search, $page, $perPage);
         }
 
-        $query = DB::table('booknow_airports')
-            ->select($this->booknowSelectColumns())
-            ->where(function ($builder): void {
-                $builder->where(function ($nested): void {
-                    $nested->whereNotNull('iata_code')
-                        ->where('iata_code', '!=', '');
-                })->orWhere(function ($nested): void {
-                    $nested->whereNotNull('icao_code')
-                        ->where('icao_code', '!=', '');
-                });
-            })
-            ->when($search !== '', fn ($builder) => AirportSearchScope::apply($builder, $search))
-            ->orderBy('name_en');
+        $query = $this->baseAirportQuery()
+            ->when($search !== '', fn ($builder) => AirportSearchScope::apply($builder, $search));
 
         $total = (clone $query)->count();
         $items = collect($query->offset(($page - 1) * $perPage)->limit($perPage)->get())
@@ -157,19 +192,44 @@ class AirportService
     private function booknowSelectColumns(): array
     {
         return [
-            'iata_code',
-            'icao_code',
-            'name_en',
-            'name_ar',
-            'name_fr',
-            'city_en',
-            'city_ar',
-            'city_fr',
-            'country_iso2',
-            'country_name_en',
-            'country_name_ar',
-            'country_name_fr',
+            'booknow_airports.iata_code',
+            'booknow_airports.icao_code',
+            'booknow_airports.name_en',
+            'booknow_airports.name_ar',
+            'booknow_airports.name_fr',
+            'booknow_airports.city_en',
+            'booknow_airports.city_ar',
+            'booknow_airports.city_fr',
+            'booknow_airports.country_iso2',
+            'booknow_airports.country_name_en',
+            'booknow_airports.country_name_ar',
+            'booknow_airports.country_name_fr',
         ];
+    }
+
+    private function baseAirportQuery()
+    {
+        $query = DB::table('booknow_airports')
+            ->select($this->booknowSelectColumns())
+            ->where(function ($builder): void {
+                $builder->where(function ($nested): void {
+                    $nested->whereNotNull('booknow_airports.iata_code')
+                        ->where('booknow_airports.iata_code', '!=', '');
+                })->orWhere(function ($nested): void {
+                    $nested->whereNotNull('booknow_airports.icao_code')
+                        ->where('booknow_airports.icao_code', '!=', '');
+                });
+            });
+
+        if (Schema::hasTable('airport_stats')) {
+            $query->leftJoin('airport_stats', function ($join): void {
+                $join->whereRaw('airport_stats.airport_key = ('.AirportKey::sqlExpression('booknow_airports').')');
+            })
+                ->orderByRaw('COALESCE(airport_stats.travel_count, 0) DESC')
+                ->orderByRaw('COALESCE(airport_stats.search_count, 0) DESC');
+        }
+
+        return $query->orderBy('booknow_airports.name_en');
     }
 
     /**

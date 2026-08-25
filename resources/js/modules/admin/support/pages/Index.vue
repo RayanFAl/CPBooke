@@ -43,7 +43,7 @@ const props = defineProps({
 });
 
 const page = usePage();
-const { locale, t } = useAdminLocale();
+const { locale, t, paginationLabel } = useAdminLocale();
 const filtersReady = ref(false);
 const assigningTicketId = ref(null);
 let searchDebounceTimer = null;
@@ -662,7 +662,7 @@ onBeforeUnmount(() => {
                             :href="link.url"
                             class="rounded-xl px-3 py-2 text-sm font-medium transition"
                             :class="link.active ? 'bg-slate-950 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'"
-                            v-html="link.label"
+                            v-html="paginationLabel(link.label)"
                         />
                     </nav>
                 </div>

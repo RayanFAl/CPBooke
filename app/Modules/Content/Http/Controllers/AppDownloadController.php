@@ -3,6 +3,7 @@
 namespace App\Modules\Content\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Admin\Dashboard\Services\AppPulseService;
 use App\Modules\Api\Content\Services\ContentPageService;
 use App\Modules\Content\Services\MobileAppReleaseService;
 use Illuminate\Contracts\View\View;
@@ -15,12 +16,14 @@ class AppDownloadController extends Controller
     public function __construct(
         private readonly ContentPageService $contentPageService,
         private readonly MobileAppReleaseService $mobileAppReleaseService,
+        private readonly AppPulseService $appPulseService,
     ) {}
 
     public function show(Request $request): View
     {
         $locale = $this->contentPageService->resolveLocale($request);
         $release = $this->mobileAppReleaseService->latestRelease();
+        $this->appPulseService->recordPageView($request, $release);
 
         return view('content.download', [
             'locale' => $locale,
@@ -37,13 +40,15 @@ class AppDownloadController extends Controller
         ]);
     }
 
-    public function download(): BinaryFileResponse
+    public function download(Request $request): BinaryFileResponse
     {
         $release = $this->mobileAppReleaseService->latestRelease();
 
         if ($release === null) {
             throw new NotFoundHttpException('APK file is not available.');
         }
+
+        $this->appPulseService->recordApkDownload($request, $release);
 
         return response()->download(
             $release['apk_path'],

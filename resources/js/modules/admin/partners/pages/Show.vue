@@ -2,6 +2,7 @@
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import { useAdminConfirm } from '../../composables/useAdminConfirm';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 
 const props = defineProps({
@@ -15,7 +16,8 @@ const props = defineProps({
     created_webhook_secret: { type: Object, default: null },
 });
 
-const { t } = useAdminLocale();
+const { t, backArrow } = useAdminLocale();
+const { confirm } = useAdminConfirm();
 
 const keyForm = useForm({ name: '' });
 const webhookForm = useForm({
@@ -33,6 +35,22 @@ const editWebhookForm = useForm({
     is_active: true,
 });
 
+const statusLabel = (status) => {
+    const labels = {
+        active: 'Active',
+        inactive: 'Inactive',
+        revoked: 'Revoked',
+        paused: 'Paused',
+        pending: 'Pending',
+        sent: 'Sent',
+        failed: 'Failed',
+    };
+
+    return t(labels[status] || status);
+};
+
+const eventLabel = (eventName) => t(`partner.event.${eventName}`);
+
 const createKey = () => {
     keyForm.post(route('admin.partners.api-keys.store', props.partner.id), {
         preserveScroll: true,
@@ -40,8 +58,13 @@ const createKey = () => {
     });
 };
 
-const revokeKey = (key) => {
-    if (!confirm(t('Revoke this API key? Existing integrations using it will stop working.'))) {
+const revokeKey = async (key) => {
+    if (!await confirm({
+        title: 'Confirm action',
+        message: t('Revoke this API key? Existing integrations using it will stop working.'),
+        confirmLabel: 'Revoke',
+        variant: 'danger',
+    })) {
         return;
     }
 
@@ -80,8 +103,13 @@ const saveWebhook = () => {
     });
 };
 
-const deleteWebhook = (webhook) => {
-    if (!confirm(t('Delete this webhook endpoint?'))) {
+const deleteWebhook = async (webhook) => {
+    if (!await confirm({
+        title: 'Confirm action',
+        message: t('Delete this webhook endpoint?'),
+        confirmLabel: 'Delete',
+        variant: 'danger',
+    })) {
         return;
     }
 
@@ -99,12 +127,12 @@ const deleteWebhook = (webhook) => {
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Partner') }}</p>
                         <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ partner.name }}</h2>
-                        <p class="mt-2 text-sm text-slate-600">{{ partner.slug }} · {{ partner.status }}</p>
+                        <p class="mt-2 text-sm text-slate-600">{{ partner.slug }} · {{ statusLabel(partner.status) }}</p>
                         <p v-if="partner.contact_email" class="mt-1 text-sm text-slate-500">{{ partner.contact_email }}</p>
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <Link :href="route('admin.partners.index')" class="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                            {{ t('Back') }}
+                            {{ backArrow }} {{ t('Back') }}
                         </Link>
                         <Link
                             v-if="can_manage"
@@ -186,7 +214,7 @@ const deleteWebhook = (webhook) => {
                         <div class="flex flex-wrap gap-3">
                             <label v-for="eventName in webhook_events" :key="eventName" class="inline-flex items-center gap-2 text-xs text-slate-700">
                                 <input v-model="webhookForm.events" type="checkbox" :value="eventName" class="rounded border-slate-300">
-                                {{ eventName }}
+                                {{ eventLabel(eventName) }}
                             </label>
                         </div>
                         <button type="submit" class="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800" :disabled="webhookForm.processing">
@@ -203,7 +231,7 @@ const deleteWebhook = (webhook) => {
                                     <p class="break-all font-medium text-slate-950">{{ webhook.url }}</p>
                                     <p class="mt-1 text-xs text-slate-500">
                                         {{ webhook.is_active ? t('Active') : t('Paused') }}
-                                        · {{ (webhook.events || []).join(', ') }}
+                                        · {{ (webhook.events || []).map(eventLabel).join(', ') }}
                                     </p>
                                     <p v-if="webhook.description" class="mt-1 text-xs text-slate-500">{{ webhook.description }}</p>
                                 </div>
@@ -222,7 +250,7 @@ const deleteWebhook = (webhook) => {
                                 <div class="flex flex-wrap gap-3">
                                     <label v-for="eventName in webhook_events" :key="`edit-${eventName}`" class="inline-flex items-center gap-2 text-xs text-slate-700">
                                         <input v-model="editWebhookForm.events" type="checkbox" :value="eventName" class="rounded border-slate-300">
-                                        {{ eventName }}
+                                        {{ eventLabel(eventName) }}
                                     </label>
                                 </div>
                                 <label class="inline-flex items-center gap-2 text-xs text-slate-700">
@@ -245,7 +273,7 @@ const deleteWebhook = (webhook) => {
                     <h3 class="text-lg font-semibold text-slate-950">{{ t('Recent deliveries') }}</h3>
                 </div>
                 <table class="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <thead class="bg-slate-50 text-start text-xs font-semibold uppercase tracking-wide text-slate-500">
                         <tr>
                             <th class="px-4 py-3">{{ t('Event') }}</th>
                             <th class="px-4 py-3">{{ t('Status') }}</th>
@@ -257,10 +285,10 @@ const deleteWebhook = (webhook) => {
                     <tbody class="divide-y divide-slate-100">
                         <tr v-for="delivery in deliveries" :key="delivery.id">
                             <td class="px-4 py-3">
-                                <p class="font-medium text-slate-950">{{ delivery.event }}</p>
+                                <p class="font-medium text-slate-950">{{ eventLabel(delivery.event) }}</p>
                                 <p class="truncate text-xs text-slate-500">{{ delivery.endpoint_url }}</p>
                             </td>
-                            <td class="px-4 py-3">{{ delivery.status }}</td>
+                            <td class="px-4 py-3">{{ statusLabel(delivery.status) }}</td>
                             <td class="px-4 py-3">{{ delivery.response_code ?? '—' }}</td>
                             <td class="px-4 py-3">{{ delivery.attempt_count }}</td>
                             <td class="px-4 py-3 text-xs text-slate-500">{{ delivery.created_at }}</td>

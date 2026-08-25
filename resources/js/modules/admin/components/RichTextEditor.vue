@@ -134,10 +134,10 @@ const btnClass = (active) =>
             <span class="mx-1 h-5 w-px bg-slate-300" />
 
             <button type="button" class="rounded-lg px-2 py-1.5 text-slate-600 hover:bg-slate-100" title="Undo" @click="editor.chain().focus().undo().run()">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 10h10a5 5 0 0 1 0 10H9M3 10l4-4M3 10l4 4"/></svg>
+                <svg class="h-4 w-4 rtl:scale-x-[-1]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 10h10a5 5 0 0 1 0 10H9M3 10l4-4M3 10l4 4"/></svg>
             </button>
             <button type="button" class="rounded-lg px-2 py-1.5 text-slate-600 hover:bg-slate-100" title="Redo" @click="editor.chain().focus().redo().run()">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10H11a5 5 0 0 0 0 10h4M21 10l-4-4M21 10l-4 4"/></svg>
+                <svg class="h-4 w-4 rtl:scale-x-[-1]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10H11a5 5 0 0 0 0 10h4M21 10l-4-4M21 10l-4 4"/></svg>
             </button>
         </div>
 

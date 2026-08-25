@@ -15,7 +15,7 @@ const { t } = useAdminLocale();
         max-width="md"
         @close="cancel"
     >
-        <p class="text-sm leading-6 text-slate-600">
+        <p class="whitespace-pre-line text-sm leading-6 text-slate-600">
             {{ confirmState.message }}
         </p>
 

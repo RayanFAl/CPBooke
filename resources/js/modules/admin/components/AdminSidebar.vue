@@ -129,6 +129,9 @@ const iconPaths = {
     search: 'M8.5 3a5.5 5.5 0 104.383 8.823l3.09 3.09a.75.75 0 101.06-1.06l-3.09-3.09A5.5 5.5 0 008.5 3zm-4 5.5a4 4 0 118 0 4 4 0 01-8 0z',
     monitoring: 'M10 2a8 8 0 100 16 8 8 0 000-16zm0 3a.75.75 0 01.75.75v3.5l2.5 1.5a.75.75 0 11-.75 1.3l-2.875-1.725A.75.75 0 019.25 9.25V5.75A.75.75 0 0110 5z',
     health: 'M10 3.5a6.5 6.5 0 00-5.995 9.082L2.5 14.5l2.418-.505A6.5 6.5 0 1010 3.5zm-2.25 3a.75.75 0 000 1.5h1.5v1.5a.75.75 0 001.5 0V8h1.5a.75.75 0 000-1.5H11V5.5a.75.75 0 00-1.5 0V6.5H8.75a.75.75 0 00-.75-.75z',
+    team: 'M6.5 3A1.5 1.5 0 005 4.5V16l5-2.5L15 16V4.5A1.5 1.5 0 0013.5 3h-7z',
+    content: 'M5 3h7.5L16 6.5V17H5V3zm7.5 0V6.5H16',
+    settings: 'M10 2a.75.75 0 01.75.75v.68c.62.16 1.2.44 1.72.82l.48-.48a.75.75 0 111.06 1.06l-.48.48c.10.0.1.3.82 1.72h.68a.75.75 0 010 1.5h-.68c-.16.62-.44 1.2-.82 1.72l.48.48a.75.75 0 11-1.06 1.06l-.48-.48a6.2 6.2 0 01-1.72.82v.68a.75.75 0 01-1.5 0v-.68a6.2 6.2 0 01-1.72-.82l-.48.48a.75.75 0 11-1.06-1.06l.48-.48A6.2 6.2 0 013.43 10.75H2.75a.75.75 0 010-1.5h.68c.16-.62.44-1.2.82-1.72l-.48-.48a.75.75 0 111.06-1.06l.48.48A6.2 6.2 0 019.25 3.43V2.75A.75.75 0 0110 2zm0 5.25a2.75 2.75 0 100 5.5 2.75 2.75 0 000-5.5z',
 };
 
 const handleNavigate = () => {
@@ -137,7 +140,7 @@ const handleNavigate = () => {
 </script>
 
 <template>
-    <aside class="flex h-full w-full flex-col bg-slate-950 text-slate-100">
+    <aside class="flex h-full min-h-0 w-full flex-col bg-slate-950 text-slate-100">
         <div
             class="flex items-start gap-2 border-b border-slate-800 px-3 py-4"
             :class="collapsed ? 'justify-center' : 'px-4'"
@@ -175,7 +178,7 @@ const handleNavigate = () => {
             </button>
         </div>
 
-        <nav class="flex-1 space-y-1 overflow-y-auto px-2 py-4">
+        <nav class="admin-sidebar-scroll flex-1 space-y-1 overflow-y-auto px-2 py-4">
             <template v-for="item in visibleNavigationItems" :key="item.label">
                 <Link
                     v-if="!item.children"
@@ -215,7 +218,7 @@ const handleNavigate = () => {
                         <svg
                             v-if="!collapsed"
                             class="h-4 w-4 shrink-0 text-slate-500 transition"
-                            :class="isGroupOpen(item) ? 'rotate-90' : ''"
+                            :class="isGroupOpen(item) ? (isArabic ? '-rotate-90' : 'rotate-90') : (isArabic ? 'rotate-180' : '')"
                             viewBox="0 0 20 20"
                             fill="currentColor"
                             aria-hidden="true"

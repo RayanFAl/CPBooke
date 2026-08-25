@@ -75,6 +75,12 @@ class Order extends Model
 
     public const PAYMENT_METHOD_CARD = 'card';
 
+    public const PAYMENT_METHOD_CASH = 'cash';
+
+    public const PAYMENT_METHOD_BANK = 'bank';
+
+    public const SOURCE_ADMIN_MANUAL = 'admin_manual';
+
     public const SERVICE_TYPE_FLIGHT = 'flight';
 
     public const SERVICE_TYPE_HOTEL = 'hotel';

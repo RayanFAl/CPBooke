@@ -3,10 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\FeaturedAirport;
+use App\Models\Order;
 use App\Models\User;
+use App\Modules\Airports\Listeners\RecordAirportTravelOnOrderConfirmed;
+use App\Modules\Orders\Events\OrderConfirmed;
+use App\Support\Airports\AirportPopularityService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -144,6 +149,140 @@ class ApiAirportsTest extends TestCase
             ->assertJsonPath('message', 'Airports fetched successfully.')
             ->assertJsonPath('meta.current_page', 1)
             ->assertJsonPath('data.airports.0.code', 'TIP');
+    }
+
+    public function test_airport_search_ranks_most_traveled_then_most_searched(): void
+    {
+        DB::table('airport_stats')->insert([
+            [
+                'airport_key' => 'IATA:DAM',
+                'search_count' => 1,
+                'travel_count' => 12,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'airport_key' => 'IATA:CAI',
+                'search_count' => 20,
+                'travel_count' => 2,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->getJson('/api/v1/airports?q=International')
+            ->assertOk()
+            ->assertJsonPath('data.airports.0.code', 'DAM')
+            ->assertJsonPath('data.airports.1.code', 'CAI');
+    }
+
+    public function test_airports_without_search_fill_with_popular_after_featured(): void
+    {
+        FeaturedAirport::query()->create([
+            'airport_key' => 'IATA:TIP',
+            'sort_order' => 1,
+        ]);
+
+        FeaturedAirport::query()->create([
+            'airport_key' => 'IATA:DAM',
+            'sort_order' => 2,
+        ]);
+
+        DB::table('airport_stats')->insert([
+            'airport_key' => 'IATA:CAI',
+            'search_count' => 3,
+            'travel_count' => 40,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->getJson('/api/v1/airports')
+            ->assertOk()
+            ->assertJsonPath('data.airports.0.code', 'TIP')
+            ->assertJsonPath('data.airports.1.code', 'DAM')
+            ->assertJsonPath('data.airports.2.code', 'CAI');
+    }
+
+    public function test_flight_search_intent_increments_airport_search_counts(): void
+    {
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->postJson('/api/v1/notifications/search-intents', [
+            'origin' => 'TIP',
+            'destination' => 'CAI',
+            'departure_date' => '2026-09-20',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('airport_stats', [
+            'airport_key' => 'IATA:TIP',
+            'search_count' => 1,
+        ]);
+        $this->assertDatabaseHas('airport_stats', [
+            'airport_key' => 'IATA:CAI',
+            'search_count' => 1,
+        ]);
+    }
+
+    public function test_confirmed_flight_order_increments_travel_counts(): void
+    {
+        Event::fake();
+        Event::assertListening(OrderConfirmed::class, RecordAirportTravelOnOrderConfirmed::class);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'provider_name' => 'BookNow',
+            'status' => Order::STATUS_CONFIRMED,
+            'payment_status' => Order::PAYMENT_STATUS_PAID,
+            'service_type' => Order::SERVICE_TYPE_FLIGHT,
+            'currency' => 'LYD',
+            'total_amount' => 180,
+            'details' => [
+                'origin' => 'MJI',
+                'destination' => 'TUN',
+                'segments' => [
+                    [
+                        'departure_airport' => 'MJI',
+                        'arrival_airport' => 'TUN',
+                    ],
+                ],
+            ],
+            'request_payload' => ['test' => true],
+        ]);
+
+        app(AirportPopularityService::class)->recordTravelFromOrder($order);
+
+        $this->assertDatabaseHas('airport_stats', [
+            'airport_key' => 'IATA:MJI',
+            'travel_count' => 1,
+        ]);
+        $this->assertDatabaseHas('airport_stats', [
+            'airport_key' => 'IATA:TUN',
+            'travel_count' => 1,
+        ]);
     }
 
     public function test_admin_can_toggle_featured_airport_from_edit(): void

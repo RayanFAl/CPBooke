@@ -8,7 +8,9 @@ use App\Models\OrderHistory;
 use App\Models\SupportTicket;
 use App\Models\User;
 use App\Modules\Admin\Access\Services\AccessControlService;
+use App\Modules\Audit\Services\AuditRecorder;
 use App\Modules\Loyalty\Services\LoyaltyService as CustomerLoyaltyService;
+use App\Support\Rbac\RbacAuditLogger;
 use App\Support\Rbac\RbacRegistry;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +23,8 @@ class UserService
         private readonly AccessControlService $accessControlService,
         private readonly CustomerLoyaltyService $loyaltyService,
         private readonly CustomerCrmActivityService $crmActivityService,
+        private readonly AuditRecorder $auditRecorder,
+        private readonly RbacAuditLogger $rbacAuditLogger,
     ) {}
 
     /**
@@ -341,6 +345,66 @@ class UserService
 
             return $user->refresh()->load(['roles', 'permissions']);
         });
+    }
+
+    /**
+     * Update customer identity fields without touching roles or permissions.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function updateIdentity(User $actor, User $user, array $data): User
+    {
+        if (! $user->isCustomerAccount()) {
+            throw ValidationException::withMessages([
+                'account_type' => 'Only customer accounts can be updated from the CRM identity form.',
+            ]);
+        }
+
+        $this->accessControlService->assertCanManageUser($actor, $user);
+
+        $oldValues = [
+            'full_name' => $user->full_name ?: $user->name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'country' => $user->country,
+        ];
+
+        $user->fill([
+            'name' => $data['full_name'],
+            'full_name' => $data['full_name'],
+            'email' => $data['email'],
+            'phone' => $data['phone'] ?: null,
+            'country' => $data['country'] ?: null,
+        ])->save();
+
+        $newValues = [
+            'full_name' => $user->full_name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'country' => $user->country,
+        ];
+
+        $this->auditRecorder->record(
+            module: 'users',
+            action: 'customer.identity.updated',
+            subject: 'Updated customer identity from CRM.',
+            entityType: 'user',
+            entityId: $user->id,
+            actor: $actor,
+            oldValues: $oldValues,
+            newValues: $newValues,
+        );
+
+        $this->rbacAuditLogger->log(
+            'customer.identity.updated',
+            'users.update',
+            $actor,
+            'user',
+            $user->id,
+            ['changed' => array_keys(array_diff_assoc($newValues, $oldValues))],
+        );
+
+        return $user->refresh();
     }
 
     /**

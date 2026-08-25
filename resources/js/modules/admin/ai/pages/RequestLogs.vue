@@ -11,7 +11,7 @@ const props = defineProps({
     modes: { type: Array, default: () => [] },
 });
 
-const { t } = useAdminLocale();
+const { t, paginationLabel } = useAdminLocale();
 
 const form = reactive({
     search: props.filters.search || '',
@@ -185,7 +185,7 @@ const slotsText = (summary) => {
                     :href="link.url || '#'"
                     class="rounded-lg px-3 py-1 text-sm"
                     :class="link.active ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-700'"
-                    v-html="link.label"
+                    v-html="paginationLabel(link.label)"
                 />
             </div>
         </section>

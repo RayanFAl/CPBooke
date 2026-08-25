@@ -7,6 +7,7 @@ use App\Modules\Api\Airports\Services\AirportService;
 use App\Modules\Api\Resources\AirportResource;
 use App\Modules\Api\Resources\FeaturedAirportResource;
 use App\Modules\Api\Support\Http\Responses\ApiResponse;
+use App\Support\Airports\AirportPopularityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -14,6 +15,7 @@ class AirportController extends Controller
 {
     public function __construct(
         private readonly AirportService $airportService,
+        private readonly AirportPopularityService $airportPopularityService,
     ) {
     }
 
@@ -33,22 +35,24 @@ class AirportController extends Controller
     }
 
     /**
-     * Search and paginate airports. Without `q`/`search`, returns admin featured airports.
+     * Search and paginate airports. Without `q`/`search`, returns featured airports then popular app routes.
      */
     public function index(Request $request): JsonResponse
     {
         $search = $this->resolveSearchQuery($request);
 
         if ($search === '') {
-            $featured = $this->airportService->featured();
+            $airports = $this->airportService->browse();
 
             return ApiResponse::success(
                 [
-                    'airports' => FeaturedAirportResource::collection($featured)->resolve($request),
+                    'airports' => FeaturedAirportResource::collection($airports)->resolve($request),
                 ],
                 'Featured airports fetched successfully.',
             );
         }
+
+        $this->airportPopularityService->recordExactAirportQuery($search);
 
         $page = max($request->integer('page', 1), 1);
         $perPage = (int) min(max($request->integer('per_page', 20), 1), 50);

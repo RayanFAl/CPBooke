@@ -15,7 +15,7 @@ const props = defineProps({
     },
 });
 
-const { t } = useAdminLocale();
+const { t, forwardArrow } = useAdminLocale();
 const page = usePage();
 const activeTab = ref('overview');
 
@@ -294,7 +294,7 @@ const inputClass = 'mt-1 block w-full rounded-lg border border-slate-200 px-3 py
                                 class="mt-4 text-sm font-medium text-cyan-700 transition hover:text-cyan-900"
                                 @click="activeTab = 'program'"
                             >
-                                {{ t('Edit program') }} →
+                                {{ t('Edit program') }} {{ forwardArrow }}
                             </button>
                         </article>
 
@@ -320,7 +320,7 @@ const inputClass = 'mt-1 block w-full rounded-lg border border-slate-200 px-3 py
                                                 <p class="text-sm font-medium text-slate-950">{{ entry.user.name || entry.user.email || t('Unknown user') }}</p>
                                                 <p class="mt-1 text-xs text-slate-500">{{ pretty(entry.action) }} · {{ entry.changed_at }}</p>
                                             </div>
-                                            <p class="text-sm text-slate-600">{{ entry.from_tier || t('No tier') }} → {{ entry.to_tier || t('No tier') }}</p>
+                                            <p class="text-sm text-slate-600">{{ entry.from_tier || t('No tier') }} {{ forwardArrow }} {{ entry.to_tier || t('No tier') }}</p>
                                         </div>
                                     </div>
                                 </div>

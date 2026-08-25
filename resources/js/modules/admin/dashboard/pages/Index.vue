@@ -20,6 +20,7 @@ const accentMap = {
     sky: 'from-white via-sky-50/80 to-slate-50 text-slate-700 ring-slate-200',
     amber: 'from-white via-amber-50/80 to-stone-50 text-slate-700 ring-slate-200',
     rose: 'from-white via-rose-50/75 to-slate-50 text-slate-700 ring-slate-200',
+    violet: 'from-white via-violet-50/80 to-slate-50 text-slate-700 ring-slate-200',
 };
 
 const spotlightToneMap = {
@@ -31,6 +32,9 @@ const spotlightToneMap = {
 const overviewCards = computed(() => props.dashboard.overview ?? []);
 const spotlightCards = computed(() => props.dashboard.spotlights ?? []);
 const latestOrders = computed(() => props.dashboard.latest_orders ?? []);
+const appPulse = computed(() => props.dashboard.app_pulse ?? {});
+const appPulseCards = computed(() => appPulse.value.cards ?? []);
+const appPulseSpotlights = computed(() => appPulse.value.spotlights ?? []);
 const { locale, t } = useAdminLocale();
 const { defaultCurrency } = usePlatformCurrency();
 const { navigating } = useAdminNavigation();
@@ -40,13 +44,36 @@ const revenueTrend = computed(() => props.dashboard.charts?.revenue_trend ?? [])
 const statusBreakdown = computed(() => props.dashboard.charts?.status_breakdown ?? []);
 const serviceBreakdown = computed(() => props.dashboard.charts?.service_breakdown ?? []);
 const supportBreakdown = computed(() => props.dashboard.charts?.support_breakdown ?? []);
+const downloadsTrend = computed(() => appPulse.value.charts?.downloads_trend ?? []);
+const searchesTrend = computed(() => appPulse.value.charts?.searches_trend ?? []);
+const signupsTrend = computed(() => appPulse.value.charts?.signups_trend ?? []);
+const platformMix = computed(() => appPulse.value.charts?.platform_mix ?? []);
+const topRoutes = computed(() => appPulse.value.charts?.top_routes ?? []);
+const conversion = computed(() => appPulse.value.conversion ?? {
+    searched: 0,
+    viewed_price: 0,
+    booked: 0,
+    search_to_price_rate: 0,
+    search_to_book_rate: 0,
+    price_to_book_rate: 0,
+});
+const conversionMax = computed(() => Math.max(
+    conversion.value.searched,
+    conversion.value.viewed_price,
+    conversion.value.booked,
+    1,
+));
 
 const orderTrendPath = computed(() => buildLinePath(orderTrend.value.map((item) => item.value)));
 const revenueTrendPath = computed(() => buildLinePath(revenueTrend.value.map((item) => item.value)));
+const downloadsTrendPath = computed(() => buildLinePath(downloadsTrend.value.map((item) => item.value)));
+const searchesTrendPath = computed(() => buildLinePath(searchesTrend.value.map((item) => item.value)));
 
 const maxStatusValue = computed(() => Math.max(...statusBreakdown.value.map((item) => item.value), 1));
 const maxServiceValue = computed(() => Math.max(...serviceBreakdown.value.map((item) => item.value), 1));
 const maxSupportValue = computed(() => Math.max(...supportBreakdown.value.map((item) => item.value), 1));
+const maxPlatformValue = computed(() => Math.max(...platformMix.value.map((item) => item.value), 1));
+const maxRouteValue = computed(() => Math.max(...topRoutes.value.map((item) => item.value), 1));
 
 const generatedAtLabel = computed(() => formatDateTime(props.dashboard.generated_at));
 
@@ -210,6 +237,249 @@ const openFinanceDesk = () => {
                     </p>
                 </article>
             </div>
+
+            <section class="overflow-hidden rounded-[2rem] border border-violet-100 bg-[radial-gradient(circle_at_top_left,_rgba(221,214,254,0.75),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(224,242,254,0.8),_transparent_28%),linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] p-6 shadow-[0_20px_60px_-35px_rgba(76,29,149,0.18)]">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div class="max-w-3xl">
+                        <p class="text-xs font-semibold uppercase tracking-[0.28em] text-violet-700/80">
+                            {{ t('App pulse') }}
+                        </p>
+                        <h2 class="mt-3 font-serif text-2xl tracking-tight text-slate-950 md:text-3xl">
+                            {{ t('Downloads, installs, and in-app searches.') }}
+                        </h2>
+                        <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+                            {{ t('Play Store numbers are not here. These counts come from the public APK page, phones that opened the app, and people who searched travel inside Booke.') }}
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <Link :href="route('admin.mobile-app.index')" class="inline-flex items-center rounded-full border border-violet-200 bg-white px-3 py-1.5 text-sm text-violet-800 transition hover:bg-violet-50">
+                            {{ t('Mobile app releases') }}
+                        </Link>
+                        <Link :href="route('admin.customers.index')" class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50">
+                            {{ t('Open customers') }}
+                        </Link>
+                    </div>
+                </div>
+
+                <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <article
+                        v-for="card in appPulseCards"
+                        :key="card.key"
+                        class="overflow-hidden rounded-[1.6rem] border border-white/80 bg-gradient-to-br p-5 shadow-[0_16px_36px_-28px_rgba(15,23,42,0.2)]"
+                        :class="accentMap[card.accent] || accentMap.violet"
+                    >
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                            {{ t(card.label) }}
+                        </p>
+                        <p class="mt-4 text-3xl font-semibold text-slate-950">
+                            {{ metricValue(card.value, 'number') }}
+                        </p>
+                        <p class="mt-3 text-sm font-medium text-slate-800">
+                            {{ metricValue(card.delta, 'number') }}
+                            <span class="font-normal text-slate-500">{{ t(card.delta_label) }}</span>
+                        </p>
+                        <p class="mt-2 text-xs leading-5 text-slate-500">
+                            {{ t(card.helper) }}
+                        </p>
+                    </article>
+                </div>
+
+                <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <article
+                        v-for="item in appPulseSpotlights"
+                        :key="item.label"
+                        class="rounded-2xl border border-slate-200 bg-white/85 px-4 py-4"
+                    >
+                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                            {{ t(item.label) }}
+                        </p>
+                        <p class="mt-2 text-2xl font-semibold text-slate-950">
+                            {{ metricValue(item.value, 'number') }}
+                        </p>
+                        <p class="mt-1 text-xs leading-5 text-slate-500">
+                            <template v-if="item.helper_value !== null && item.helper_value !== undefined">
+                                {{ metricValue(item.helper_value, 'number') }}
+                            </template>
+                            {{ t(item.helper) }}
+                        </p>
+                    </article>
+                </div>
+
+                <article class="mt-6 rounded-[1.6rem] border border-slate-200 bg-white p-5">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Conversion funnel') }}</p>
+                            <h3 class="mt-2 text-lg font-semibold text-slate-950">{{ t('Search → price → book') }}</h3>
+                            <p class="mt-2 max-w-2xl text-sm text-slate-600">
+                                {{ t('People who searched this week, then saw a price, then booked that route. Price views need the app to send the lowest fare with the search.') }}
+                            </p>
+                        </div>
+                        <p class="text-sm font-semibold text-slate-800">
+                            {{ metricValue(conversion.search_to_book_rate, 'percent') }}
+                            <span class="font-normal text-slate-500">{{ t('search to book') }}</span>
+                        </p>
+                    </div>
+                    <div class="mt-6 grid gap-4 md:grid-cols-3">
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="font-medium text-slate-700">{{ t('Searched') }}</span>
+                                <span class="font-semibold text-slate-950">{{ metricValue(conversion.searched, 'number') }}</span>
+                            </div>
+                            <div class="h-3 overflow-hidden rounded-full bg-slate-100">
+                                <div class="h-full rounded-full bg-sky-400" :style="{ width: barWidth(conversion.searched, conversionMax) }" />
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="font-medium text-slate-700">{{ t('Saw a price') }}</span>
+                                <span class="font-semibold text-slate-950">{{ metricValue(conversion.viewed_price, 'number') }} · {{ metricValue(conversion.search_to_price_rate, 'percent') }}</span>
+                            </div>
+                            <div class="h-3 overflow-hidden rounded-full bg-slate-100">
+                                <div class="h-full rounded-full bg-amber-400" :style="{ width: barWidth(conversion.viewed_price, conversionMax) }" />
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="font-medium text-slate-700">{{ t('Booked') }}</span>
+                                <span class="font-semibold text-slate-950">{{ metricValue(conversion.booked, 'number') }} · {{ metricValue(conversion.price_to_book_rate, 'percent') }}</span>
+                            </div>
+                            <div class="h-3 overflow-hidden rounded-full bg-slate-100">
+                                <div class="h-full rounded-full bg-emerald-500" :style="{ width: barWidth(conversion.booked, conversionMax) }" />
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <div class="mt-6 grid gap-6 lg:grid-cols-2">
+                    <article class="rounded-[1.6rem] border border-slate-200 bg-white p-5">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Download trend') }}</p>
+                                <h3 class="mt-2 text-lg font-semibold text-slate-950">{{ t('APK downloads') }}</h3>
+                            </div>
+                            <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700 ring-1 ring-violet-100">
+                                {{ t('Last 7 days') }}
+                            </span>
+                        </div>
+                        <div class="mt-5 rounded-[1.4rem] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] p-4">
+                            <AdminSparkline
+                                :points="downloadsTrend"
+                                :line-path="downloadsTrendPath"
+                                gradient-id="downloadsLineGradient"
+                                :locale="locale"
+                                stroke-from="#a78bfa"
+                                stroke-to="#7dd3fc"
+                            />
+                            <div class="mt-4 grid grid-cols-7 gap-2 text-center text-xs text-slate-500">
+                                <div v-for="point in downloadsTrend" :key="`dl-${point.label}`">
+                                    <p class="font-semibold text-slate-950">{{ point.value }}</p>
+                                    <p class="mt-1">{{ point.label }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="rounded-[1.6rem] border border-slate-200 bg-white p-5">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Search trend') }}</p>
+                                <h3 class="mt-2 text-lg font-semibold text-slate-950">{{ t('In-app flight searches') }}</h3>
+                            </div>
+                            <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-100">
+                                {{ t('Last 7 days') }}
+                            </span>
+                        </div>
+                        <div class="mt-5 rounded-[1.4rem] border border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] p-4">
+                            <AdminSparkline
+                                :points="searchesTrend"
+                                :line-path="searchesTrendPath"
+                                gradient-id="searchesLineGradient"
+                                :locale="locale"
+                                stroke-from="#fbbf24"
+                                stroke-to="#fdba74"
+                            />
+                            <div class="mt-4 grid grid-cols-7 gap-2 text-center text-xs text-slate-500">
+                                <div v-for="point in searchesTrend" :key="`sr-${point.label}`">
+                                    <p class="font-semibold text-slate-950">{{ point.value }}</p>
+                                    <p class="mt-1">{{ point.label }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="mt-6 rounded-[1.6rem] border border-slate-200 bg-white p-5">
+                    <div class="flex items-center justify-between gap-4">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('New customers') }}</p>
+                            <h3 class="mt-1 text-lg font-semibold text-slate-950">{{ t('App signups') }}</h3>
+                        </div>
+                        <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
+                            {{ t('Last 7 days') }}
+                        </span>
+                    </div>
+                    <div class="mt-4 grid grid-cols-7 gap-2 text-center">
+                        <div
+                            v-for="point in signupsTrend"
+                            :key="`su-${point.label}`"
+                            class="rounded-2xl bg-slate-50 px-2 py-3"
+                        >
+                            <p class="text-lg font-semibold text-slate-950">{{ point.value }}</p>
+                            <p class="mt-1 text-[11px] text-slate-500">{{ point.label }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 grid gap-6 lg:grid-cols-2">
+                    <article class="rounded-[1.6rem] border border-slate-200 bg-white p-5">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Device mix') }}</p>
+                                <h3 class="mt-2 text-lg font-semibold text-slate-950">{{ t('Installed platforms') }}</h3>
+                            </div>
+                            <span class="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                                {{ t('Active devices') }}
+                            </span>
+                        </div>
+                        <div class="mt-6 space-y-4">
+                            <div v-for="item in platformMix" :key="item.label" class="space-y-2">
+                                <div class="flex items-center justify-between gap-4 text-sm">
+                                    <span class="font-medium text-slate-700">{{ t(item.label) }}</span>
+                                    <span class="font-semibold text-slate-950">{{ metricValue(item.value, 'number') }}</span>
+                                </div>
+                                <div class="h-3 overflow-hidden rounded-full bg-slate-100">
+                                    <div class="h-full rounded-full bg-gradient-to-r from-violet-300 via-sky-200 to-slate-200" :style="{ width: barWidth(item.value, maxPlatformValue) }" />
+                                </div>
+                            </div>
+                            <p v-if="platformMix.length === 0" class="text-sm text-slate-500">{{ t('No installed devices recorded yet.') }}</p>
+                        </div>
+                    </article>
+
+                    <article class="rounded-[1.6rem] border border-slate-200 bg-white p-5">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Popular searches') }}</p>
+                                <h3 class="mt-2 text-lg font-semibold text-slate-950">{{ t('Routes people look for') }}</h3>
+                            </div>
+                            <span class="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                                {{ t('Top routes') }}
+                            </span>
+                        </div>
+                        <div class="mt-6 space-y-4">
+                            <div v-for="item in topRoutes" :key="item.label" class="space-y-2">
+                                <div class="flex items-center justify-between gap-4 text-sm">
+                                    <span class="font-medium text-slate-700">{{ item.label }}</span>
+                                    <span class="font-semibold text-slate-950">{{ metricValue(item.value, 'number') }}</span>
+                                </div>
+                                <div class="h-3 overflow-hidden rounded-full bg-slate-100">
+                                    <div class="h-full rounded-full bg-gradient-to-r from-amber-300 via-orange-100 to-stone-200" :style="{ width: barWidth(item.value, maxRouteValue) }" />
+                                </div>
+                            </div>
+                            <p v-if="topRoutes.length === 0" class="text-sm text-slate-500">{{ t('No in-app searches recorded yet.') }}</p>
+                        </div>
+                    </article>
+                </div>
+            </section>
 
             <div class="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.9fr)]">
                 <div class="grid gap-6">

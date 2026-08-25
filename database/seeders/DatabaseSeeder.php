@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             SystemSettingsSeeder::class,
             ProviderSeeder::class,
             HomeContentSeeder::class,
+            MobileCatalogSeeder::class,
             ContentPageSeeder::class,
             NotificationTemplateSeeder::class,
         ]);

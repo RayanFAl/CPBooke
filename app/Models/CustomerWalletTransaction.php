@@ -38,11 +38,26 @@ class CustomerWalletTransaction extends Model
 
     public const TYPE_ADJUSTMENT = 'adjustment';
 
+    /** Alias used in Control Panel copy for TYPE_ADMIN_CREDIT. */
+    public const TYPE_ADMIN_TOPUP = self::TYPE_ADMIN_CREDIT;
+
     public const REFERENCE_MANUAL = 'manual';
 
     public const REFERENCE_ORDER = 'order';
 
     public const REFERENCE_TEST_TOP_UP = 'test_top_up';
+
+    public const REASON_CASH_RECEIVED = 'cash_received';
+
+    public const REASON_BANK_TRANSFER = 'bank_transfer';
+
+    public const REASON_COMPENSATION = 'compensation';
+
+    public const REASON_PROMOTIONAL = 'promotional';
+
+    public const REASON_CORRECTION = 'correction';
+
+    public const REASON_OTHER = 'other';
 
     /**
      * @return array<string, string>
@@ -98,5 +113,72 @@ class CustomerWalletTransaction extends Model
             self::TYPE_BOOKING,
             self::TYPE_ADMIN_DEBIT,
         ], true);
+    }
+
+    public function reason(): ?string
+    {
+        $reason = $this->metadata['reason'] ?? null;
+
+        return is_string($reason) && $reason !== '' ? $reason : null;
+    }
+
+    public function note(): ?string
+    {
+        $note = $this->metadata['note'] ?? null;
+
+        return is_string($note) && $note !== '' ? $note : null;
+    }
+
+    public function adminTopUpSummary(): ?string
+    {
+        if ($this->type !== self::TYPE_ADMIN_CREDIT) {
+            return null;
+        }
+
+        $actor = $this->creator?->full_name ?: $this->creator?->name ?: 'Admin';
+        $currency = $this->currency;
+        $amount = number_format(abs((float) $this->amount), 2, '.', '');
+        $before = number_format((float) $this->balance_before, 2, '.', '');
+        $after = number_format((float) $this->balance_after, 2, '.', '');
+
+        return sprintf(
+            '%s added %s %s to Customer Wallet. Before: %s %s. Added: +%s %s. After: %s %s.',
+            $actor,
+            $amount,
+            $currency,
+            $before,
+            $currency,
+            $amount,
+            $currency,
+            $after,
+            $currency,
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function adminCreditReasons(): array
+    {
+        return [
+            self::REASON_CASH_RECEIVED,
+            self::REASON_BANK_TRANSFER,
+            self::REASON_COMPENSATION,
+            self::REASON_PROMOTIONAL,
+            self::REASON_CORRECTION,
+            self::REASON_OTHER,
+        ];
+    }
+
+    public static function adminCreditReasonLabel(string $reason): string
+    {
+        return match ($reason) {
+            self::REASON_CASH_RECEIVED => 'Cash received',
+            self::REASON_BANK_TRANSFER => 'Bank transfer',
+            self::REASON_COMPENSATION => 'Compensation',
+            self::REASON_PROMOTIONAL => 'Promotional credit',
+            self::REASON_CORRECTION => 'Balance correction',
+            default => 'Other',
+        };
     }
 }

@@ -13,7 +13,7 @@ const props = defineProps({
     },
 });
 
-const { t, isArabic } = useAdminLocale();
+const { t, isArabic, forwardArrow } = useAdminLocale();
 const { confirm } = useAdminConfirm();
 const page = usePage();
 
@@ -238,7 +238,7 @@ const categoryLabel = (template) => {
                                 class="mt-2 text-sm font-medium text-cyan-700 hover:text-cyan-800"
                                 @click="activeTab = 'logs'"
                             >
-                                {{ t('View all failed deliveries') }} →
+                                {{ t('View all failed deliveries') }} {{ forwardArrow }}
                             </button>
                         </div>
                     </article>

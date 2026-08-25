@@ -27,6 +27,15 @@ const applyFilters = () => {
 const openPartner = (partner) => {
     router.visit(route('admin.partners.show', partner.id));
 };
+
+const statusLabel = (status) => {
+    const labels = {
+        active: 'Active',
+        inactive: 'Inactive',
+    };
+
+    return t(labels[status] || status);
+};
 </script>
 
 <template>
@@ -72,7 +81,7 @@ const openPartner = (partner) => {
 
             <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                 <table class="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <thead class="bg-slate-50 text-start text-xs font-semibold uppercase tracking-wide text-slate-500">
                         <tr>
                             <th class="px-4 py-3">{{ t('Partner') }}</th>
                             <th class="px-4 py-3">{{ t('Status') }}</th>
@@ -94,7 +103,7 @@ const openPartner = (partner) => {
                                 <p class="font-medium text-slate-950">{{ partner.name }}</p>
                                 <p class="text-xs text-slate-500">{{ partner.slug }}</p>
                             </td>
-                            <td class="px-4 py-3">{{ partner.status }}</td>
+                            <td class="px-4 py-3">{{ statusLabel(partner.status) }}</td>
                             <td class="px-4 py-3">{{ partner.api_keys_count }}</td>
                             <td class="px-4 py-3">{{ partner.webhooks_count }}</td>
                         </tr>

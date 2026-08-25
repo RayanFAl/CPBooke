@@ -4,7 +4,17 @@ use App\Modules\Admin\Users\Http\Controllers\UsersController;
 use Illuminate\Support\Facades\Route;
 
 Route::controller(UsersController::class)->group(function (): void {
-	Route::get('/users', 'index')->middleware('permission:users.view')->name('users.index');
+	Route::get('/customers', 'index')->middleware('permission:users.view')->name('customers.index');
+	Route::get('/customers/{user}/edit', 'editCustomer')->middleware('permission:users.update')->name('customers.edit');
+	Route::put('/customers/{user}', 'updateCustomer')->middleware('permission:users.update')->name('customers.update');
+	Route::get('/customers/{user}', 'show')->middleware('permission:users.view')->name('customers.show');
+
+	Route::get('/team', 'teamIndex')->middleware('permission:users.view')->name('team.index');
+	Route::get('/team/create', 'create')->middleware('permission:users.create')->name('team.create');
+	Route::get('/team/{user}', 'show')->middleware('permission:users.view')->name('team.show');
+
+	Route::get('/users', 'legacyIndex')->middleware('permission:users.view')->name('users.index');
+
 	Route::get('/users/create', 'create')->middleware('permission:users.create')->name('users.create');
 	Route::post('/users', 'store')->middleware('permission:users.create')->name('users.store');
 	Route::get('/users/{user}/edit', 'edit')->middleware('permission:users.update')->name('users.edit');

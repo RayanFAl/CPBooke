@@ -82,8 +82,16 @@ class OrderActionService
             ];
         }
 
-        // Partial refund is intentionally not offered in the support UI (V1 simplification).
-        // Full refund + compensation cover the operational cases for now.
+        if ($netPaidAmount > 0 && $this->canRunAction($actor, 'partial_refund')) {
+            $actions[] = [
+                'name' => 'partial_refund',
+                'label' => 'Partial Refund',
+                'variant' => 'danger',
+                'requires_amount' => true,
+                'permission' => 'support.partial-refund',
+                'available_amount' => number_format($netPaidAmount, 2, '.', ''),
+            ];
+        }
 
         if (in_array($paymentStatus, [Order::PAYMENT_STATUS_REFUNDED, Order::PAYMENT_STATUS_PARTIALLY_REFUNDED], true)
             && $refundedAmount > 0

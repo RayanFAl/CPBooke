@@ -1,8 +1,7 @@
 /**
  * Admin sidebar navigation.
  *
- * - Top-level links: single page (e.g. Dashboard)
- * - Groups: label + children (collapsible parent with nested links)
+ * Daily work first, then money and providers, then content, then system tools.
  */
 export const navigationItems = [
     {
@@ -10,6 +9,26 @@ export const navigationItems = [
         route: 'admin.dashboard',
         startsWith: '/admin/dashboard',
         icon: 'dashboard',
+    },
+    {
+        label: 'People',
+        icon: 'users',
+        children: [
+            {
+                label: 'Customers',
+                route: 'admin.customers.index',
+                startsWith: '/admin/customers',
+                permission: 'users.view',
+                icon: 'users',
+            },
+            {
+                label: 'Team',
+                route: 'admin.team.index',
+                startsWith: '/admin/team',
+                permission: 'users.view',
+                icon: 'team',
+            },
+        ],
     },
     {
         label: 'Operations',
@@ -29,25 +48,31 @@ export const navigationItems = [
                 permission: 'support.view',
                 icon: 'support',
             },
+        ],
+    },
+    {
+        label: 'Finance',
+        icon: 'finance',
+        children: [
             {
-                label: 'Airports',
-                route: 'admin.airports.index',
-                startsWith: '/admin/airports',
-                permission: 'settings.manage',
-                icon: 'airports',
+                label: 'Finance overview',
+                route: 'admin.finance.index',
+                startsWith: '/admin/finance',
+                permission: 'finance.view',
+                icon: 'finance',
             },
             {
-                label: 'Products',
-                route: 'admin.home.index',
-                startsWith: '/admin/home',
-                permission: 'settings.manage',
-                icon: 'dashboard',
+                label: 'Customer Wallets',
+                route: 'admin.customer-wallets.index',
+                startsWith: '/admin/customer-wallets',
+                permission: 'customer-wallets.view',
+                icon: 'finance',
             },
             {
-                label: 'Policies & Terms',
-                route: 'admin.content.index',
-                startsWith: '/admin/content',
-                permission: 'settings.manage',
+                label: 'Approvals',
+                route: 'admin.approvals.index',
+                startsWith: '/admin/approvals',
+                permission: 'approvals.view',
                 icon: 'governance',
             },
         ],
@@ -87,43 +112,43 @@ export const navigationItems = [
         ],
     },
     {
-        label: 'Finance',
-        icon: 'finance',
+        label: 'Content',
+        icon: 'content',
         children: [
             {
-                label: 'Finance overview',
-                route: 'admin.finance.index',
-                startsWith: '/admin/finance',
-                permission: 'finance.view',
-                icon: 'finance',
+                label: 'Airports',
+                route: 'admin.airports.index',
+                startsWith: '/admin/airports',
+                permission: 'settings.manage',
+                icon: 'airports',
             },
             {
-                label: 'Customer Wallets',
-                route: 'admin.customer-wallets.index',
-                startsWith: '/admin/customer-wallets',
-                permission: 'customer-wallets.view',
-                icon: 'finance',
+                label: 'Products',
+                route: 'admin.home.index',
+                startsWith: '/admin/home',
+                permission: 'settings.manage',
+                icon: 'content',
             },
             {
-                label: 'Approvals',
-                route: 'admin.approvals.index',
-                startsWith: '/admin/approvals',
-                permission: 'approvals.view',
+                label: 'Options & Market',
+                route: 'admin.catalog.index',
+                startsWith: '/admin/catalog',
+                permission: 'settings.manage',
+                icon: 'content',
+            },
+            {
+                label: 'Policies & Terms',
+                route: 'admin.content.index',
+                startsWith: '/admin/content',
+                permission: 'settings.manage',
                 icon: 'governance',
             },
         ],
     },
     {
-        label: 'Platform',
-        icon: 'users',
+        label: 'Engage',
+        icon: 'notifications',
         children: [
-            {
-                label: 'Customers',
-                route: 'admin.users.index',
-                startsWith: '/admin/users',
-                permission: 'users.view',
-                icon: 'users',
-            },
             {
                 label: 'Loyalty',
                 route: 'admin.loyalty.index',
@@ -138,6 +163,12 @@ export const navigationItems = [
                 permission: 'notifications.view',
                 icon: 'notifications',
             },
+        ],
+    },
+    {
+        label: 'System',
+        icon: 'settings',
+        children: [
             {
                 label: 'Global Search',
                 route: 'admin.search.index',
@@ -178,7 +209,7 @@ export const navigationItems = [
                 route: 'admin.settings.index',
                 startsWith: '/admin/settings',
                 permission: 'settings.manage',
-                icon: 'governance',
+                icon: 'settings',
             },
             {
                 label: 'Mobile App',

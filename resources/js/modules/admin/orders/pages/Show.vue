@@ -32,7 +32,7 @@ const props = defineProps({
 });
 
 const page = usePage();
-const { locale, t } = useAdminLocale();
+const { locale, t, forwardArrow } = useAdminLocale();
 const { defaultCurrency } = usePlatformCurrency();
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
 
@@ -235,7 +235,7 @@ const timelineEvents = computed(() => {
             id: `history-${entry.id}`,
             type: 'history',
             label: isNotes ? t('Internal notes updated') : `${formatLabel(entry.field)} ${t('updated')}`,
-            description: `${oldValue} → ${newValue}`,
+            description: `${oldValue} ${forwardArrow.value} ${newValue}`,
             timestamp: entry.created_at,
             actor: actorName,
             icon: isNotes ? 'NT' : 'AU',

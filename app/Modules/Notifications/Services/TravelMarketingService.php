@@ -9,10 +9,17 @@ use App\Models\User;
 use App\Modules\Notifications\Events\AbandonedFlightSearchDue;
 use App\Modules\Notifications\Events\PriceAlertHit;
 use App\Modules\Notifications\Support\OrderNotificationContext;
+use App\Support\Airports\AirportPopularityService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 class TravelMarketingService
 {
+    public function __construct(
+        private readonly AirportPopularityService $airportPopularityService,
+    ) {
+    }
+
     /**
      * Upsert the traveler's latest flight search so Abandoned Search / Price Alerts can fire.
      *
@@ -44,9 +51,16 @@ class TravelMarketingService
             'last_searched_at' => now(),
         ]);
 
+        if (Schema::hasColumn('travel_search_intents', 'search_count')) {
+            $intent->search_count = (int) ($intent->search_count ?: 0) + 1;
+        }
+
         if ($price !== null) {
             $intent->previous_seen_price = $previousPrice;
             $intent->last_seen_price = $price;
+            if (Schema::hasColumn('travel_search_intents', 'results_viewed_at')) {
+                $intent->results_viewed_at = $intent->results_viewed_at ?: now();
+            }
         }
 
         if ($this->userBookedRoute($user, $origin, $destination, $departureDate)) {
@@ -54,6 +68,8 @@ class TravelMarketingService
         }
 
         $intent->save();
+
+        $this->airportPopularityService->recordFlightSearch($origin, $destination);
 
         return $intent->fresh() ?? $intent;
     }
@@ -166,6 +182,24 @@ class TravelMarketingService
             });
     }
 
+    public function markConvertedForCustomer(User $user): void
+    {
+        TravelSearchIntent::query()
+            ->where('user_id', $user->id)
+            ->whereNull('converted_at')
+            ->orderBy('id')
+            ->each(function (TravelSearchIntent $intent) use ($user): void {
+                if ($this->userBookedRoute(
+                    $user,
+                    $intent->origin,
+                    $intent->destination,
+                    $intent->departure_date?->toDateString(),
+                )) {
+                    $intent->forceFill(['converted_at' => now()])->save();
+                }
+            });
+    }
+
     private function markConvertedIntents(): void
     {
         TravelSearchIntent::query()
@@ -178,14 +212,7 @@ class TravelMarketingService
                         continue;
                     }
 
-                    if ($this->userBookedRoute(
-                        $intent->user,
-                        $intent->origin,
-                        $intent->destination,
-                        $intent->departure_date?->toDateString(),
-                    )) {
-                        $intent->forceFill(['converted_at' => now()])->save();
-                    }
+                    $this->markConvertedForCustomer($intent->user);
                 }
             });
     }

@@ -8,7 +8,7 @@ const props = defineProps({
     partner: { type: Object, default: null },
 });
 
-const { t } = useAdminLocale();
+const { t, backArrow } = useAdminLocale();
 const isEdit = computed(() => Boolean(props.partner?.id));
 
 const form = useForm({
@@ -40,7 +40,7 @@ const submit = () => {
                         <h2 class="text-2xl font-semibold text-slate-950">{{ isEdit ? t('Edit partner') : t('Add partner') }}</h2>
                         <p class="mt-2 text-sm text-slate-600">{{ t('Partners receive order and refund webhooks and can call the Partner API with API keys.') }}</p>
                     </div>
-                    <Link :href="route('admin.partners.index')" class="text-sm font-medium text-slate-600 hover:text-slate-950">{{ t('Back') }}</Link>
+                    <Link :href="route('admin.partners.index')" class="text-sm font-medium text-slate-600 hover:text-slate-950">{{ backArrow }} {{ t('Back') }}</Link>
                 </div>
             </div>
 

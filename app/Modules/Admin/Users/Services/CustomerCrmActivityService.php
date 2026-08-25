@@ -562,6 +562,7 @@ class CustomerCrmActivityService
             ->map(function (CustomerWallet $wallet): array {
                 $transactions = Schema::hasTable('customer_wallet_transactions')
                     ? $wallet->transactions()
+                        ->with('creator:id,name,full_name')
                         ->orderByDesc('created_at')
                         ->orderByDesc('id')
                         ->limit(10)
@@ -571,8 +572,13 @@ class CustomerCrmActivityService
                             'type' => $transaction->type,
                             'amount' => number_format((float) $transaction->amount, 2, '.', ''),
                             'signed_amount' => $transaction->signedAmount(),
+                            'balance_before' => number_format((float) $transaction->balance_before, 2, '.', ''),
+                            'balance_after' => number_format((float) $transaction->balance_after, 2, '.', ''),
                             'currency' => $transaction->currency,
                             'description' => $transaction->description,
+                            'reason' => $transaction->reason(),
+                            'note' => $transaction->note(),
+                            'summary' => $transaction->adminTopUpSummary(),
                             'created_at' => $transaction->created_at?->toIso8601String(),
                         ])
                         ->values()

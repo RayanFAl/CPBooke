@@ -57,7 +57,7 @@ const props = defineProps({
     },
 });
 
-const { locale, t } = useAdminLocale();
+const { locale, t, backArrow, forwardArrow } = useAdminLocale();
 const { defaultCurrency } = usePlatformCurrency();
 const page = usePage();
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
@@ -1005,7 +1005,7 @@ const closeCustomerDrawer = () => {
                                 :href="route('admin.support.index')"
                                 class="text-sm font-medium text-slate-500 transition hover:text-slate-800"
                             >
-                                ← {{ t('Back to support') }}
+                                {{ backArrow }} {{ t('Back to support') }}
                             </Link>
 
                             <div
@@ -1474,7 +1474,7 @@ const closeCustomerDrawer = () => {
                                         :href="route('admin.notifications.index')"
                                         class="text-sm font-medium text-slate-600 transition hover:text-slate-900"
                                     >
-                                        {{ t('Open full notifications console') }} →
+                                        {{ t('Open full notifications console') }} {{ forwardArrow }}
                                     </Link>
                                 </div>
                             </div>
@@ -1844,7 +1844,7 @@ const closeCustomerDrawer = () => {
                                     class="mt-4 inline-flex items-center text-sm font-medium text-slate-700 transition hover:text-slate-950"
                                     @click="openActivityTab('notifications')"
                                 >
-                                    {{ t('Open activity tab') }} →
+                                    {{ t('Open activity tab') }} {{ forwardArrow }}
                                 </button>
                             </div>
 
@@ -2046,7 +2046,7 @@ const closeCustomerDrawer = () => {
                 >
                     <button
                         type="button"
-                        class="absolute right-5 top-5 inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+                        class="absolute end-5 top-5 inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
                         @click="closeLightbox"
                     >
                         <span class="sr-only">{{ t('Close image viewer') }}</span>
@@ -2058,11 +2058,11 @@ const closeCustomerDrawer = () => {
                     <button
                         v-if="imageMessages.length > 1"
                         type="button"
-                        class="absolute left-5 top-1/2 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+                        class="absolute start-5 top-1/2 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
                         @click="showPreviousLightboxImage"
                     >
                         <span class="sr-only">{{ t('Previous image') }}</span>
-                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5"><path fill-rule="evenodd" d="M11.78 15.78a.75.75 0 01-1.06 0L5.47 10.53a.75.75 0 010-1.06l5.25-5.25a.75.75 0 111.06 1.06L7.06 10l4.72 4.72a.75.75 0 010 1.06z" clip-rule="evenodd" /></svg>
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5 rtl:scale-x-[-1]"><path fill-rule="evenodd" d="M11.78 15.78a.75.75 0 01-1.06 0L5.47 10.53a.75.75 0 010-1.06l5.25-5.25a.75.75 0 111.06 1.06L7.06 10l4.72 4.72a.75.75 0 010 1.06z" clip-rule="evenodd" /></svg>
                     </button>
 
                     <div class="mx-auto flex max-h-full w-full max-w-5xl flex-col items-center gap-4">
@@ -2082,11 +2082,11 @@ const closeCustomerDrawer = () => {
                     <button
                         v-if="imageMessages.length > 1"
                         type="button"
-                        class="absolute right-5 top-1/2 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+                        class="absolute end-5 top-1/2 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
                         @click="showNextLightboxImage"
                     >
                         <span class="sr-only">{{ t('Next image') }}</span>
-                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5"><path fill-rule="evenodd" d="M8.22 4.22a.75.75 0 011.06 0l5.25 5.25a.75.75 0 010 1.06l-5.25 5.25a.75.75 0 11-1.06-1.06L12.94 10 8.22 5.28a.75.75 0 010-1.06z" clip-rule="evenodd" /></svg>
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5 rtl:scale-x-[-1]"><path fill-rule="evenodd" d="M8.22 4.22a.75.75 0 011.06 0l5.25 5.25a.75.75 0 010 1.06l-5.25 5.25a.75.75 0 11-1.06-1.06L12.94 10 8.22 5.28a.75.75 0 010-1.06z" clip-rule="evenodd" /></svg>
                     </button>
                 </div>
             </Transition>

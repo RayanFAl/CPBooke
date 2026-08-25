@@ -12,6 +12,7 @@ Route::prefix('v1')
 		require __DIR__.'/api/v1/ai.php';
 		require __DIR__.'/api/v1/favorites.php';
 		require __DIR__.'/api/v1/home.php';
+		require __DIR__.'/api/v1/catalog.php';
 		require __DIR__.'/api/v1/content.php';
 		require __DIR__.'/api/v1/app.php';
 		require __DIR__.'/api/v1/hotel-reviews.php';

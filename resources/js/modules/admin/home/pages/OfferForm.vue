@@ -11,7 +11,7 @@ const props = defineProps({
     options: { type: Object, required: true },
 });
 
-const { t } = useAdminLocale();
+const { t, backArrow } = useAdminLocale();
 const isEdit = computed(() => Boolean(props.offer?.id));
 
 const form = useForm({
@@ -79,7 +79,7 @@ const submit = () => {
         <section class="mx-auto max-w-3xl space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <Link :href="route('admin.home.index', { tab: 'offers' })" class="text-sm text-cyan-700 hover:underline">
-                    ← {{ t('Back to home content') }}
+                    {{ backArrow }} {{ t('Back to home content') }}
                 </Link>
                 <h2 class="mt-3 text-2xl font-semibold text-slate-950">
                     {{ isEdit ? t('Edit offer') : t('Add offer') }}

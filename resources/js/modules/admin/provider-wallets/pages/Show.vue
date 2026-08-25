@@ -25,7 +25,7 @@ const props = defineProps({
     },
 });
 
-const { locale, t } = useAdminLocale();
+const { locale, t, backArrow } = useAdminLocale();
 const { defaultCurrency } = usePlatformCurrency();
 const page = usePage();
 const flashSuccess = computed(() => page.props.flash?.success ?? null);
@@ -111,7 +111,7 @@ const submitAdjust = () => {
                             :href="route('admin.provider-wallets.index')"
                             class="text-sm font-medium text-cyan-700 hover:text-cyan-800"
                         >
-                            ← {{ t('Back to wallets') }}
+                            {{ backArrow }} {{ t('Back to wallets') }}
                         </Link>
                         <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ wallet.provider_name }}</h2>
                         <p class="mt-1 text-sm text-slate-500">

@@ -1,5 +1,4 @@
 <script setup>
-import AccountTypeBadge from '../components/AccountTypeBadge.vue';
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import AdminEmptyState from '../../components/AdminEmptyState.vue';
 import RoleBadge from '../components/RoleBadge.vue';
@@ -21,11 +20,27 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    audience: {
+        type: String,
+        default: 'customer',
+    },
 });
 
 const page = usePage();
-const { locale, t } = useAdminLocale();
-const usersCountLabel = computed(() => `${users.value.total} ${t(users.value.total === 1 ? 'total user' : 'total users')}`);
+const { locale, t, paginationLabel } = useAdminLocale();
+const isTeamDirectory = computed(() => props.audience === 'team');
+const indexRouteName = computed(() => (isTeamDirectory.value ? 'admin.team.index' : 'admin.customers.index'));
+const showRouteName = computed(() => (isTeamDirectory.value ? 'admin.team.show' : 'admin.customers.show'));
+const pageTitle = computed(() => (isTeamDirectory.value ? t('Team') : t('Customers')));
+const usersCountLabel = computed(() => {
+    const total = users.value.total ?? 0;
+
+    if (isTeamDirectory.value) {
+        return `${total} ${t(total === 1 ? 'total team member' : 'total team members')}`;
+    }
+
+    return `${total} ${t(total === 1 ? 'total customer' : 'total customers')}`;
+});
 
 const filterForm = reactive({
     search: props.filters.email ?? props.filters.phone ?? props.filters.name ?? '',
@@ -50,7 +65,7 @@ watch(
 
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
 
-const canCreateUsers = computed(() => permissions.value.includes('users.create'));
+const canCreateUsers = computed(() => isTeamDirectory.value && permissions.value.includes('users.create'));
 
 const roleLabelMap = computed(() =>
     Object.fromEntries(props.roles.map((role) => [role.name, role.label])),
@@ -66,13 +81,11 @@ const summaryMetrics = computed(() => {
     const total = props.users.total ?? localUsers.value.length;
     const active = localUsers.value.filter((user) => user.is_active).length;
     const inactive = localUsers.value.filter((user) => !user.is_active).length;
-    const admins = localUsers.value.filter((user) => user.account_type === 'admin').length;
 
     return [
-        { label: t('Total users'), value: total },
+        { label: t(isTeamDirectory.value ? 'Total team members' : 'Total customers'), value: total },
         { label: t('Active on page'), value: active },
         { label: t('Inactive on page'), value: inactive },
-        { label: t('Admins on page'), value: admins },
     ];
 });
 
@@ -127,7 +140,7 @@ const activeFilterChips = computed(() => {
         chips.push(`${t('Country')}: ${filterForm.country}`);
     }
 
-    if (filterForm.role) {
+    if (isTeamDirectory.value && filterForm.role) {
         chips.push(`${t('Role')}: ${t(filterForm.role === 'unassigned' ? 'No role' : (roleLabelMap.value[filterForm.role] ?? filterForm.role))}`);
     }
 
@@ -165,11 +178,11 @@ const smartSearchPayload = () => {
 
 const applyFilters = () => {
     router.get(
-        route('admin.users.index'),
+        route(indexRouteName.value),
         {
             ...smartSearchPayload(),
             ...(filterForm.status ? { status: filterForm.status } : {}),
-            ...(filterForm.role ? { role: filterForm.role } : {}),
+            ...(isTeamDirectory.value && filterForm.role ? { role: filterForm.role } : {}),
         },
         {
             preserveScroll: true,
@@ -187,7 +200,7 @@ const resetFilters = () => {
     filterForm.created_from = '';
     filterForm.created_to = '';
 
-    router.get(route('admin.users.index'), {}, {
+    router.get(route(indexRouteName.value), {}, {
         preserveScroll: true,
         preserveState: true,
         replace: true,
@@ -234,7 +247,7 @@ const relativeTime = (value) => {
 };
 
 const openUserPage = (user) => {
-    router.visit(route('admin.users.show', user.id), {
+    router.visit(route(showRouteName.value, user.id), {
         preserveScroll: true,
     });
 };
@@ -243,11 +256,13 @@ const users = computed(() => props.users);
 </script>
 
 <template>
-    <Head :title="t('Users')" />
+    <Head :title="pageTitle" />
 
     <AdminLayout
-        title="Users"
-        description="Browse the users directory with compact filters and open each profile directly from the table."
+        :title="isTeamDirectory ? 'Team' : 'Customers'"
+        :description="isTeamDirectory
+            ? 'Browse Control Panel staff, open a profile to manage roles and permissions.'
+            : 'Browse app customers, then open a profile for CRM, wallet, and deposit.'"
     >
         <section class="space-y-6">
             <div class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 text-slate-900 shadow-sm">
@@ -256,9 +271,13 @@ const users = computed(() => props.users);
                         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
                             {{ t('Admin Smart Grid') }}
                         </p>
-                        <h2 class="mt-2 text-2xl font-semibold text-slate-950">{{ t('Users workspace') }}</h2>
+                        <h2 class="mt-2 text-2xl font-semibold text-slate-950">
+                            {{ t(isTeamDirectory ? 'Team workspace' : 'Customers workspace') }}
+                        </h2>
                         <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                            {{ t('Scan account health at a glance, then open the full user profile directly from any row in the table.') }}
+                            {{ t(isTeamDirectory
+                                ? 'Scan staff accounts at a glance, then open a profile to manage roles and permissions.'
+                                : 'Scan customer accounts at a glance, then open a profile for CRM, wallet, and deposit.') }}
                         </p>
                     </div>
 
@@ -268,15 +287,15 @@ const users = computed(() => props.users);
                         </div>
                         <Link
                             v-if="canCreateUsers"
-                            :href="route('admin.users.create')"
+                            :href="route('admin.team.create')"
                             class="inline-flex items-center justify-center rounded-2xl bg-cyan-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-cyan-700"
                         >
-                            {{ t('Create admin user') }}
+                            {{ t('Add team member') }}
                         </Link>
                     </div>
                 </div>
 
-                <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                     <article
                         v-for="metric in summaryMetrics"
                         :key="metric.label"
@@ -325,7 +344,10 @@ const users = computed(() => props.users);
                         </select>
                     </label>
 
-                    <label class="flex h-14 min-w-[9rem] shrink-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4">
+                    <label
+                        v-if="isTeamDirectory"
+                        class="flex h-14 min-w-[9rem] shrink-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4"
+                    >
                         <span class="text-sm font-medium text-slate-600">{{ t('Role') }}</span>
                         <select
                             v-model="filterForm.role"
@@ -390,9 +412,8 @@ const users = computed(() => props.users);
                         <thead class="bg-slate-50">
                             <tr class="text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                                 <th class="px-6 py-4">{{ t('User') }}</th>
-                                <th class="px-6 py-4">{{ t('Type') }}</th>
-                                <th class="px-6 py-4">{{ t('Role') }}</th>
-                                <th class="px-6 py-4">{{ t('Country') }}</th>
+                                <th v-if="isTeamDirectory" class="px-6 py-4">{{ t('Role') }}</th>
+                                <th v-else class="px-6 py-4">{{ t('Country') }}</th>
                                 <th class="px-6 py-4">{{ t('Status') }}</th>
                                 <th class="px-6 py-4">{{ t('Last login') }}</th>
                             </tr>
@@ -423,13 +444,10 @@ const users = computed(() => props.users);
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-6 py-5">
-                                    <AccountTypeBadge :account-type="user.account_type" />
-                                </td>
-                                <td class="px-6 py-5">
+                                <td v-if="isTeamDirectory" class="px-6 py-5">
                                     <RoleBadge :role="user.role" />
                                 </td>
-                                <td class="px-6 py-5 text-slate-600">{{ user.country || t('Not set') }}</td>
+                                <td v-else class="px-6 py-5 text-slate-600">{{ user.country || t('Not set') }}</td>
                                 <td class="px-6 py-5">
                                     <div class="flex items-center gap-3">
                                         <span class="inline-flex h-2.5 w-2.5 rounded-full" :class="user.is_active ? 'bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]' : 'bg-slate-400 shadow-[0_0_0_4px_rgba(148,163,184,0.14)]'" />
@@ -443,9 +461,9 @@ const users = computed(() => props.users);
                             </tr>
 
                             <tr v-if="displayedUsers.length === 0">
-                                <td colspan="6" class="px-6 py-6">
+                                <td colspan="4" class="px-6 py-6">
                                     <AdminEmptyState
-                                        title="No users matched the current filter bar."
+                                        :title="isTeamDirectory ? 'No team members matched the current filter bar.' : 'No customers matched the current filter bar.'"
                                         description="Try changing the filters or search terms to find the user you need."
                                     />
                                 </td>
@@ -456,7 +474,7 @@ const users = computed(() => props.users);
 
                 <div v-if="displayedUsers.length === 0" class="md:hidden">
                     <AdminEmptyState
-                        title="No users matched the current filter bar."
+                        :title="isTeamDirectory ? 'No team members matched the current filter bar.' : 'No customers matched the current filter bar.'"
                         description="Try changing the filters or search terms to find the user you need."
                     />
                 </div>
@@ -482,9 +500,8 @@ const users = computed(() => props.users);
                         </div>
 
                         <div class="mt-3 flex flex-wrap items-center gap-2">
-                            <AccountTypeBadge :account-type="user.account_type" />
-                            <RoleBadge :role="user.role" />
-                            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                            <RoleBadge v-if="isTeamDirectory" :role="user.role" />
+                            <span v-else class="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
                                 {{ user.country || t('Not set') }}
                             </span>
                         </div>
@@ -497,7 +514,7 @@ const users = computed(() => props.users);
 
                 <div class="flex flex-col gap-4 border-t border-slate-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <p class="text-sm text-slate-500">
-                        {{ t('Showing') }} {{ users.from ?? 0 }} {{ t('to') }} {{ users.to ?? 0 }} {{ t('of') }} {{ users.total }} {{ t('users.') }}
+                        {{ t('Showing') }} {{ users.from ?? 0 }} {{ t('to') }} {{ users.to ?? 0 }} {{ t('of') }} {{ users.total }} {{ t(isTeamDirectory ? 'team members.' : 'customers.') }}
                     </p>
 
                     <nav class="flex flex-wrap gap-2">
@@ -508,7 +525,7 @@ const users = computed(() => props.users);
                             :href="link.url"
                             class="rounded-xl px-3 py-2 text-sm font-medium transition"
                             :class="link.active ? 'bg-slate-950 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'"
-                            v-html="link.label"
+                            v-html="paginationLabel(link.label)"
                         />
                     </nav>
                 </div>

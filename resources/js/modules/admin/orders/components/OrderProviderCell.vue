@@ -17,7 +17,7 @@ const props = defineProps({
     },
 });
 
-const { locale, t } = useAdminLocale();
+const { locale, t, forwardArrow } = useAdminLocale();
 const logoFailed = ref(false);
 
 const isHotel = computed(() => Boolean(
@@ -99,7 +99,7 @@ const hotelMetaLabel = computed(() => {
             month: 'short',
         }).format(new Date(value));
 
-        parts.push(`${format(props.hotel.check_in)} → ${format(props.hotel.check_out)}`);
+        parts.push(`${format(props.hotel.check_in)} ${forwardArrow.value} ${format(props.hotel.check_out)}`);
     } else if (props.hotel?.check_in) {
         parts.push(new Intl.DateTimeFormat(locale.value, {
             day: '2-digit',

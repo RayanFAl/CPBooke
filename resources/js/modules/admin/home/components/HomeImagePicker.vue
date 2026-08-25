@@ -7,6 +7,7 @@ const props = defineProps({
     imageUrl: { type: String, default: '' },
     currentImageUrl: { type: String, default: '' },
     hint: { type: String, default: '' },
+    label: { type: String, default: '' },
     error: { type: String, default: '' },
 });
 
@@ -81,7 +82,7 @@ const clearFile = () => {
     <div class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
             <div>
-                <p class="text-sm font-medium text-slate-900">{{ t('Upload image') }}</p>
+                <p class="text-sm font-medium text-slate-900">{{ label || t('Upload image') }}</p>
                 <p class="mt-0.5 text-xs text-slate-500">{{ hint || t('Prefer WebP/JPG ~1600px wide.') }}</p>
             </div>
             <button

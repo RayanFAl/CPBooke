@@ -27,6 +27,8 @@ use App\Modules\Orders\Events\PaymentSucceeded;
 use App\Modules\Orders\Events\RefundFailed;
 use App\Modules\Orders\Events\RefundInitiated;
 use App\Modules\Orders\Events\RefundIssued;
+use App\Modules\Airports\Listeners\RecordAirportTravelOnOrderConfirmed;
+use App\Modules\Notifications\Listeners\MarkTravelSearchConvertedOnOrderConfirmed;
 use App\Modules\Partners\Listeners\DispatchPartnerWebhookListener;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
@@ -66,6 +68,8 @@ class EventServiceProvider extends ServiceProvider
         OrderConfirmed::class => [
             DispatchSystemNotificationListener::class,
             DispatchPartnerWebhookListener::class,
+            RecordAirportTravelOnOrderConfirmed::class,
+            MarkTravelSearchConvertedOnOrderConfirmed::class,
         ],
         OrderCompleted::class => [
             RecalculateUserLoyaltyListener::class,

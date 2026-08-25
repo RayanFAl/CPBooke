@@ -1,7 +1,13 @@
 <script setup>
+import AdminButton from '../../components/AdminButton.vue';
+import AdminInput from '../../components/AdminInput.vue';
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import AdminModal from '../../components/AdminModal.vue';
+import AdminSelect from '../../components/AdminSelect.vue';
+import AdminTextarea from '../../components/AdminTextarea.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useAdminConfirm } from '../../composables/useAdminConfirm';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 
 const props = defineProps({
@@ -13,18 +19,60 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    credit_reasons: {
+        type: Array,
+        default: () => [],
+    },
+    open_add_money: {
+        type: Boolean,
+        default: false,
+    },
     can_manage: {
         type: Boolean,
         default: false,
     },
+    can_view_user: {
+        type: Boolean,
+        default: false,
+    },
+    receipt_id: {
+        type: Number,
+        default: null,
+    },
 });
 
-const { locale, t } = useAdminLocale();
+const { locale, t, backArrow } = useAdminLocale();
+const { confirm } = useAdminConfirm();
 const page = usePage();
 const flashSuccess = computed(() => page.props.flash?.success ?? null);
+const receiptTransaction = computed(() => {
+    if (!props.receipt_id) {
+        return null;
+    }
+
+    return props.transactions.data.find((tx) => Number(tx.id) === Number(props.receipt_id)) ?? null;
+});
+const translatedFlashSuccess = computed(() => {
+    const tx = receiptTransaction.value;
+
+    if (tx) {
+        const added = Math.abs(Number(tx.signed_amount ?? 0));
+
+        return t(':admin added :amount to Customer Wallet. Before: :before. Added: +:added. After: :after.', {
+            admin: tx.created_by || t('Admin'),
+            amount: formatMoney(added, tx.currency),
+            before: formatMoney(tx.balance_before, tx.currency),
+            added: formatMoney(added, tx.currency),
+            after: formatMoney(tx.balance_after, tx.currency),
+        });
+    }
+
+    return flashSuccess.value ? t(flashSuccess.value) : null;
+});
 
 const creditForm = useForm({
     amount: '',
+    reason: '',
     note: '',
 });
 
@@ -51,7 +99,7 @@ const formatDateTime = (value) => {
 
 const typeLabel = (type) => {
     const labels = {
-        admin_credit: t('Admin credit'),
+        admin_credit: t('Admin top-up'),
         admin_debit: t('Admin debit'),
         booking: t('Booking'),
         refund: t('Refund'),
@@ -64,10 +112,90 @@ const typeLabel = (type) => {
     return labels[type] ?? type;
 };
 
-const submitCredit = () => {
+const reasonLabel = (reason) => {
+    const labels = {
+        cash_received: t('Cash received'),
+        bank_transfer: t('Bank transfer'),
+        compensation: t('Compensation'),
+        promotional: t('Promotional credit'),
+        correction: t('Balance correction'),
+        other: t('Other'),
+    };
+
+    return labels[reason] ?? reason;
+};
+
+const creditAmount = computed(() => {
+    const amount = Number(creditForm.amount);
+
+    return Number.isFinite(amount) && amount > 0 ? amount : 0;
+});
+
+const creditPreview = computed(() => {
+    const before = Number(props.wallet.balance ?? 0);
+    const added = creditAmount.value;
+
+    return {
+        before,
+        added,
+        after: before + added,
+    };
+});
+
+const canAddMoney = computed(() => props.can_manage && !props.wallet.is_frozen);
+
+const openAddMoney = () => {
+    if (!canAddMoney.value) {
+        return;
+    }
+
+    showAddMoney.value = true;
+};
+
+const closeAddMoney = () => {
+    showAddMoney.value = false;
+};
+
+const submitCredit = async () => {
+    if (!creditAmount.value || !creditForm.reason) {
+        creditForm.post(route('admin.customer-wallets.credit', props.wallet.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                creditForm.reset();
+                showAddMoney.value = false;
+            },
+        });
+
+        return;
+    }
+
+    const accepted = await confirm({
+        title: 'Confirm wallet top-up',
+        message: [
+            t(':admin will add :amount to this customer wallet as a recorded transaction.', {
+                admin: page.props.auth?.user?.full_name || page.props.auth?.user?.name || t('Admin'),
+                amount: formatMoney(creditPreview.value.added, props.wallet.currency),
+            }),
+            `${t('Before')}: ${formatMoney(creditPreview.value.before, props.wallet.currency)}`,
+            `${t('Added')}: +${formatMoney(creditPreview.value.added, props.wallet.currency)}`,
+            `${t('After')}: ${formatMoney(creditPreview.value.after, props.wallet.currency)}`,
+            `${t('Reason')}: ${reasonLabel(creditForm.reason)}`,
+        ].join('\n'),
+        confirmLabel: 'Record top-up',
+        cancelLabel: 'Cancel',
+        variant: 'primary',
+    });
+
+    if (!accepted) {
+        return;
+    }
+
     creditForm.post(route('admin.customer-wallets.credit', props.wallet.id), {
         preserveScroll: true,
-        onSuccess: () => creditForm.reset(),
+        onSuccess: () => {
+            creditForm.reset();
+            showAddMoney.value = false;
+        },
     });
 };
 
@@ -89,11 +217,29 @@ const unfreezeWallet = () => {
         preserveScroll: true,
     });
 };
+
+onMounted(() => {
+    const hasCreditErrors = Object.keys(creditForm.errors).length > 0;
+
+    if ((props.open_add_money && canAddMoney.value) || hasCreditErrors) {
+        showAddMoney.value = true;
+    }
+});
+
+watch(
+    () => creditForm.errors,
+    (errors) => {
+        if (errors && Object.keys(errors).length > 0) {
+            showAddMoney.value = true;
+        }
+    },
+    { deep: true },
+);
 </script>
 
 <template>
     <AdminLayout>
-        <Head :title="wallet.user_name" />
+        <Head :title="`${wallet.user_name} · ${t('Customer Wallets')}`" />
 
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -103,9 +249,18 @@ const unfreezeWallet = () => {
                             :href="route('admin.customer-wallets.index')"
                             class="text-sm font-medium text-cyan-700 hover:text-cyan-800"
                         >
-                            ← {{ t('Back to customer wallets') }}
+                            {{ backArrow }} {{ t('Back to customer wallets') }}
                         </Link>
-                        <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ wallet.user_name }}</h2>
+                        <h2 class="mt-3 text-2xl font-semibold text-slate-950">
+                            <Link
+                                v-if="can_view_user"
+                                :href="route('admin.users.show', wallet.user_id)"
+                                class="hover:text-cyan-800"
+                            >
+                                {{ wallet.user_name }}
+                            </Link>
+                            <span v-else>{{ wallet.user_name }}</span>
+                        </h2>
                         <p class="mt-1 text-sm text-slate-500">
                             {{ wallet.wallet_number }} · {{ wallet.currency }}
                         </p>
@@ -120,19 +275,43 @@ const unfreezeWallet = () => {
                         </p>
                     </div>
 
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-right">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ t('Current balance') }}</p>
-                        <p class="mt-1 text-2xl font-semibold text-slate-950">
-                            {{ formatMoney(wallet.balance, wallet.currency) }}
-                        </p>
+                    <div class="flex flex-col items-stretch gap-3 sm:items-end">
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-right">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ t('Current balance') }}</p>
+                            <p class="mt-1 text-2xl font-semibold text-slate-950">
+                                {{ formatMoney(wallet.balance, wallet.currency) }}
+                            </p>
+                        </div>
+                        <AdminButton
+                            v-if="canAddMoney"
+                            variant="success"
+                            @click="openAddMoney"
+                        >
+                            {{ t('Add money') }}
+                        </AdminButton>
                     </div>
                 </div>
 
-                <p
-                    v-if="flashSuccess"
+                <div
+                    v-if="translatedFlashSuccess"
                     class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
                 >
-                    {{ flashSuccess }}
+                    <p class="whitespace-pre-line">{{ translatedFlashSuccess }}</p>
+                    <a
+                        v-if="receiptTransaction?.print_url"
+                        :href="receiptTransaction.print_url"
+                        target="_blank"
+                        rel="noopener"
+                        class="mt-2 inline-flex font-semibold text-emerald-900 underline"
+                    >
+                        {{ t('Print receipt') }}
+                    </a>
+                </div>
+                <p
+                    v-else-if="wallet.is_frozen && can_manage"
+                    class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+                >
+                    {{ t('This wallet is frozen. Unfreeze it before recording an admin top-up.') }}
                 </p>
 
                 <div v-if="can_manage" class="mt-4 flex flex-wrap gap-2">
@@ -155,98 +334,81 @@ const unfreezeWallet = () => {
                 </div>
             </div>
 
-            <div v-if="can_manage" class="grid gap-4 lg:grid-cols-2">
-                <form class="space-y-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm" @submit.prevent="submitCredit">
-                    <h3 class="text-base font-semibold text-slate-950">{{ t('Add credit') }}</h3>
-                    <p class="text-sm text-slate-600">{{ t('Manual admin credit for testing or compensation.') }}</p>
-
-                    <div>
-                        <label class="mb-1.5 block text-sm font-medium text-slate-800">{{ t('Amount') }}</label>
-                        <input
-                            v-model="creditForm.amount"
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                            required
-                        >
-                        <p v-if="creditForm.errors.amount" class="mt-1 text-sm text-rose-600">{{ creditForm.errors.amount }}</p>
-                    </div>
-
-                    <div>
-                        <label class="mb-1.5 block text-sm font-medium text-slate-800">{{ t('Note') }}</label>
-                        <input
-                            v-model="creditForm.note"
-                            type="text"
-                            class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                        >
-                    </div>
-
-                    <button
-                        type="submit"
-                        class="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-60"
-                        :disabled="creditForm.processing"
-                    >
-                        {{ t('Add credit') }}
-                    </button>
-                </form>
-
-                <form class="space-y-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm" @submit.prevent="submitDebit">
+            <div v-if="can_manage && !wallet.is_frozen" class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <form class="space-y-3" @submit.prevent="submitDebit">
                     <h3 class="text-base font-semibold text-slate-950">{{ t('Deduct credit') }}</h3>
                     <p class="text-sm text-slate-600">{{ t('Manual debit from the customer wallet.') }}</p>
 
-                    <div>
-                        <label class="mb-1.5 block text-sm font-medium text-slate-800">{{ t('Amount') }}</label>
-                        <input
-                            v-model="debitForm.amount"
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                            required
+                    <div class="grid gap-3 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+                        <div>
+                            <label class="mb-1.5 block text-sm font-medium text-slate-800">{{ t('Amount') }}</label>
+                            <input
+                                v-model="debitForm.amount"
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                                required
+                            >
+                            <p v-if="debitForm.errors.amount" class="mt-1 text-sm text-rose-600">{{ debitForm.errors.amount }}</p>
+                        </div>
+                        <div>
+                            <label class="mb-1.5 block text-sm font-medium text-slate-800">{{ t('Note') }}</label>
+                            <input
+                                v-model="debitForm.note"
+                                type="text"
+                                class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                            >
+                        </div>
+                        <button
+                            type="submit"
+                            class="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+                            :disabled="debitForm.processing"
                         >
-                        <p v-if="debitForm.errors.amount" class="mt-1 text-sm text-rose-600">{{ debitForm.errors.amount }}</p>
+                            {{ t('Deduct credit') }}
+                        </button>
                     </div>
-
-                    <div>
-                        <label class="mb-1.5 block text-sm font-medium text-slate-800">{{ t('Note') }}</label>
-                        <input
-                            v-model="debitForm.note"
-                            type="text"
-                            class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                        >
-                    </div>
-
-                    <button
-                        type="submit"
-                        class="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
-                        :disabled="debitForm.processing"
-                    >
-                        {{ t('Deduct credit') }}
-                    </button>
                 </form>
             </div>
 
             <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                <div class="border-b border-slate-200 px-5 py-4">
-                    <h3 class="text-base font-semibold text-slate-950">{{ t('Transaction history') }}</h3>
-                    <p class="mt-1 text-sm text-slate-600">{{ t('Credits, bookings, refunds, and adjustments.') }}</p>
+                <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                    <div>
+                        <h3 class="text-base font-semibold text-slate-950">{{ t('Wallet transactions') }}</h3>
+                        <p class="mt-1 text-sm text-slate-600">{{ t('Every balance change is a ledger row with amount, admin, and before/after balances.') }}</p>
+                    </div>
+                    <a
+                        v-if="wallet.statement_print_url"
+                        :href="wallet.statement_print_url"
+                        target="_blank"
+                        rel="noopener"
+                        class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+                    >
+                        {{ t('Print statement') }}
+                    </a>
                 </div>
 
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-slate-200 text-sm">
                         <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                             <tr>
-                                <th class="px-4 py-3">{{ t('When') }}</th>
+                                <th class="px-4 py-3">{{ t('Transaction ID') }}</th>
+                                <th class="px-4 py-3">{{ t('Date/Time') }}</th>
                                 <th class="px-4 py-3">{{ t('Type') }}</th>
                                 <th class="px-4 py-3">{{ t('Amount') }}</th>
                                 <th class="px-4 py-3">{{ t('Before') }}</th>
                                 <th class="px-4 py-3">{{ t('After') }}</th>
+                                <th class="px-4 py-3">{{ t('Admin') }}</th>
                                 <th class="px-4 py-3">{{ t('Details') }}</th>
+                                <th class="px-4 py-3"></th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             <tr v-for="tx in transactions.data" :key="tx.id">
+                                <td class="px-4 py-3 font-mono text-xs text-slate-700">
+                                    <p>#{{ tx.transaction_id }}</p>
+                                    <p class="mt-1 break-all text-[11px] text-slate-400">{{ tx.reference_id }}</p>
+                                </td>
                                 <td class="px-4 py-3 text-slate-700">{{ formatDateTime(tx.created_at) }}</td>
                                 <td class="px-4 py-3">
                                     <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-800">
@@ -261,10 +423,11 @@ const unfreezeWallet = () => {
                                 </td>
                                 <td class="px-4 py-3 text-slate-800">{{ formatMoney(tx.balance_before, tx.currency) }}</td>
                                 <td class="px-4 py-3 text-slate-800">{{ formatMoney(tx.balance_after, tx.currency) }}</td>
+                                <td class="px-4 py-3 text-slate-700">{{ tx.created_by || '—' }}</td>
                                 <td class="px-4 py-3 text-slate-600">
-                                    <p class="text-xs uppercase tracking-wide text-slate-400">
-                                        {{ tx.reference_type }} #{{ tx.reference_id }}
-                                    </p>
+                                    <p v-if="tx.summary" class="font-medium text-slate-900">{{ tx.summary }}</p>
+                                    <p v-if="tx.reason_label" class="mt-1">{{ t('Reason') }}: {{ t(tx.reason_label) }}</p>
+                                    <p v-if="tx.note">{{ t('Note') }}: {{ tx.note }}</p>
                                     <p v-if="tx.order">
                                         {{ t('Order') }}:
                                         <Link
@@ -274,12 +437,22 @@ const unfreezeWallet = () => {
                                             {{ tx.order.booking_reference || tx.order.external_booking_id }}
                                         </Link>
                                     </p>
-                                    <p v-if="tx.description">{{ tx.description }}</p>
-                                    <p v-if="tx.created_by" class="text-xs text-slate-500">{{ tx.created_by }}</p>
+                                    <p v-if="!tx.summary && tx.description">{{ tx.description }}</p>
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <a
+                                        v-if="tx.print_url"
+                                        :href="tx.print_url"
+                                        target="_blank"
+                                        rel="noopener"
+                                        class="text-sm font-medium text-cyan-700 hover:text-cyan-800"
+                                    >
+                                        {{ t('Print') }}
+                                    </a>
                                 </td>
                             </tr>
                             <tr v-if="transactions.data.length === 0">
-                                <td colspan="6" class="px-4 py-10 text-center text-slate-500">
+                                <td colspan="9" class="px-4 py-10 text-center text-slate-500">
                                     {{ t('No transactions recorded yet.') }}
                                 </td>
                             </tr>
@@ -288,5 +461,87 @@ const unfreezeWallet = () => {
                 </div>
             </div>
         </section>
+
+        <AdminModal
+            :show="showAddMoney"
+            title="Add money"
+            description="Record an admin top-up as a wallet transaction. The balance is never edited directly."
+            max-width="lg"
+            @close="closeAddMoney"
+        >
+            <form class="space-y-4" @submit.prevent="submitCredit">
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <AdminInput
+                        v-model="creditForm.amount"
+                        :label="t('Amount')"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        required
+                        :error="creditForm.errors.amount"
+                    />
+                    <AdminInput
+                        :model-value="wallet.currency"
+                        :label="t('Currency')"
+                        disabled
+                    />
+                </div>
+
+                <AdminSelect
+                    v-model="creditForm.reason"
+                    :label="t('Reason')"
+                    required
+                    :error="creditForm.errors.reason"
+                >
+                    <option value="" disabled>{{ t('Select a reason') }}</option>
+                    <option
+                        v-for="reason in credit_reasons"
+                        :key="reason.value"
+                        :value="reason.value"
+                    >
+                        {{ t(reason.label) }}
+                    </option>
+                </AdminSelect>
+
+                <AdminTextarea
+                    v-model="creditForm.note"
+                    :label="t('Note')"
+                    :rows="3"
+                    :placeholder="t('Optional context for this top-up')"
+                    :error="creditForm.errors.note"
+                />
+
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                    <p class="font-medium text-slate-900">{{ t('Preview') }}</p>
+                    <dl class="mt-3 grid gap-2 sm:grid-cols-3">
+                        <div>
+                            <dt class="text-xs uppercase tracking-wide text-slate-500">{{ t('Before') }}</dt>
+                            <dd class="mt-1 text-slate-800">{{ formatMoney(creditPreview.before, wallet.currency) }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs uppercase tracking-wide text-slate-500">{{ t('Added') }}</dt>
+                            <dd class="mt-1 font-medium text-emerald-700">+{{ formatMoney(creditPreview.added, wallet.currency) }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs uppercase tracking-wide text-slate-500">{{ t('After') }}</dt>
+                            <dd class="mt-1 font-semibold text-slate-950">{{ formatMoney(creditPreview.after, wallet.currency) }}</dd>
+                        </div>
+                    </dl>
+                </div>
+            </form>
+
+            <template #footer>
+                <AdminButton variant="secondary" @click="closeAddMoney">
+                    {{ t('Cancel') }}
+                </AdminButton>
+                <AdminButton
+                    variant="success"
+                    :processing="creditForm.processing"
+                    @click="submitCredit"
+                >
+                    {{ t('Record top-up') }}
+                </AdminButton>
+            </template>
+        </AdminModal>
     </AdminLayout>
 </template>

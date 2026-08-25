@@ -288,4 +288,173 @@ class UsersTest extends TestCase
                 ->where('user.crm.timeline.0.category', fn ($category) => in_array($category, ['search', 'notification', 'login', 'alert', 'account', 'profile'], true))
             );
     }
+
+    public function test_users_index_redirects_to_customers_directory(): void
+    {
+        $actor = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $actor->refresh()->syncRolesByName(['super_admin']);
+
+        $this->actingAs($actor)
+            ->get(route('admin.users.index'))
+            ->assertRedirect(route('admin.customers.index'));
+    }
+
+    public function test_customers_index_lists_only_customer_accounts(): void
+    {
+        $actor = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $actor->refresh()->syncRolesByName(['super_admin']);
+
+        $this->actingAs($actor)
+            ->get(route('admin.customers.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/users/pages/Index', false)
+                ->where('audience', 'customer')
+                ->has('users.data', 1)
+                ->where('users.data.0.id', $customer->id)
+                ->where('users.data.0.account_type', User::ACCOUNT_TYPE_CUSTOMER)
+            );
+    }
+
+    public function test_team_index_lists_only_admin_accounts(): void
+    {
+        $actor = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $staff = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $actor->refresh()->syncRolesByName(['super_admin']);
+
+        $this->actingAs($actor)
+            ->get(route('admin.team.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/users/pages/Index', false)
+                ->where('audience', 'team')
+                ->where('users.data', function ($users) use ($customer, $actor, $staff) {
+                    $ids = collect($users)->pluck('id');
+
+                    return $ids->doesntContain($customer->id)
+                        && $ids->contains($actor->id)
+                        && $ids->contains($staff->id)
+                        && collect($users)->every(fn ($user) => $user['account_type'] === User::ACCOUNT_TYPE_ADMIN);
+                })
+            );
+    }
+
+    public function test_customer_edit_page_is_unavailable(): void
+    {
+        $actor = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $actor->refresh()->syncRolesByName(['super_admin']);
+
+        $this->actingAs($actor)
+            ->get(route('admin.users.edit', $customer))
+            ->assertNotFound();
+    }
+
+    public function test_admin_can_edit_customer_identity_from_crm(): void
+    {
+        $actor = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+            'full_name' => 'Wrong Name',
+            'email' => 'old-customer@example.com',
+            'phone' => '+218910000001',
+        ]);
+
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $actor->refresh()->syncRolesByName(['super_admin']);
+
+        $this->actingAs($actor)
+            ->get(route('admin.customers.edit', $customer))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/users/pages/EditCustomer', false)
+                ->where('user.email', 'old-customer@example.com')
+            );
+
+        $this->actingAs($actor)
+            ->put(route('admin.customers.update', $customer), [
+                'full_name' => 'Correct Name',
+                'email' => 'new-customer@example.com',
+                'phone' => '+218910000002',
+                'country' => 'Libya',
+            ])
+            ->assertRedirect(route('admin.customers.show', $customer));
+
+        $this->assertDatabaseHas('users', [
+            'id' => $customer->id,
+            'full_name' => 'Correct Name',
+            'email' => 'new-customer@example.com',
+            'phone' => '+218910000002',
+            'country' => 'Libya',
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+        ]);
+    }
+
+    public function test_opening_a_staff_profile_on_customers_route_redirects_to_team(): void
+    {
+        $actor = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $staff = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $actor->refresh()->syncRolesByName(['super_admin']);
+
+        $this->actingAs($actor)
+            ->get(route('admin.customers.show', $staff))
+            ->assertRedirect(route('admin.team.show', $staff));
+    }
 }

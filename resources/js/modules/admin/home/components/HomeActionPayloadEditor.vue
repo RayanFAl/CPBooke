@@ -30,6 +30,10 @@ const SCHEMAS = {
         { key: 'destination', input: 'text', example: 'TR' },
         { key: 'start_date', input: 'date', example: '2026-09-15' },
         { key: 'days', input: 'number', example: '7' },
+        { key: 'subtype', input: 'text', example: 'travel' },
+    ],
+    search_esim: [
+        { key: 'esimCountry', input: 'text', example: 'TR' },
     ],
 };
 

@@ -11,6 +11,14 @@ Route::get('/customer-wallets/{customerWallet}', [CustomerWalletController::clas
     ->middleware('permission:customer-wallets.view')
     ->name('customer-wallets.show');
 
+Route::get('/customer-wallets/{customerWallet}/print', [CustomerWalletController::class, 'printStatement'])
+    ->middleware('permission:customer-wallets.view')
+    ->name('customer-wallets.print');
+
+Route::get('/customer-wallets/{customerWallet}/transactions/{transaction}/print', [CustomerWalletController::class, 'printTransaction'])
+    ->middleware('permission:customer-wallets.view')
+    ->name('customer-wallets.transactions.print');
+
 Route::post('/customer-wallets/{customerWallet}/credit', [CustomerWalletController::class, 'credit'])
     ->middleware('permission:customer-wallets.manage')
     ->name('customer-wallets.credit');
@@ -30,3 +38,7 @@ Route::post('/customer-wallets/{customerWallet}/unfreeze', [CustomerWalletContro
 Route::post('/users/{user}/customer-wallet', [CustomerWalletController::class, 'createForUser'])
     ->middleware('permission:customer-wallets.manage')
     ->name('users.customer-wallet.create');
+
+Route::post('/users/{user}/customer-wallet/add-money', [CustomerWalletController::class, 'addMoney'])
+    ->middleware('permission:customer-wallets.manage')
+    ->name('users.customer-wallet.add-money');

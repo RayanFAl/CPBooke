@@ -9,7 +9,7 @@ const props = defineProps({
     default_currency: { type: String, default: null },
 });
 
-const { t } = useAdminLocale();
+const { t, backArrow } = useAdminLocale();
 const { defaultCurrency } = usePlatformCurrency();
 
 const form = useForm({
@@ -32,7 +32,7 @@ const submit = () => {
         <section class="mx-auto max-w-2xl space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <Link :href="route('admin.settlements.index')" class="text-sm font-medium text-cyan-700 hover:text-cyan-800">
-                    ← {{ t('Settlements') }}
+                    {{ backArrow }} {{ t('Settlements') }}
                 </Link>
                 <h2 class="mt-4 text-2xl font-semibold text-slate-950">{{ t('Create settlement period') }}</h2>
                 <p class="mt-2 text-sm text-slate-600">

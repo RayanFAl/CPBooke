@@ -10,7 +10,7 @@ const props = defineProps({
     options: { type: Object, required: true },
 });
 
-const { t, isArabic } = useAdminLocale();
+const { t, isArabic, backArrow } = useAdminLocale();
 const isEdit = computed(() => Boolean(props.page?.id));
 
 const form = useForm({
@@ -72,7 +72,7 @@ const submit = () => {
         <section class="mx-auto max-w-3xl space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <Link :href="route('admin.content.index')" class="text-sm text-cyan-700 hover:underline">
-                    ← {{ t('Back to content pages') }}
+                    {{ backArrow }} {{ t('Back to content pages') }}
                 </Link>
                 <h2 class="mt-3 text-2xl font-semibold text-slate-950">
                     {{ isEdit ? t('Edit page') : t('Add page') }}

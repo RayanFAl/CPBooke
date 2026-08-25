@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Users\Http\Controllers;
 use App\Models\User;
 use App\Modules\Admin\Access\Services\AccessControlService;
 use App\Modules\Admin\Users\Http\Requests\StoreUserRequest;
+use App\Modules\Admin\Users\Http\Requests\UpdateCustomerIdentityRequest;
 use App\Modules\Admin\Users\Http\Requests\UpdateUserRequest;
 use App\Modules\Admin\Users\Services\UserService;
 use Illuminate\Http\RedirectResponse;
@@ -20,26 +21,27 @@ class UsersController
     ) {}
 
     /**
-     * Display the users listing.
+     * Display the customers directory.
      */
     public function index(Request $request): Response
     {
-        $filters = $request->validate([
-            'name' => ['nullable', 'string', 'max:255'],
-            'email' => ['nullable', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:30'],
-            'account_type' => ['nullable', 'in:customer,admin'],
-            'role' => ['nullable', 'string', 'max:50'],
-            'status' => ['nullable', 'in:active,inactive'],
-        ]);
+        return $this->listing($request, User::ACCOUNT_TYPE_CUSTOMER);
+    }
 
-        $actor = $request->user();
+    /**
+     * Display the Control Panel team directory.
+     */
+    public function teamIndex(Request $request): Response
+    {
+        return $this->listing($request, User::ACCOUNT_TYPE_ADMIN);
+    }
 
-        return Inertia::render('admin/users/pages/Index', [
-            'users' => $this->userService->paginateForAdmin($actor, $filters),
-            'filters' => $filters,
-            'roles' => $this->accessControlService->availableRoleOptionsFor($actor),
-        ]);
+    /**
+     * Keep the legacy users directory URL pointed at customers.
+     */
+    public function legacyIndex(): RedirectResponse
+    {
+        return redirect()->route('admin.customers.index');
     }
 
     /**
@@ -62,16 +64,24 @@ class UsersController
         $user = $this->userService->create($request->user(), $request->validated());
 
         return redirect()
-            ->route('admin.users.show', $user)
+            ->route('admin.team.show', $user)
             ->with('success', 'Administrative user created successfully.');
     }
 
     /**
      * Display the specified user profile.
      */
-    public function show(User $user): Response
+    public function show(Request $request, User $user): Response|RedirectResponse
     {
-        $actor = request()->user();
+        if ($request->routeIs('admin.customers.show') && ! $user->isCustomerAccount()) {
+            return redirect()->route('admin.team.show', $user);
+        }
+
+        if ($request->routeIs('admin.team.show') && ! $user->isAdminAccount()) {
+            return redirect()->route('admin.customers.show', $user);
+        }
+
+        $actor = $request->user();
 
         $this->accessControlService->assertCanManageUser($actor, $user);
 
@@ -81,10 +91,29 @@ class UsersController
     }
 
     /**
+     * Display the customer identity editor.
+     */
+    public function editCustomer(User $user): Response|RedirectResponse
+    {
+        if (! $user->isCustomerAccount()) {
+            return redirect()->route('admin.users.edit', $user);
+        }
+
+        $actor = request()->user();
+        $this->accessControlService->assertCanManageUser($actor, $user);
+
+        return Inertia::render('admin/users/pages/EditCustomer', [
+            'user' => $this->userService->editPayload($user),
+        ]);
+    }
+
+    /**
      * Display the specified user edit page.
      */
     public function edit(User $user): Response
     {
+        abort_unless($user->isAdminAccount(), 404);
+
         $actor = request()->user();
 
         $this->accessControlService->assertCanManageUser($actor, $user);
@@ -98,14 +127,32 @@ class UsersController
     }
 
     /**
+     * Update customer identity from CRM.
+     */
+    public function updateCustomer(UpdateCustomerIdentityRequest $request, User $user): RedirectResponse
+    {
+        if (! $user->isCustomerAccount()) {
+            abort(404);
+        }
+
+        $this->userService->updateIdentity($request->user(), $user, $request->validated());
+
+        return redirect()
+            ->route('admin.customers.show', $user)
+            ->with('success', 'Customer details updated successfully.');
+    }
+
+    /**
      * Update the specified user.
      */
     public function update(UpdateUserRequest $request, User $user): RedirectResponse
     {
+        abort_unless($user->isAdminAccount(), 404);
+
         $this->userService->update($request->user(), $user, $request->validated());
 
         return redirect()
-            ->route('admin.users.show', $user)
+            ->route('admin.team.show', $user)
             ->with('success', 'User updated successfully.');
     }
 
@@ -117,5 +164,34 @@ class UsersController
         $result = $this->userService->toggleStatus(request()->user(), $user);
 
         return back()->with($result['updated'] ? 'success' : 'error', $result['message']);
+    }
+
+    /**
+     * Render a directory listing locked to one account type.
+     */
+    private function listing(Request $request, string $accountType): Response
+    {
+        $rules = [
+            'name' => ['nullable', 'string', 'max:255'],
+            'email' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'status' => ['nullable', 'in:active,inactive'],
+        ];
+
+        if ($accountType === User::ACCOUNT_TYPE_ADMIN) {
+            $rules['role'] = ['nullable', 'string', 'max:50'];
+        }
+
+        $filters = $request->validate($rules);
+        $filters['account_type'] = $accountType;
+
+        $actor = $request->user();
+
+        return Inertia::render('admin/users/pages/Index', [
+            'users' => $this->userService->paginateForAdmin($actor, $filters),
+            'filters' => $filters,
+            'roles' => $this->accessControlService->availableRoleOptionsFor($actor),
+            'audience' => $accountType === User::ACCOUNT_TYPE_CUSTOMER ? 'customer' : 'team',
+        ]);
     }
 }

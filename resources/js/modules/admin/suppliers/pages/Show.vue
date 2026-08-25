@@ -20,7 +20,7 @@ const props = defineProps({
     can_view_wallets: { type: Boolean, default: false },
 });
 
-const { locale, t } = useAdminLocale();
+const { locale, t, backArrow, forwardArrow } = useAdminLocale();
 const { defaultCurrency } = usePlatformCurrency();
 const { confirm } = useAdminConfirm();
 const page = usePage();
@@ -215,7 +215,7 @@ loadConfigForm('sandbox');
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <Link :href="route('admin.suppliers.index')" class="text-sm font-medium text-cyan-700">← {{ t('Back to providers') }}</Link>
+                        <Link :href="route('admin.suppliers.index')" class="text-sm font-medium text-cyan-700">{{ backArrow }} {{ t('Back to providers') }}</Link>
                         <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ supplier.name }}</h2>
                         <p class="mt-1 text-sm text-slate-500">{{ supplier.key }} · {{ supplier.status }} · {{ supplier.integration_status }}</p>
                     </div>
@@ -573,7 +573,7 @@ loadConfigForm('sandbox');
                         <div><dt class="text-slate-500">{{ t('Contact') }}</dt><dd class="font-medium">{{ supplier.contact_name || '—' }}</dd></div>
                         <div><dt class="text-slate-500">{{ t('Email') }}</dt><dd class="font-medium">{{ supplier.contact_email || '—' }}</dd></div>
                         <div><dt class="text-slate-500">{{ t('Phone') }}</dt><dd class="font-medium">{{ supplier.contact_phone || '—' }}</dd></div>
-                        <div><dt class="text-slate-500">{{ t('Contract period') }}</dt><dd class="font-medium">{{ supplier.contract_starts_at || '—' }} → {{ supplier.contract_ends_at || '—' }}</dd></div>
+                        <div><dt class="text-slate-500">{{ t('Contract period') }}</dt><dd class="font-medium">{{ supplier.contract_starts_at || '—' }} {{ forwardArrow }} {{ supplier.contract_ends_at || '—' }}</dd></div>
                         <div><dt class="text-slate-500">{{ t('Website') }}</dt><dd class="font-medium">{{ supplier.website || '—' }}</dd></div>
                     </dl>
                 </div>

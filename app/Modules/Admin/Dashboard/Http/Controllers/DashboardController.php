@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Dashboard\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\User;
+use App\Modules\Admin\Dashboard\Services\AppPulseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,10 @@ use Inertia\Response;
 
 class DashboardController
 {
+    public function __construct(
+        private readonly AppPulseService $appPulseService,
+    ) {}
+
     /**
      * Display the admin dashboard shell.
      */
@@ -205,6 +210,7 @@ class DashboardController
 
         return [
             'generated_at' => now()->toIso8601String(),
+            'app_pulse' => $this->appPulseService->dashboardPayload($rangeStart, $labels),
             'overview' => [
                 [
                     'key' => 'revenue',

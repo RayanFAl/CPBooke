@@ -153,7 +153,7 @@ const submit = () => {
                             {{ t('Create admin user') }}
                         </PrimaryButton>
                         <Link
-                            :href="route('admin.users.index')"
+                            :href="route('admin.team.index')"
                             class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                         >
                             {{ t('Cancel') }}

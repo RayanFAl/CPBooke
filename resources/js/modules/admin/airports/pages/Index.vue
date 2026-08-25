@@ -3,7 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout.vue';
 import FeaturedAirportsPanel from '../components/FeaturedAirportsPanel.vue';
 import AirportFeaturedStar from '../components/AirportFeaturedStar.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 
 const props = defineProps({
@@ -35,13 +35,31 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    country_options: {
+        type: Array,
+        default: () => [],
+    },
+    type_options: {
+        type: Array,
+        default: () => [],
+    },
+    per_page_options: {
+        type: Array,
+        default: () => [20, 50, 100],
+    },
 });
 
-const { t } = useAdminLocale();
+const { t, paginationLabel } = useAdminLocale();
 
 const filterForm = reactive({
     search: props.filters.search ?? '',
+    country: props.filters.country ?? '',
+    type: props.filters.type ?? '',
+    per_page: props.filters.per_page ?? 20,
 });
+
+const filtersReady = ref(false);
+let searchDebounceTimer = null;
 
 const fileInput = ref(null);
 const selectedFileName = ref('');
@@ -103,10 +121,15 @@ const openAirportPage = (airport) => {
     router.visit(route('admin.airports.edit', key));
 };
 
+const filterPayload = () => ({
+    ...(filterForm.search.trim() ? { search: filterForm.search.trim() } : {}),
+    ...(filterForm.country ? { country: filterForm.country } : {}),
+    ...(filterForm.type ? { type: filterForm.type } : {}),
+    ...(Number(filterForm.per_page) !== 20 ? { per_page: filterForm.per_page } : {}),
+});
+
 const applyFilters = () => {
-    router.get(route('admin.airports.index'), {
-        ...(filterForm.search.trim() ? { search: filterForm.search.trim() } : {}),
-    }, {
+    router.get(route('admin.airports.index'), filterPayload(), {
         preserveState: true,
         preserveScroll: true,
         replace: true,
@@ -114,8 +137,23 @@ const applyFilters = () => {
 };
 
 const resetFilters = () => {
+    filtersReady.value = false;
     filterForm.search = '';
+    filterForm.country = '';
+    filterForm.type = '';
+    filterForm.per_page = 20;
     applyFilters();
+    nextTick(() => {
+        filtersReady.value = true;
+    });
+};
+
+const formatType = (value) => {
+    if (!value) {
+        return '-';
+    }
+
+    return String(value).replaceAll('_', ' ');
 };
 
 const onFileChange = (event) => {
@@ -178,13 +216,43 @@ watch(
     { immediate: true },
 );
 
+watch(
+    () => filterForm.search,
+    () => {
+        if (!filtersReady.value) {
+            return;
+        }
+
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(() => applyFilters(), 400);
+    },
+);
+
+watch(
+    () => [
+        filterForm.country,
+        filterForm.type,
+        filterForm.per_page,
+    ],
+    () => {
+        if (!filtersReady.value) {
+            return;
+        }
+
+        applyFilters();
+    },
+);
+
 onMounted(() => {
+    filtersReady.value = true;
+
     if (importIsRunning.value) {
         startPolling();
     }
 });
 
 onUnmounted(() => {
+    clearTimeout(searchDebounceTimer);
     stopPolling();
 });
 </script>
@@ -222,31 +290,73 @@ onUnmounted(() => {
                     </div>
                 </div>
 
-                <form class="mt-6 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end" @submit.prevent="applyFilters">
-                    <label class="space-y-2 text-sm font-medium text-slate-700">
-                        <span>{{ t('Search') }}</span>
-                        <input
-                            v-model="filterForm.search"
-                            type="text"
-                            class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
-                            :placeholder="t('Name, code, city, or country')"
+                <form class="mt-6 space-y-4" @submit.prevent="applyFilters">
+                    <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)_minmax(12rem,16rem)] md:items-end">
+                        <label class="space-y-2 text-sm font-medium text-slate-700">
+                            <span>{{ t('Search') }}</span>
+                            <input
+                                v-model="filterForm.search"
+                                type="search"
+                                class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
+                                :placeholder="t('Name, code, city, or country')"
+                            >
+                        </label>
+
+                        <label v-if="country_options.length" class="space-y-2 text-sm font-medium text-slate-700">
+                            <span>{{ t('Country') }}</span>
+                            <select
+                                v-model="filterForm.country"
+                                class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
+                            >
+                                <option value="">{{ t('All countries') }}</option>
+                                <option v-for="country in country_options" :key="country.value" :value="country.value">
+                                    {{ country.label }}
+                                </option>
+                            </select>
+                        </label>
+
+                        <label v-if="usesFullSchema && type_options.length" class="space-y-2 text-sm font-medium text-slate-700">
+                            <span>{{ t('Type') }}</span>
+                            <select
+                                v-model="filterForm.type"
+                                class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
+                            >
+                                <option value="">{{ t('All types') }}</option>
+                                <option v-for="type in type_options" :key="type" :value="type">
+                                    {{ formatType(type) }}
+                                </option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <div class="flex flex-wrap items-end gap-3">
+                        <label class="min-w-[7rem] space-y-2 text-sm font-medium text-slate-700">
+                            <span>{{ t('Per page') }}</span>
+                            <select
+                                v-model.number="filterForm.per_page"
+                                class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
+                            >
+                                <option v-for="size in per_page_options" :key="size" :value="size">
+                                    {{ size }}
+                                </option>
+                            </select>
+                        </label>
+
+                        <button
+                            type="submit"
+                            class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
                         >
-                    </label>
+                            {{ t('Apply') }}
+                        </button>
 
-                    <button
-                        type="submit"
-                        class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
-                    >
-                        {{ t('Apply') }}
-                    </button>
-
-                    <button
-                        type="button"
-                        class="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                        @click="resetFilters"
-                    >
-                        {{ t('Reset') }}
-                    </button>
+                        <button
+                            type="button"
+                            class="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                            @click="resetFilters"
+                        >
+                            {{ t('Reset') }}
+                        </button>
+                    </div>
                 </form>
             </div>
 
@@ -378,7 +488,7 @@ onUnmounted(() => {
                                             {{ airport.country_iso2 }}
                                         </div>
                                     </td>
-                                    <td class="px-6 py-5">{{ displayValue(airport.type) }}</td>
+                                    <td class="px-6 py-5">{{ formatType(airport.type) }}</td>
                                 </template>
                                 <template v-else>
                                     <td class="px-6 py-5 font-medium text-slate-900">{{ airport.name }}</td>
@@ -413,7 +523,7 @@ onUnmounted(() => {
                             :href="link.url"
                             class="rounded-xl px-3 py-2 text-sm font-medium transition"
                             :class="link.active ? 'bg-slate-950 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'"
-                            v-html="link.label"
+                            v-html="paginationLabel(link.label)"
                         />
                     </nav>
                 </div>

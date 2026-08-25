@@ -728,7 +728,7 @@ class SupportTest extends TestCase
 
         $this->assertTrue($supportProps['order_actions']['can_manage']);
         $this->assertSame(
-            ['cancel', 'full_refund', 'reverse_refund', 'compensation'],
+            ['cancel', 'full_refund', 'partial_refund', 'reverse_refund', 'compensation'],
             array_column($supportProps['order_actions']['available'], 'name'),
             'Support agents retain reverse refund access temporarily through the legacy orders.change-status fallback.',
         );
@@ -1117,10 +1117,11 @@ class SupportTest extends TestCase
                 ->where('ticket.order_ticket.service_type', Order::SERVICE_TYPE_FLIGHT)
                 ->has('ticket.timeline')
                 ->where('order_actions.can_manage', true)
-                ->has('order_actions.available', 3)
+                ->has('order_actions.available', 4)
                 ->where('order_actions.available.0.name', 'cancel')
                 ->where('order_actions.available.1.name', 'full_refund')
-                ->where('order_actions.available.2.name', 'compensation')
+                ->where('order_actions.available.2.name', 'partial_refund')
+                ->where('order_actions.available.3.name', 'compensation')
             );
     }
 

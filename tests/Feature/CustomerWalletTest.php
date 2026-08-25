@@ -11,6 +11,7 @@ use App\Modules\CustomerWallets\Services\CustomerWalletService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -53,34 +54,148 @@ class CustomerWalletTest extends TestCase
     public function test_admin_can_credit_customer_wallet_and_record_balance_before_after(): void
     {
         $admin = $this->makeAdmin('super_admin');
+        $admin->forceFill(['name' => 'Ahmed', 'full_name' => 'Ahmed'])->save();
         $customer = $this->makeCustomer();
 
         $wallet = CustomerWallet::query()->create([
             'user_id' => $customer->id,
             'wallet_number' => 'WLT-000001-TEST01',
             'currency' => 'LYD',
+            'balance' => 200,
+            'status' => CustomerWallet::STATUS_ACTIVE,
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->post("/admin/customer-wallets/{$wallet->id}/credit", [
+                'amount' => 500,
+                'reason' => CustomerWalletTransaction::REASON_CASH_RECEIVED,
+                'note' => 'Office cash desk',
+            ]);
+
+        $wallet->refresh();
+
+        $this->assertSame('700.00', (string) $wallet->balance);
+        $this->assertDatabaseHas('customer_wallet_transactions', [
+            'customer_wallet_id' => $wallet->id,
+            'type' => CustomerWalletTransaction::TYPE_ADMIN_CREDIT,
+            'amount' => '500.00',
+            'balance_before' => '200.00',
+            'balance_after' => '700.00',
+            'currency' => 'LYD',
+            'created_by' => $admin->id,
+            'reference_type' => CustomerWalletTransaction::REFERENCE_MANUAL,
+        ]);
+
+        $transaction = CustomerWalletTransaction::query()
+            ->where('customer_wallet_id', $wallet->id)
+            ->where('type', CustomerWalletTransaction::TYPE_ADMIN_CREDIT)
+            ->first();
+
+        $this->assertNotNull($transaction);
+        $this->assertSame('cash_received', $transaction->reason());
+        $this->assertSame('Office cash desk', $transaction->note());
+        $this->assertSame('admin_topup', $transaction->metadata['operation'] ?? null);
+        $this->assertStringContainsString('Admin top-up', (string) $transaction->description);
+        $this->assertSame(1, CustomerWalletTransaction::query()->where('customer_wallet_id', $wallet->id)->count());
+
+        $response->assertRedirect(route('admin.customer-wallets.show', [
+            'customerWallet' => $wallet,
+            'receipt' => $transaction->id,
+        ]))->assertSessionHas(
+            'success',
+            'Ahmed added 500.00 LYD to Customer Wallet. Before: 200.00 LYD. Added: +500.00 LYD. After: 700.00 LYD.',
+        );
+    }
+
+    public function test_admin_can_print_wallet_receipt_and_statement(): void
+    {
+        $admin = $this->makeAdmin('super_admin');
+        $customer = $this->makeCustomer();
+        $wallet = CustomerWallet::query()->create([
+            'user_id' => $customer->id,
+            'wallet_number' => 'WLT-000001-PRINT',
+            'currency' => 'LYD',
+            'balance' => 200,
+            'status' => CustomerWallet::STATUS_ACTIVE,
+        ]);
+
+        $transaction = app(CustomerWalletService::class)->adminCredit(
+            $wallet,
+            500,
+            $admin,
+            [
+                'reason' => CustomerWalletTransaction::REASON_CASH_RECEIVED,
+                'note' => 'Office cash desk',
+            ],
+        );
+
+        $this->actingAs($admin)
+            ->get(route('admin.customer-wallets.transactions.print', [
+                'customerWallet' => $wallet,
+                'transaction' => $transaction,
+            ]))
+            ->assertOk()
+            ->assertSee('Wallet receipt')
+            ->assertSee((string) $transaction->id)
+            ->assertSee('500.00')
+            ->assertSee('Print / Save PDF');
+
+        $this->actingAs($admin)
+            ->get(route('admin.customer-wallets.print', $wallet))
+            ->assertOk()
+            ->assertSee('Wallet statement')
+            ->assertSee('WLT-000001-PRINT');
+    }
+
+    public function test_admin_credit_requires_a_reason(): void
+    {
+        $admin = $this->makeAdmin('super_admin');
+        $customer = $this->makeCustomer();
+        $wallet = CustomerWallet::query()->create([
+            'user_id' => $customer->id,
+            'wallet_number' => 'WLT-000001-TEST0R',
+            'currency' => 'LYD',
             'balance' => 0,
             'status' => CustomerWallet::STATUS_ACTIVE,
         ]);
 
         $this->actingAs($admin)
+            ->from(route('admin.customer-wallets.show', $wallet))
             ->post("/admin/customer-wallets/{$wallet->id}/credit", [
-                'amount' => 1000,
-                'note' => 'Initial test credit',
+                'amount' => 100,
             ])
-            ->assertRedirect(route('admin.customer-wallets.show', $wallet));
+            ->assertRedirect(route('admin.customer-wallets.show', $wallet))
+            ->assertSessionHasErrors('reason');
 
-        $wallet->refresh();
-
-        $this->assertSame('1000.00', (string) $wallet->balance);
-        $this->assertDatabaseHas('customer_wallet_transactions', [
+        $this->assertSame('0.00', (string) $wallet->fresh()->balance);
+        $this->assertDatabaseMissing('customer_wallet_transactions', [
             'customer_wallet_id' => $wallet->id,
-            'type' => CustomerWalletTransaction::TYPE_ADMIN_CREDIT,
-            'amount' => '1000.00',
-            'balance_before' => '0.00',
-            'balance_after' => '1000.00',
-            'created_by' => $admin->id,
         ]);
+    }
+
+    public function test_admin_can_open_add_money_from_customer_and_create_wallet(): void
+    {
+        $admin = $this->makeAdmin('super_admin');
+        $customer = $this->makeCustomer();
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.customer-wallet.add-money', $customer))
+            ->assertRedirect();
+
+        $wallet = CustomerWallet::query()->where('user_id', $customer->id)->first();
+
+        $this->assertNotNull($wallet);
+        $this->assertSame('LYD', $wallet->currency);
+        $this->assertSame('0.00', (string) $wallet->balance);
+
+        $this->actingAs($admin)
+            ->get(route('admin.customer-wallets.show', ['customerWallet' => $wallet, 'action' => 'add-money']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/customer-wallets/pages/Show')
+                ->where('open_add_money', true)
+                ->has('credit_reasons')
+                ->where('can_manage', true));
     }
 
     public function test_wallet_payment_and_refund_restore_balance(): void

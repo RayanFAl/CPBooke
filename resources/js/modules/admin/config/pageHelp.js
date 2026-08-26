@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Hover/tap explanations for admin screens.
  * More specific route names must be listed before their prefixes.
  */
@@ -120,8 +120,8 @@ export const pageHelpEntries = [
     },
     {
         match: 'admin.provider-wallets.create',
-        en: 'Open a wallet for a provider so BookNow can hold or move supplier funds.',
-        ar: 'افتح محفظة لمزوّد حتى يتمكن BookNow من حفظ أو تحريك أموال المزوّد.',
+        en: 'Open a wallet for a provider so Booke can hold or move supplier funds.',
+        ar: 'افتح محفظة لمزوّد حتى يتمكن بوكي من حفظ أو تحريك أموال المزوّد.',
     },
     {
         match: 'admin.provider-wallets.show',
@@ -140,8 +140,8 @@ export const pageHelpEntries = [
     },
     {
         match: 'admin.settlements.show',
-        en: 'Compare BookNow costs with the provider invoice, resolve differences, then approve or close the period.',
-        ar: 'قارن تكاليف BookNow مع فاتورة المزوّد، عالج الفروقات، ثم وافق على الفترة أو أغلقها.',
+        en: 'Compare Booke costs with the provider invoice, resolve differences, then approve or close the period.',
+        ar: 'قارن تكاليف بوكي مع فاتورة المزوّد، عالج الفروقات، ثم وافق على الفترة أو أغلقها.',
     },
     {
         match: 'admin.settlements',
@@ -240,8 +240,8 @@ export const pageHelpEntries = [
     },
     {
         match: 'admin.partners.create',
-        en: 'Register an external company that will call BookNow by API (bank, agency, or another app). Not a travel supplier.',
-        ar: 'سجّل شركة خارجية ستتصل بـ BookNow عبر API (بنك أو وكالة أو تطبيق آخر). ليس مزوّد سفر.',
+        en: 'Register an external company that will call Booke by API (bank, agency, or another app). Not a travel supplier.',
+        ar: 'سجّل شركة خارجية ستتصل بـ بوكي عبر API (بنك أو وكالة أو تطبيق آخر). ليس مزوّد سفر.',
     },
     {
         match: 'admin.partners.edit',
@@ -250,8 +250,8 @@ export const pageHelpEntries = [
     },
     {
         match: 'admin.partners',
-        en: 'External API partners (bank, agency, or another app) that connect to BookNow. Not a travel supplier. Give them an API key and optional webhooks for order and refund events. Leave empty if you have no such company yet.',
-        ar: 'شركاء API خارجيون (بنك أو وكالة أو تطبيق آخر) يرتبطون بـ BookNow. ليسوا مزوّدي سفر. أعطهم مفتاح API واختياريّاً إشعارات للطلبات والاسترداد. اترك الصفحة فارغة إذا لا توجد شركة من هذا النوع بعد.',
+        en: 'External API partners (bank, agency, or another app) that connect to Booke. Not a travel supplier. Give them an API key and optional webhooks for order and refund events. Leave empty if you have no such company yet.',
+        ar: 'شركاء API خارجيون (بنك أو وكالة أو تطبيق آخر) يرتبطون بـ بوكي. ليسوا مزوّدي سفر. أعطهم مفتاح API واختياريّاً إشعارات للطلبات والاسترداد. اترك الصفحة فارغة إذا لا توجد شركة من هذا النوع بعد.',
     },
     {
         match: 'admin.settings',
@@ -275,7 +275,7 @@ export const pageHelpEntries = [
     },
     {
         match: 'admin.dashboard',
-        en: 'Today’s snapshot: app downloads, searches, bookings, money, and alerts. Play Store counts are not included — only what BookNow can see.',
-        ar: 'صورة اليوم: تحميلات التطبيق، البحث، الحجوزات، المال، والتنبيهات. أرقام متجر بلاي غير مشمولة — فقط ما تراه BookNow.',
+        en: 'Today’s snapshot: app downloads, searches, bookings, money, and alerts. Play Store counts are not included — only what Booke can see.',
+        ar: 'صورة اليوم: تحميلات التطبيق، البحث، الحجوزات، المال، والتنبيهات. أرقام متجر بلاي غير مشمولة — فقط ما تراه بوكي.',
     },
 ];

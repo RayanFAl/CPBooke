@@ -29,7 +29,7 @@ class ProviderSeeder extends Seeder
         );
 
         $this->enableAllServices($provider);
-        $this->retireSplitBookNowProviders();
+        $this->retireSplitBookeProviders();
     }
 
     private function enableAllServices(Provider $provider): void
@@ -54,7 +54,7 @@ class ProviderSeeder extends Seeder
     /**
      * Previous seeds created separate BookNow rows per product. Keep one supplier.
      */
-    private function retireSplitBookNowProviders(): void
+    private function retireSplitBookeProviders(): void
     {
         Provider::query()
             ->whereIn('key', [

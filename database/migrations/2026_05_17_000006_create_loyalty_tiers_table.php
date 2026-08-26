@@ -38,7 +38,7 @@ return new class extends Migration
                 'sort_order' => 0,
                 'is_active' => true,
                 'is_default' => true,
-                'metadata' => json_encode(['program_label' => 'BookNow Loyalty']),
+                'metadata' => json_encode(['program_label' => 'Booke Loyalty']),
                 'created_at' => now(),
                 'updated_at' => now(),
             ],

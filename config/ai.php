@@ -7,7 +7,7 @@ return [
     | AI Travel Assistant
     |--------------------------------------------------------------------------
     |
-    | Gemini powers natural-language understanding for BookNow Voice/Chat.
+    | Gemini powers natural-language understanding for Booke Voice/Chat.
     | The AI only extracts structured intents/slots and ranks real API offers.
     | It never searches flights, invents prices, or books.
     |

@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, ref } from 'vue';
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import TemplateManager from '../components/TemplateManager.vue';
@@ -45,8 +45,8 @@ const activeTemplates = computed(() => templates.value.filter((template) => temp
 
 const pushForm = useForm({
     user_id: pushTargets.value[0]?.id ?? '',
-    title: 'BookNow News',
-    body: 'مرحباً! هذا إشعار تجريبي من BookNow.',
+    title: 'Booke News',
+    body: 'مرحباً! هذا إشعار تجريبي من Booke.',
 });
 
 const templateTestForm = useForm({

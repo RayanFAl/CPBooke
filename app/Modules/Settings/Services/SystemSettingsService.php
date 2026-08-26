@@ -77,8 +77,8 @@ class SystemSettingsService
     {
         $name = trim((string) ($this->current()->company_name ?: ''));
 
-        if ($name === '' || in_array($name, ['Booke', 'بوكي', 'CPBooke', 'Laravel'], true)) {
-            return 'BookNow';
+        if ($name === '' || in_array($name, ['BookNow', 'Booke', 'بوكي', 'CPBooke', 'Laravel'], true)) {
+            return 'Booke';
         }
 
         return $name;

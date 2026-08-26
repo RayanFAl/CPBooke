@@ -73,7 +73,7 @@ class SystemSetting extends Model
     public static function defaultAttributes(): array
     {
         return [
-            'company_name' => config('app.name', 'BookNow'),
+            'company_name' => config('app.name', 'Booke'),
             'company_address' => null,
             'support_email' => config('mail.addresses.support'),
             'support_phone' => null,

@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import AdminSparkline from '../../components/AdminSparkline.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
@@ -52,7 +52,7 @@ const topRoutes = computed(() => appPulse.value.charts?.top_routes ?? []);
 const conversion = computed(() => appPulse.value.conversion ?? {
     searched: 0,
     viewed_price: 0,
-    __BookNowD__: 0,
+    booked: 0,
     search_to_price_rate: 0,
     search_to_book_rate: 0,
     price_to_book_rate: 0,
@@ -60,7 +60,7 @@ const conversion = computed(() => appPulse.value.conversion ?? {
 const conversionMax = computed(() => Math.max(
     conversion.value.searched,
     conversion.value.viewed_price,
-    conversion.value.__BookNowD__,
+    conversion.value.booked,
     1,
 ));
 
@@ -248,7 +248,7 @@ const openFinanceDesk = () => {
                             {{ t('Downloads, installs, and in-app searches.') }}
                         </h2>
                         <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-                            {{ t('Play Store numbers are not here. These counts come from the public APK page, phones that opened the app, and people who searched travel inside BookNow.') }}
+                            {{ t('Play Store numbers are not here. These counts come from the public APK page, phones that opened the app, and people who searched travel inside Booke.') }}
                         </p>
                     </div>
                     <div class="flex flex-wrap gap-2">
@@ -311,7 +311,7 @@ const openFinanceDesk = () => {
                             <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Conversion funnel') }}</p>
                             <h3 class="mt-2 text-lg font-semibold text-slate-950">{{ t('Search → price → book') }}</h3>
                             <p class="mt-2 max-w-2xl text-sm text-slate-600">
-                                {{ t('People who searched this week, then saw a price, then __BookNowD__ that route. Price views need the app to send the lowest fare with the search.') }}
+                                {{ t('People who searched this week, then saw a price, then booked that route. Price views need the app to send the lowest fare with the search.') }}
                             </p>
                         </div>
                         <p class="text-sm font-semibold text-slate-800">
@@ -340,11 +340,11 @@ const openFinanceDesk = () => {
                         </div>
                         <div class="space-y-2">
                             <div class="flex items-center justify-between text-sm">
-                                <span class="font-medium text-slate-700">{{ t('__BookNowD__') }}</span>
-                                <span class="font-semibold text-slate-950">{{ metricValue(conversion.__BookNowD__, 'number') }} · {{ metricValue(conversion.price_to_book_rate, 'percent') }}</span>
+                                <span class="font-medium text-slate-700">{{ t('Booked') }}</span>
+                                <span class="font-semibold text-slate-950">{{ metricValue(conversion.booked, 'number') }} · {{ metricValue(conversion.price_to_book_rate, 'percent') }}</span>
                             </div>
                             <div class="h-3 overflow-hidden rounded-full bg-slate-100">
-                                <div class="h-full rounded-full bg-emerald-500" :style="{ width: barWidth(conversion.__BookNowD__, conversionMax) }" />
+                                <div class="h-full rounded-full bg-emerald-500" :style="{ width: barWidth(conversion.booked, conversionMax) }" />
                             </div>
                         </div>
                     </div>

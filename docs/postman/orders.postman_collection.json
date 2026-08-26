@@ -132,7 +132,7 @@
 					{ "key": "Authorization", "value": "Bearer {{token}}" }
 				],
 				"url": "{{base_url}}/orders/{{order_id}}",
-				"description": "Use internal numeric `order_id` (cpbooke_id).\n\nBookNow orders: flat payload with `number`, `provider_order_number`, `details`, `booking_flight_data`.\nLegacy orders: `data.order`."
+				"description": "Use internal numeric `order_id` (cpbooke_id).\n\nBooke orders: flat payload with `number`, `provider_order_number`, `details`, `booking_flight_data`.\nLegacy orders: `data.order`."
 			},
 			"response": []
 		},

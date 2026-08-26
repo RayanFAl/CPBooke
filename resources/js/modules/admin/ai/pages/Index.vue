@@ -90,7 +90,7 @@ const testConnection = async () => {
 <template>
     <AdminLayout
         title="AI Travel Assistant"
-        description="Control Gemini NLU and recommendation settings for BookNow Voice Assistant."
+        description="Control Gemini NLU and recommendation settings for Booke Voice Assistant."
     >
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

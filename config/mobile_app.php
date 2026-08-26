@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('MOBILE_APP_NAME', env('APP_NAME', 'BookNow')),
+    'name' => env('MOBILE_APP_NAME', env('APP_NAME', 'Booke')),
 
     'version' => env('MOBILE_APK_VERSION', '1.0.0'),
 

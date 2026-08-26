@@ -10,8 +10,8 @@ const { locale, isArabic, setLocale, t } = useAdminLocale();
 const companyName = computed(() => {
     const name = String(page.props.platform?.company_name ?? '').trim();
 
-    if (!name || ['Booke', 'بوكي', 'CPBooke', 'Laravel'].includes(name)) {
-        return 'BookNow';
+    if (!name || ['BookNow', 'Booke', 'بوكي', 'CPBooke', 'Laravel'].includes(name)) {
+        return 'Booke';
     }
 
     return name;
@@ -73,7 +73,7 @@ const highlights = computed(() => [
                             {{ t('Operations console') }}
                         </p>
                         <h1 class="text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">
-                            {{ t('Run BookNow from a single professional dashboard.') }}
+                            {{ t('Run Booke from a single professional dashboard.') }}
                         </h1>
                         <p class="max-w-md text-base leading-7 text-slate-300">
                             {{ t('Sign in to manage bookings, finance, providers, and support with the same clarity your team expects in production.') }}

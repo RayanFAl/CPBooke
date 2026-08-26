@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Modules\Admin\Dashboard\Services;
 
@@ -58,7 +58,7 @@ class AppPulseService
         $searchRoutes = 0;
         $searchesThisWeek = 0;
         $viewedPriceThisWeek = 0;
-        $__BookNowD__FromSearchThisWeek = 0;
+        $bookedFromSearchThisWeek = 0;
         $aiSearchesThisWeek = 0;
         $activeSessionsThisWeek = 0;
         $newCustomersThisWeek = 0;
@@ -170,7 +170,7 @@ class AppPulseService
                 ->selectRaw('COUNT(DISTINCT user_id) as aggregate')
                 ->value('aggregate');
 
-            $__BookNowD__FromSearchThisWeek = (int) TravelSearchIntent::query()
+            $bookedFromSearchThisWeek = (int) TravelSearchIntent::query()
                 ->where('converted_at', '>=', $rangeStart)
                 ->selectRaw('COUNT(DISTINCT user_id) as aggregate')
                 ->value('aggregate');
@@ -247,7 +247,7 @@ class AppPulseService
                     'value' => $apkDownloads,
                     'delta' => $apkDownloadsThisWeek,
                     'delta_label' => 'this week',
-                    'helper' => 'From the public BookNow download page, not the Play Store.',
+                    'helper' => 'From the public Booke download page, not the Play Store.',
                     'accent' => 'violet',
                 ],
                 [
@@ -321,15 +321,15 @@ class AppPulseService
             'conversion' => [
                 'searched' => $searchersThisWeek,
                 'viewed_price' => $viewedPriceThisWeek,
-                '__BookNowD__' => $__BookNowD__FromSearchThisWeek,
+                'booked' => $bookedFromSearchThisWeek,
                 'search_to_price_rate' => $searchersThisWeek > 0
                     ? round(($viewedPriceThisWeek / $searchersThisWeek) * 100, 1)
                     : 0,
                 'search_to_book_rate' => $searchersThisWeek > 0
-                    ? round(($__BookNowD__FromSearchThisWeek / $searchersThisWeek) * 100, 1)
+                    ? round(($bookedFromSearchThisWeek / $searchersThisWeek) * 100, 1)
                     : 0,
                 'price_to_book_rate' => $viewedPriceThisWeek > 0
-                    ? round(($__BookNowD__FromSearchThisWeek / $viewedPriceThisWeek) * 100, 1)
+                    ? round(($bookedFromSearchThisWeek / $viewedPriceThisWeek) * 100, 1)
                     : 0,
             ],
         ];

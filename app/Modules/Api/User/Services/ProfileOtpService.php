@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Modules\Api\User\Services;
 
@@ -186,7 +186,7 @@ class ProfileOtpService
 
     private function sendSms(string $phone, string $otp, int $expireMinutes): void
     {
-        $message = "Your BookNow verification code is {$otp}. It expires in {$expireMinutes} minutes.";
+        $message = "Your Booke verification code is {$otp}. It expires in {$expireMinutes} minutes.";
         $endpoint = config('services.notifications.sms_endpoint');
 
         if (! $endpoint) {

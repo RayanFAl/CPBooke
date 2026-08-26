@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, reactive, ref, watch } from 'vue';
 import { router, useForm } from '@inertiajs/vue3';
 import { useAdminLocale } from '../../composables/useAdminLocale';
@@ -452,7 +452,7 @@ watch([search, categoryFilter, statusFilter, channelFilter], ensureSelection);
                             <div class="mt-4 rounded-3xl bg-white/10 p-4 backdrop-blur">
                                 <div class="flex items-center gap-2 text-xs text-slate-300">
                                     <span class="inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                                    BookNow · {{ pretty(selectedDraft.channels?.[0] ?? 'push') }}
+                                    Booke · {{ pretty(selectedDraft.channels?.[0] ?? 'push') }}
                                 </div>
                                 <p class="mt-3 text-sm font-semibold" :dir="previewFor.rtl ? 'rtl' : 'ltr'">
                                     {{ previewFor.title || t('Notification title') }}

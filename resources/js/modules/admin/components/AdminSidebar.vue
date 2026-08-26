@@ -21,8 +21,8 @@ const permissions = computed(() => user.value?.permissions ?? []);
 const companyName = computed(() => {
     const name = String(page.props.platform?.company_name ?? '').trim();
 
-    if (!name || ['Booke', 'بوكي', 'CPBooke', 'Laravel'].includes(name)) {
-        return 'BookNow';
+    if (!name || ['BookNow', 'Booke', 'بوكي', 'CPBooke', 'Laravel'].includes(name)) {
+        return 'Booke';
     }
 
     return name;
@@ -159,7 +159,7 @@ const handleNavigate = () => {
             >
                 <img
                     src="/images/app_logo.png"
-                    alt="BookNow"
+                    alt="Booke"
                     class="h-10 w-10 shrink-0 rounded-xl object-contain shadow-sm shadow-slate-950/40"
                 >
                 <div class="min-w-0" :class="collapsed ? 'sr-only' : ''">

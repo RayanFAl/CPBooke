@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Modules\Notifications\Services;
 
@@ -304,7 +304,7 @@ class NotificationService
     public function sendTestPush(User $user, ?string $title = null, ?string $body = null): array
     {
         $title ??= 'Test notification';
-        $body ??= 'Push channel test from BookNow.';
+        $body ??= 'Push channel test from Booke.';
 
         $inApp = UserNotification::query()->create([
             'user_id' => $user->id,

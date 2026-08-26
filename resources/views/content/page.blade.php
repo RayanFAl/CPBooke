@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="index,follow">
-    <title>BookNow</title>
+    <title>Booke</title>
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=tajawal:400,500,700&display=swap" rel="stylesheet">
     <style>
@@ -92,8 +92,8 @@
     <main class="wrap">
         <header>
             <span class="brand">
-                <img src="{{ asset('images/app_logo.png') }}" alt="BookNow" width="36" height="36" style="border-radius:10px;vertical-align:middle;margin-inline-end:10px;">
-                BookNow
+                <img src="{{ asset('images/app_logo.png') }}" alt="Booke" width="36" height="36" style="border-radius:10px;vertical-align:middle;margin-inline-end:10px;">
+                Booke
             </span>
         </header>
         @foreach ($sections as $section)

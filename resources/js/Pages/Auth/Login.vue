@@ -42,7 +42,7 @@ const submit = () => {
                 {{ t('Admin Login') }}
             </h1>
             <p class="mt-2 text-sm leading-6 text-slate-600">
-                {{ t('Sign in with an administrator account to access the BookNow control panel.') }}
+                {{ t('Sign in with an administrator account to access the Booke control panel.') }}
             </p>
         </div>
 

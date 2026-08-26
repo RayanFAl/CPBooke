@@ -2,7 +2,7 @@
 defineProps({
     alt: {
         type: String,
-        default: 'BookNow',
+        default: 'Booke',
     },
 });
 </script>

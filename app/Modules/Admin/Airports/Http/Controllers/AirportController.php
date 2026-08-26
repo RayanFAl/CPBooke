@@ -126,11 +126,14 @@ class AirportController
             'user_id' => $request->user()?->id,
         ], now()->addDay());
 
+        // Dispatch to the queue worker — do NOT use afterResponse().
+        // afterResponse() runs via dispatchSync and blocks php artisan serve
+        // for the entire import (single-threaded built-in server).
         ImportBooknowAirportsJob::dispatch(
             Storage::path($storedPath),
             $request->boolean('fresh'),
             (int) $request->user()->id,
-        )->afterResponse();
+        );
 
         return redirect()
             ->route('admin.airports.index')

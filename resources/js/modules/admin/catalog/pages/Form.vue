@@ -2,6 +2,7 @@
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import HomeActionPayloadEditor from '../../home/components/HomeActionPayloadEditor.vue';
 import HomeImagePicker from '../../home/components/HomeImagePicker.vue';
+import { actionValueExample, KNOWN_ROUTE_EXAMPLES } from '../../home/utils/mobileActionExamples';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
@@ -46,16 +47,15 @@ const actionValueLabel = computed(() => (
         : t('App screen path')
 ));
 
-const actionValuePlaceholder = computed(() => (
-    form.action_type === 'url'
-        ? 'https://example.com/product'
-        : '/insurance/travel'
-));
+const actionValuePlaceholder = computed(() => actionValueExample({
+    actionType: form.action_type,
+    catalogKey: form.key,
+}));
+
+const knownPathsHint = computed(() => KNOWN_ROUTE_EXAMPLES.join(' · '));
 
 const fillActionValueExample = () => {
-    if (!form.action_value) {
-        form.action_value = actionValuePlaceholder.value;
-    }
+    form.action_value = actionValuePlaceholder.value;
 };
 
 const submit = () => {
@@ -172,7 +172,10 @@ const submit = () => {
                         <p class="mt-1 text-xs text-slate-500">
                             {{ form.action_type === 'url'
                                 ? t('Paste a full web link starting with https://')
-                                : t('Ask the mobile team for the exact screen path.') }}
+                                : t('Suggested path for this type') + ': ' + actionValuePlaceholder }}
+                        </p>
+                        <p v-if="form.action_type === 'route'" class="mt-1 text-xs text-slate-400">
+                            {{ t('Known app paths') }}: {{ knownPathsHint }}
                         </p>
                     </div>
 

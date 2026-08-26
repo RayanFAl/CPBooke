@@ -23,6 +23,7 @@ Route::prefix('v1')
 		require __DIR__.'/api/v1/saved-passengers.php';
 		require __DIR__.'/api/v1/saved-vehicles.php';
 		require __DIR__.'/api/v1/saved-addresses.php';
+		require __DIR__.'/api/v1/linked-accounts.php';
 		require __DIR__.'/api/v1/support.php';
 		require __DIR__.'/api/v1/user.php';
 		require __DIR__.'/api/v1/wallet.php';

@@ -18,6 +18,7 @@ class HomeBanner extends Model
         'search_flights',
         'search_hotels',
         'search_insurance',
+        'search_esim',
     ];
 
     protected $fillable = [

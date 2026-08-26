@@ -20,23 +20,32 @@ class XlsxStreamReader
     {
         $sharedStrings = $this->loadSharedStrings();
         $sheetPath = $this->resolveSheetPath();
-        $sheetUri = $this->worksheetUri($sheetPath);
+        $tempSheet = $this->extractEntryToTemp($sheetPath);
 
-        $reader = new XMLReader();
-        $reader->open($sheetUri, null, LIBXML_NONET);
+        try {
+            $reader = new XMLReader();
 
-        while ($reader->read()) {
-            if ($reader->nodeType !== XMLReader::ELEMENT || $reader->localName !== 'row') {
-                continue;
+            if ($reader->open($tempSheet, null, LIBXML_NONET) !== true) {
+                throw new \RuntimeException("Unable to open worksheet XML: {$sheetPath}");
             }
 
-            yield $this->parseRow(
-                new SimpleXMLElement($reader->readOuterXML()),
-                $sharedStrings,
-            );
-        }
+            while ($reader->read()) {
+                if ($reader->nodeType !== XMLReader::ELEMENT || $reader->localName !== 'row') {
+                    continue;
+                }
 
-        $reader->close();
+                yield $this->parseRow(
+                    new SimpleXMLElement($reader->readOuterXML()),
+                    $sharedStrings,
+                );
+            }
+
+            $reader->close();
+        } finally {
+            if (is_file($tempSheet)) {
+                @unlink($tempSheet);
+            }
+        }
     }
 
     /**
@@ -97,15 +106,53 @@ class XlsxStreamReader
         throw new \RuntimeException('Worksheet sheet1.xml was not found in the XLSX file.');
     }
 
-    private function worksheetUri(string $sheetPath): string
+    /**
+     * Extract a zip entry to a real temp file.
+     *
+     * Avoids zip:// URIs, which fail on Windows paths with drive letters
+     * when opened via XMLReader.
+     */
+    private function extractEntryToTemp(string $entryName): string
     {
-        $normalizedPath = str_replace('\\', '/', $this->filePath);
+        $zip = new ZipArchive();
 
-        if (preg_match('/^[A-Za-z]:\\//', $normalizedPath) === 1) {
-            return 'zip:///'.$normalizedPath.'#'.$sheetPath;
+        if ($zip->open($this->filePath) !== true) {
+            throw new \RuntimeException("Unable to open XLSX file: {$this->filePath}");
         }
 
-        return 'zip://'.$normalizedPath.'#'.$sheetPath;
+        $stream = $zip->getStream($entryName);
+
+        if ($stream === false) {
+            $zip->close();
+
+            throw new \RuntimeException("Unable to read XLSX entry: {$entryName}");
+        }
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'xlsx_sheet_');
+
+        if ($tempPath === false) {
+            fclose($stream);
+            $zip->close();
+
+            throw new \RuntimeException('Unable to create a temporary worksheet file.');
+        }
+
+        $target = fopen($tempPath, 'wb');
+
+        if ($target === false) {
+            fclose($stream);
+            $zip->close();
+            @unlink($tempPath);
+
+            throw new \RuntimeException('Unable to open a temporary worksheet file for writing.');
+        }
+
+        stream_copy_to_stream($stream, $target);
+        fclose($stream);
+        fclose($target);
+        $zip->close();
+
+        return $tempPath;
     }
 
     /**

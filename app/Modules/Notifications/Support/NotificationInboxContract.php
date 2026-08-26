@@ -228,6 +228,9 @@ final class NotificationInboxContract
             'WALLET_TOPUP_SUCCESS', 'WALLET_DEBIT', 'WALLET_REFUND', 'WALLET_LOW_BALANCE' => [
                 self::action('open_wallet', 'Open wallet', 'فتح المحفظة', '/wallet'),
             ],
+            'LINK_REQUEST_RECEIVED', 'LINK_REQUEST_ACCEPTED', 'LINK_REQUEST_REJECTED' => [
+                self::action('open_linked_accounts', 'Open linked accounts', 'فتح الحسابات المرتبطة', '/linked-accounts'),
+            ],
             'PAYMENT_PENDING', 'PAYMENT_REQUIRES_ACTION' => [
                 self::action('complete_payment', 'Complete payment', 'إتمام الدفع', $orderLink),
             ],

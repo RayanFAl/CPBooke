@@ -488,6 +488,33 @@ class CustomerWalletTest extends TestCase
         app(CustomerWalletService::class)->adminDebit($wallet, 100);
     }
 
+    public function test_admin_debit_returns_validation_error_when_balance_is_insufficient(): void
+    {
+        $admin = $this->makeAdmin('super_admin');
+        $customer = $this->makeCustomer();
+        $wallet = CustomerWallet::query()->create([
+            'user_id' => $customer->id,
+            'wallet_number' => 'WLT-000005-TEST0B',
+            'currency' => 'LYD',
+            'balance' => 0,
+            'status' => CustomerWallet::STATUS_ACTIVE,
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.customer-wallets.show', $wallet))
+            ->post(route('admin.customer-wallets.debit', $wallet), [
+                'amount' => 10,
+            ])
+            ->assertRedirect(route('admin.customer-wallets.show', $wallet))
+            ->assertSessionHasErrors('amount');
+
+        $this->assertSame('0.00', (string) $wallet->fresh()->balance);
+        $this->assertDatabaseMissing('customer_wallet_transactions', [
+            'customer_wallet_id' => $wallet->id,
+            'type' => CustomerWalletTransaction::TYPE_ADMIN_DEBIT,
+        ]);
+    }
+
     public function test_pay_order_also_debits_provider_wallet(): void
     {
         $customer = $this->makeCustomer();

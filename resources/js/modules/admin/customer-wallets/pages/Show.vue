@@ -81,6 +81,8 @@ const debitForm = useForm({
     note: '',
 });
 
+const showAddMoney = ref(false);
+
 const formatMoney = (amount, currency) => new Intl.NumberFormat(locale.value, {
     style: 'currency',
     currency: currency || props.wallet.currency || 'LYD',

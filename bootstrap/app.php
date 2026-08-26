@@ -112,19 +112,28 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (InsufficientCustomerWalletBalanceException $exception, Request $request) {
-            if (! $request->is('api/*')) {
-                return null;
+            $message = sprintf(
+                'Insufficient wallet balance. Requested %s, available %s.',
+                $exception->requestedAmount,
+                $exception->availableBalance,
+            );
+
+            if ($request->is('api/*')) {
+                return ApiResponse::error(
+                    'Insufficient wallet balance.',
+                    [
+                        'requested_amount' => $exception->requestedAmount,
+                        'available_balance' => $exception->availableBalance,
+                    ],
+                    'insufficient_wallet_balance',
+                    422,
+                );
             }
 
-            return ApiResponse::error(
-                'Insufficient wallet balance.',
-                [
-                    'requested_amount' => $exception->requestedAmount,
-                    'available_balance' => $exception->availableBalance,
-                ],
-                'insufficient_wallet_balance',
-                422,
-            );
+            return back()
+                ->withInput()
+                ->withErrors(['amount' => $message])
+                ->with('error', $message);
         });
 
         $exceptions->render(function (\Throwable $exception, Request $request) {

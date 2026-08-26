@@ -2,6 +2,7 @@
 
 namespace App\Modules\Admin\CustomerWallets\Http\Controllers;
 
+use App\Exceptions\InsufficientCustomerWalletBalanceException;
 use App\Models\CustomerWallet;
 use App\Models\CustomerWalletTransaction;
 use App\Models\User;
@@ -11,6 +12,7 @@ use App\Modules\CustomerWallets\Services\CustomerWalletService;
 use App\Modules\Settings\Services\SystemSettingsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -105,12 +107,22 @@ class CustomerWalletController
     {
         $data = $request->validated();
 
-        $this->walletService->adminDebit(
-            $customerWallet,
-            $data['amount'],
-            $request->user(),
-            ['description' => $data['note'] ?? null],
-        );
+        try {
+            $this->walletService->adminDebit(
+                $customerWallet,
+                $data['amount'],
+                $request->user(),
+                ['description' => $data['note'] ?? null],
+            );
+        } catch (InsufficientCustomerWalletBalanceException $exception) {
+            throw ValidationException::withMessages([
+                'amount' => sprintf(
+                    'Insufficient wallet balance. Requested %s, available %s.',
+                    $exception->requestedAmount,
+                    $exception->availableBalance,
+                ),
+            ]);
+        }
 
         return redirect()
             ->route('admin.customer-wallets.show', $customerWallet)

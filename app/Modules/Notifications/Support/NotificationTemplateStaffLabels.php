@@ -136,6 +136,7 @@ final class NotificationTemplateStaffLabels
             'TIER_UPGRADED' => ['en' => 'Loyalty tier upgraded', 'ar' => 'تمت ترقية مستوى الولاء'],
             'LINK_REQUEST_RECEIVED' => ['en' => 'Account-link request received', 'ar' => 'وصل طلب ربط حساب'],
             'LINK_REQUEST_ACCEPTED' => ['en' => 'Account-link request accepted', 'ar' => 'تم قبول طلب ربط الحساب'],
+            'LINK_REQUEST_REJECTED' => ['en' => 'Account-link request rejected', 'ar' => 'تم رفض طلب ربط الحساب'],
             'PAYMENT_REQUEST_CREATED' => ['en' => 'Payment request sent', 'ar' => 'تم إرسال طلب دفع'],
             'PAYMENT_REQUEST_RECEIVED' => ['en' => 'Payment request received', 'ar' => 'وصل طلب دفع'],
             'PAYMENT_REQUEST_COMPLETED' => ['en' => 'Linked payment completed', 'ar' => 'اكتمل الدفع من الحساب المرتبط'],

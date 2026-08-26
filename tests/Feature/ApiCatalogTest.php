@@ -20,7 +20,7 @@ class ApiCatalogTest extends TestCase
             'options_image_url' => 'https://cdn.example.com/options/travel.jpg',
             'market_image_url' => 'https://cdn.example.com/market/travel.jpg',
             'action_type' => 'search_insurance',
-            'action_value' => '/insurance/travel',
+            'action_value' => '/travel-insurance',
             'action_payload' => ['subtype' => 'travel'],
             'sort_order' => 1,
             'is_active' => true,

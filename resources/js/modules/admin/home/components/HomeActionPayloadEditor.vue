@@ -24,13 +24,14 @@ const SCHEMAS = {
     search_hotels: [
         { key: 'city', input: 'text', example: 'Istanbul' },
         { key: 'check_in', input: 'date', example: '2026-09-15' },
+        { key: 'check_out', input: 'date', example: '2026-09-18' },
         { key: 'nights', input: 'number', example: '3' },
     ],
     search_insurance: [
         { key: 'destination', input: 'text', example: 'TR' },
         { key: 'start_date', input: 'date', example: '2026-09-15' },
         { key: 'days', input: 'number', example: '7' },
-        { key: 'subtype', input: 'text', example: 'travel' },
+        { key: 'subtype', input: 'select', options: ['travel', 'orange', 'mandatory'], example: 'travel' },
     ],
     search_esim: [
         { key: 'esimCountry', input: 'text', example: 'TR' },
@@ -79,6 +80,16 @@ const parseModelValue = (raw, schemaFields) => {
 
             values[field.key] = String(parsed[field.key]);
         });
+
+        // Legacy insurance seed/admin payloads used depart_date.
+        if (
+            props.actionType === 'search_insurance'
+            && !values.start_date
+            && parsed.depart_date !== undefined
+            && parsed.depart_date !== null
+        ) {
+            values.start_date = String(parsed.depart_date);
+        }
     } catch {
         // Keep empty values when existing JSON is invalid.
     }

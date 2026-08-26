@@ -21,7 +21,7 @@ class AdminCatalogTest extends TestCase
             'title_en' => 'Travel insurance',
             'title_ar' => 'تأمين سفر',
             'action_type' => 'route',
-            'action_value' => '/insurance/travel',
+            'action_value' => '/travel-insurance',
             'sort_order' => 1,
             'is_active' => true,
             'show_in_options' => true,
@@ -47,8 +47,8 @@ class AdminCatalogTest extends TestCase
                 'key' => 'travel_insurance',
                 'options_image_url' => 'https://cdn.example.com/options/travel.jpg',
                 'market_image_url' => 'https://cdn.example.com/market/travel.jpg',
-                'action_type' => 'route',
-                'action_value' => '/insurance/travel',
+                'action_type' => 'search_insurance',
+                'action_value' => '/travel-insurance',
                 'sort_order' => 1,
                 'is_active' => 1,
                 'show_in_options' => 1,
@@ -60,7 +60,7 @@ class AdminCatalogTest extends TestCase
             'key' => 'travel_insurance',
             'title_en' => 'Travel insurance',
             'title_ar' => 'تأمين سفر',
-            'action_value' => '/insurance/travel',
+            'action_value' => '/travel-insurance',
         ]);
     }
 
@@ -92,7 +92,7 @@ class AdminCatalogTest extends TestCase
             'key' => 'esim',
             'title_en' => 'eSIM',
             'action_type' => 'search_esim',
-            'action_value' => '/esim',
+            'action_value' => '/esim-countries',
             'is_active' => true,
             'show_in_options' => true,
             'show_in_market' => true,
@@ -104,7 +104,7 @@ class AdminCatalogTest extends TestCase
                 'title_ar' => 'باقات eSIM',
                 'key' => 'esim',
                 'action_type' => 'search_esim',
-                'action_value' => '/esim',
+                'action_value' => '/esim-countries',
                 'is_active' => 1,
                 'show_in_options' => 1,
                 'show_in_market' => 1,
@@ -114,6 +114,7 @@ class AdminCatalogTest extends TestCase
         $this->assertDatabaseHas('mobile_catalog_types', [
             'id' => $type->id,
             'title_en' => 'eSIM packs',
+            'action_value' => '/esim-countries',
         ]);
 
         $this->actingAs($this->adminUser())

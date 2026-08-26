@@ -165,9 +165,12 @@
         </div>
 
         <div class="brand">
-            <div>
-                <h1>{{ $company }}</h1>
-                <p>Wallet receipt · إيصال المحفظة</p>
+            <div style="display:flex;align-items:center;gap:12px;">
+                <img src="{{ asset('images/app_logo.png') }}" alt="{{ $company }}" width="40" height="40" style="border-radius:10px;">
+                <div>
+                    <h1>{{ $company }}</h1>
+                    <p>Wallet receipt · إيصال المحفظة</p>
+                </div>
             </div>
             <span class="status">Completed · مكتمل</span>
         </div>

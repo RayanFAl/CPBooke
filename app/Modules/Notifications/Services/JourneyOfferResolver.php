@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Modules\Notifications\Services;
 
@@ -171,7 +171,7 @@ class JourneyOfferResolver
         return [
             'code' => 'OFFER_HOTELS_AT_DESTINATION',
             'title' => 'Need a hotel in '.$destination.'?',
-            'body' => 'Discover nearby stays and book from Booke.',
+            'body' => 'Discover nearby stays and book from BookNow.',
             'deep_link' => '/hotels?city='.rawurlencode($city),
             'reason' => 'missing_hotel',
         ];
@@ -189,7 +189,7 @@ class JourneyOfferResolver
         return [
             'code' => 'OFFER_CARS_AT_DESTINATION',
             'title' => 'Moving around '.$destination.'?',
-            'body' => 'Rent a car from Booke for your stay.',
+            'body' => 'Rent a car from BookNow for your stay.',
             'deep_link' => '/cars?city='.rawurlencode($city),
             'reason' => 'missing_car',
         ];
@@ -208,7 +208,7 @@ class JourneyOfferResolver
 
         return [
             'code' => 'OFFER_RETURN_FLIGHT',
-            'title' => 'You booked the outbound. What about the return?',
+            'title' => 'You __BookNowD__ the outbound. What about the return?',
             'body' => 'Find a return from '.$destination.' to '.$origin.'.',
             'deep_link' => '/flights?origin='.rawurlencode(OrderNotificationContext::destinationCitySlug($flight)).'&destination='.rawurlencode(strtolower($origin)),
             'reason' => 'one_way_booking',
@@ -227,7 +227,7 @@ class JourneyOfferResolver
         return [
             'code' => 'POST_TRIP_NEXT',
             'title' => 'How was '.$destination.'?',
-            'body' => 'Ready for your next trip? Discover Booke deals from '.$destination.'.',
+            'body' => 'Ready for your next trip? Discover BookNow deals from '.$destination.'.',
             'deep_link' => '/flights?origin='.rawurlencode($city),
             'reason' => 'post_trip',
         ];
@@ -247,7 +247,7 @@ class JourneyOfferResolver
         return [
             'code' => 'LOYALTY_NEAR_REWARD',
             'title' => 'You are close to your next reward',
-            'body' => 'You are at '.$profile->progress_percentage.'% toward the next Booke tier.',
+            'body' => 'You are at '.$profile->progress_percentage.'% toward the next BookNow tier.',
             'deep_link' => '/loyalty',
             'reason' => 'loyalty_progress',
         ];

@@ -18,7 +18,15 @@ const { t, isArabic } = useAdminLocale();
 
 const user = computed(() => page.props.auth.user);
 const permissions = computed(() => user.value?.permissions ?? []);
-const companyName = computed(() => page.props.platform?.company_name || t('Booke'));
+const companyName = computed(() => {
+    const name = String(page.props.platform?.company_name ?? '').trim();
+
+    if (!name || ['Booke', 'بوكي', 'CPBooke', 'Laravel'].includes(name)) {
+        return 'BookNow';
+    }
+
+    return name;
+});
 
 const displayName = computed(() => user.value?.full_name ?? user.value?.name ?? '');
 
@@ -145,11 +153,21 @@ const handleNavigate = () => {
             class="flex items-start gap-2 border-b border-slate-800 px-3 py-4"
             :class="collapsed ? 'justify-center' : 'px-4'"
         >
-            <div class="min-w-0 flex-1" :class="collapsed ? 'sr-only' : ''">
-                <p class="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-400">
-                    {{ companyName }}
-                </p>
-                <h1 class="mt-2 text-lg font-semibold">{{ t('Control Panel') }}</h1>
+            <div
+                class="flex min-w-0 flex-1 items-center gap-3"
+                :class="collapsed ? 'justify-center' : ''"
+            >
+                <img
+                    src="/images/app_logo.png"
+                    alt="BookNow"
+                    class="h-10 w-10 shrink-0 rounded-xl object-contain shadow-sm shadow-slate-950/40"
+                >
+                <div class="min-w-0" :class="collapsed ? 'sr-only' : ''">
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-400">
+                        {{ companyName }}
+                    </p>
+                    <h1 class="mt-1 truncate text-lg font-semibold">{{ t('Control Panel') }}</h1>
+                </div>
             </div>
 
             <button

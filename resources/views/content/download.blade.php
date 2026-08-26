@@ -59,13 +59,14 @@
             height: 84px;
             margin: 0 auto 16px;
             border-radius: 20px;
-            background: linear-gradient(145deg, #4f86c6, var(--brand));
-            color: #fff;
-            display: grid;
-            place-items: center;
-            font-size: 34px;
-            font-weight: 700;
+            overflow: hidden;
             box-shadow: 0 10px 24px rgba(52, 105, 178, 0.25);
+        }
+        .app-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
         }
         h1 {
             margin: 0 0 6px;
@@ -156,11 +157,16 @@
 <body>
     <main class="wrap">
         <header>
-            <span class="brand">{{ $appName }}</span>
+            <span class="brand">
+                <img src="{{ asset('images/app_logo.png') }}" alt="{{ $appName }}" width="36" height="36" style="border-radius:10px;vertical-align:middle;margin-inline-end:10px;">
+                {{ $appName }}
+            </span>
         </header>
 
         <section class="card">
-            <div class="app-icon" aria-hidden="true">B</div>
+            <div class="app-icon" aria-hidden="true">
+                <img src="{{ asset('images/app_logo.png') }}" alt="">
+            </div>
 
             <h1>{{ $locale === 'ar' ? 'حمّل تطبيق '.$appName : 'Download the '.$appName.' app' }}</h1>
             <p class="version">{{ $locale === 'ar' ? 'الإصدار' : 'Version' }} {{ $version }}</p>

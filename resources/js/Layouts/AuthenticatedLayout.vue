@@ -28,7 +28,7 @@ const homeRoute = () => (page.props.auth.user?.is_admin ? route('admin.dashboard
                             <div class="flex shrink-0 items-center">
                                 <Link :href="homeRoute()">
                                     <ApplicationLogo
-                                        class="block h-9 w-auto fill-current text-gray-800"
+                                        class="block h-9 w-9 rounded-xl"
                                     />
                                 </Link>
                             </div>

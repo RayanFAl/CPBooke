@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Modules\Notifications\Support;
 
@@ -534,7 +534,7 @@ final class NotificationTemplateCatalog
                 name: 'Offer return flight',
                 category: NotificationTemplateCategories::OFFERS,
                 description: 'Next-best-offer after a one-way ticket: suggest booking the return.',
-                subject: 'You booked the outbound. What about the return?',
+                subject: 'You __BookNowD__ the outbound. What about the return?',
                 body: 'Find a return from {destination} before fares go up.',
                 arSubject: 'حجزت الذهاب، ماذا عن العودة؟',
                 arBody: 'ابحث عن رحلة العودة من {destination} قبل ارتفاع الأسعار.',
@@ -547,9 +547,9 @@ final class NotificationTemplateCatalog
                 category: NotificationTemplateCategories::OFFERS,
                 description: 'Embedded after the trip to start the next search from the destination.',
                 subject: 'Ready for your next trip from {destination}?',
-                body: 'Discover Booke deals departing from {destination}.',
+                body: 'Discover BookNow deals departing from {destination}.',
                 arSubject: 'جاهز لرحلتك القادمة؟',
-                arBody: 'اكتشف عروض Booke من {destination}.',
+                arBody: 'اكتشف عروض BookNow من {destination}.',
                 channels: [NotificationChannels::IN_APP],
                 variables: ['user_name', 'destination', 'deep_link'],
             ),
@@ -559,9 +559,9 @@ final class NotificationTemplateCatalog
                 category: NotificationTemplateCategories::LOYALTY,
                 description: 'Embedded when loyalty progress is at least 80% toward the next tier.',
                 subject: 'You are close to your next reward',
-                body: 'Keep going — your next Booke reward is almost unlocked.',
+                body: 'Keep going — your next BookNow reward is almost unlocked.',
                 arSubject: 'باقي قليل وتفتح مكافأتك',
-                arBody: 'استمر — مكافأتك التالية في Booke اقتربت.',
+                arBody: 'استمر — مكافأتك التالية في BookNow اقتربت.',
                 channels: [NotificationChannels::IN_APP],
                 variables: ['user_name', 'deep_link'],
             ),

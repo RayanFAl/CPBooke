@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Modules\Api\Auth\Services;
 
@@ -52,7 +52,7 @@ class TwoFactorService
         );
 
         $otpauthUrl = $this->google2fa->getQRCodeUrl(
-            config('app.name', 'Booke'),
+            config('app.name', 'BookNow'),
             (string) $user->email,
             $secret,
         );

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Modules\Api\Orders\Http\Controllers;
 
@@ -50,7 +50,7 @@ class OrderController extends Controller
     }
 
     /**
-     * Sync a flight booking from BookNow into CPBooke (idempotent by booking_id).
+     * Sync a flight booking from BookNow into BookNow (idempotent by booking_id).
      */
     public function syncFlight(Request $request): JsonResponse
     {
@@ -58,7 +58,7 @@ class OrderController extends Controller
     }
 
     /**
-     * Sync an eSIM purchase into CPBooke (idempotent by provider_booking.booking_id).
+     * Sync an eSIM purchase into BookNow (idempotent by provider_booking.booking_id).
      */
     public function syncEsim(Request $request): JsonResponse
     {
@@ -66,7 +66,7 @@ class OrderController extends Controller
     }
 
     /**
-     * Sync an insurance purchase into CPBooke (idempotent by provider_booking.booking_id).
+     * Sync an insurance purchase into BookNow (idempotent by provider_booking.booking_id).
      */
     public function syncInsurance(Request $request): JsonResponse
     {
@@ -74,7 +74,7 @@ class OrderController extends Controller
     }
 
     /**
-     * Sync a hotel booking into CPBooke (idempotent by provider_booking.booking_id).
+     * Sync a hotel booking into BookNow (idempotent by provider_booking.booking_id).
      */
     public function syncHotel(Request $request): JsonResponse
     {

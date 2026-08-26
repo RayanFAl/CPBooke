@@ -34,14 +34,22 @@ const submit = () => {
     <GuestLayout>
         <Head :title="t('Admin Login')" />
 
-        <div class="mb-6">
-            <h1 class="text-xl font-semibold text-slate-950">{{ t('Admin Login') }}</h1>
-            <p class="mt-1 text-sm text-slate-600">
-                {{ t('Sign in with an administrator account to access the Booke control panel.') }}
+        <div class="mb-7">
+            <p class="text-xs font-semibold uppercase tracking-[0.28em] text-[#2f6db8]">
+                {{ t('Staff access') }}
+            </p>
+            <h1 class="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                {{ t('Admin Login') }}
+            </h1>
+            <p class="mt-2 text-sm leading-6 text-slate-600">
+                {{ t('Sign in with an administrator account to access the BookNow control panel.') }}
             </p>
         </div>
 
-        <div v-if="status" class="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+        <div
+            v-if="status"
+            class="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
+        >
             {{ status }}
         </div>
 
@@ -67,24 +75,24 @@ const submit = () => {
                 :error="form.errors.password"
             />
 
-            <label class="flex items-center gap-2 text-sm text-slate-600">
-                <Checkbox name="remember" v-model:checked="form.remember" />
-                <span>{{ t('Remember me') }}</span>
-            </label>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <label class="flex items-center gap-2 text-sm text-slate-600">
+                    <Checkbox name="remember" v-model:checked="form.remember" />
+                    <span>{{ t('Remember me') }}</span>
+                </label>
 
-            <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
                 <Link
                     v-if="canResetPassword"
                     :href="route('password.request')"
-                    class="text-sm font-medium text-cyan-700 transition hover:text-cyan-800"
+                    class="text-sm font-medium text-[#2f6db8] transition hover:text-[#255991]"
                 >
                     {{ t('Forgot your password?') }}
                 </Link>
-
-                <AdminButton type="submit" :processing="form.processing">
-                    {{ t('Log in') }}
-                </AdminButton>
             </div>
+
+            <AdminButton type="submit" class="mt-2 w-full justify-center" :processing="form.processing">
+                {{ t('Log in') }}
+            </AdminButton>
         </form>
     </GuestLayout>
 </template>

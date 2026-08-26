@@ -77,7 +77,11 @@ class SystemSettingsService
     {
         $name = trim((string) ($this->current()->company_name ?: ''));
 
-        return $name !== '' ? $name : (string) config('app.name', 'CPBooke');
+        if ($name === '' || in_array($name, ['Booke', 'بوكي', 'CPBooke', 'Laravel'], true)) {
+            return 'BookNow';
+        }
+
+        return $name;
     }
 
     public function mailFromName(): string

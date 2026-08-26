@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 return [
 
@@ -111,13 +111,13 @@ return [
     */
 
     'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'no-reply@booke.ly'),
-        'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Booke')),
+        'address' => env('MAIL_FROM_ADDRESS', 'no-reply@booknow.ly'),
+        'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'BookNow')),
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Booke mailbox roles
+    | BookNow mailbox roles
     |--------------------------------------------------------------------------
     |
     | Sending uses MAIL_FROM_ADDRESS (no-reply). Support is Reply-To / contact.
@@ -126,10 +126,10 @@ return [
     */
 
     'addresses' => [
-        'noreply' => env('MAIL_FROM_ADDRESS', 'no-reply@booke.ly'),
-        'support' => env('MAIL_SUPPORT_ADDRESS', 'support@booke.ly'),
-        'info' => env('MAIL_INFO_ADDRESS', 'info@booke.ly'),
-        'feedback' => env('MAIL_FEEDBACK_ADDRESS', 'feedback@booke.ly'),
+        'noreply' => env('MAIL_FROM_ADDRESS', 'no-reply@booknow.ly'),
+        'support' => env('MAIL_SUPPORT_ADDRESS', 'support@booknow.ly'),
+        'info' => env('MAIL_INFO_ADDRESS', 'info@booknow.ly'),
+        'feedback' => env('MAIL_FEEDBACK_ADDRESS', 'feedback@booknow.ly'),
     ],
 
 ];

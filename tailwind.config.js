@@ -22,6 +22,7 @@ export default {
         extend: {
             fontFamily: {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                ar: ['IBM Plex Sans Arabic', 'Segoe UI', 'Tahoma', ...defaultTheme.fontFamily.sans],
             },
             colors: {
                 brand: {

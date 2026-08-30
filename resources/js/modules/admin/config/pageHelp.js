@@ -10,8 +10,8 @@ export const pageHelpEntries = [
     },
     {
         match: 'admin.customers.show',
-        en: 'Customer CRM: searches, logins, bookings, wallet, and support. Use Edit identity to fix name or phone. Use Book for customer to record a desk booking.',
-        ar: 'ملف العميل: البحث، الدخول، الحجوزات، المحفظة، والدعم. عدّل الهوية لتصحيح الاسم أو الهاتف. احجز للعميل لتسجيل حجز مكتبي.',
+        en: 'Customer CRM: searches, logins, bookings, wallet, and support. Use Edit identity to fix name or phone.',
+        ar: 'ملف العميل: البحث، الدخول، الحجوزات، المحفظة، والدعم. عدّل الهوية لتصحيح الاسم أو الهاتف.',
     },
     {
         match: 'admin.customers',
@@ -47,11 +47,6 @@ export const pageHelpEntries = [
         match: 'admin.users.show',
         en: 'User profile. Customers show CRM and wallet. Staff show roles and access.',
         ar: 'ملف المستخدم. العميل يظهر معه النشاط والمحفظة. الموظف يظهر معه الدور والصلاحيات.',
-    },
-    {
-        match: 'admin.orders.create',
-        en: 'Record a booking you already made by phone or at the desk. Enter the PNR and amount. This does not buy a ticket from BookNow.',
-        ar: 'سجّل حجزاً أتممته بالهاتف أو من المكتب. أدخل الـ PNR والمبلغ. هذا لا يشتري تذكرة من BookNow.',
     },
     {
         match: 'admin.orders.show',

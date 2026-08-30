@@ -24,7 +24,13 @@ const { confirm } = useAdminConfirm();
 const page = usePage();
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
 const canUpdateUsers = computed(() => permissions.value.includes('users.update'));
-const canCreateOrders = computed(() => permissions.value.includes('orders.create'));
+const currentUserId = computed(() => page.props.auth.user?.id ?? null);
+const canDeleteTeamMember = computed(() =>
+    canUpdateUsers.value
+    && !isCustomerProfile.value
+    && currentUserId.value !== null
+    && currentUserId.value !== props.user.id,
+);
 const canViewOrders = computed(() => permissions.value.includes('orders.view'));
 const canViewLoyalty = computed(() => permissions.value.includes('loyalty.view'));
 const canViewSupport = computed(() => permissions.value.includes('support.view'));
@@ -299,6 +305,19 @@ const toggleStatus = async () => {
     });
 };
 
+const deleteTeamMember = async () => {
+    if (!await confirm({
+        title: t('Delete team member'),
+        message: t('Permanently delete :name from the team? This cannot be undone.', { name: props.user.full_name }),
+        confirmLabel: 'Delete',
+        variant: 'danger',
+    })) {
+        return;
+    }
+
+    router.delete(route('admin.users.destroy', props.user.id));
+};
+
 const changeTab = (tabId) => {
     activeTab.value = normalizeTab(tabId);
     replaceHash(activeTab.value);
@@ -368,13 +387,6 @@ onBeforeUnmount(() => {
                             >
                                 {{ t('Edit identity') }}
                             </Link>
-                            <Link
-                                v-if="canCreateOrders && isCustomerProfile"
-                                :href="route('admin.orders.create', { customer_id: user.id })"
-                                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                            >
-                                {{ t('Book for customer') }}
-                            </Link>
                             <button
                                 v-if="canUpdateUsers"
                                 type="button"
@@ -382,6 +394,14 @@ onBeforeUnmount(() => {
                                 @click="toggleStatus"
                             >
                                 {{ user.is_active ? t('Deactivate account') : t('Activate account') }}
+                            </button>
+                            <button
+                                v-if="canDeleteTeamMember"
+                                type="button"
+                                class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 transition hover:bg-rose-100"
+                                @click="deleteTeamMember"
+                            >
+                                {{ t('Delete team member') }}
                             </button>
                         </div>
                     </div>

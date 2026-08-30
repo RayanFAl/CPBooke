@@ -8,14 +8,6 @@ Route::controller(OrdersController::class)->group(function (): void {
 		->middleware('permission:orders.view')
 		->name('orders.index');
 
-	Route::get('/orders/create', 'create')
-		->middleware('permission:orders.create')
-		->name('orders.create');
-
-	Route::post('/orders', 'store')
-		->middleware('permission:orders.create')
-		->name('orders.store');
-
 	Route::get('/orders/{order}', 'show')
 		->middleware('permission:orders.view')
 		->name('orders.show');

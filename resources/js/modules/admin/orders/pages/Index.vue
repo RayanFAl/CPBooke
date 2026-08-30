@@ -36,12 +36,6 @@ const filterForm = reactive({
     status: props.filters.status ?? '',
 });
 
-const canCreateOrders = computed(() => {
-    const permissions = page.props.auth.user?.permissions ?? [];
-
-    return permissions.includes('orders.create');
-});
-
 const canViewFinancials = computed(() => {
     const permissions = page.props.auth.user?.permissions ?? [];
 
@@ -125,13 +119,6 @@ const openOrderPage = (order) => {
                     </div>
 
                     <div class="flex flex-wrap items-center gap-3">
-                        <Link
-                            v-if="canCreateOrders"
-                            :href="route('admin.orders.create')"
-                            class="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
-                        >
-                            {{ t('Record booking') }}
-                        </Link>
                         <div class="rounded-2xl bg-slate-950 px-4 py-3 text-sm text-white">
                             {{ ordersCountLabel }}
                         </div>

@@ -436,6 +436,61 @@ class UserService
     }
 
     /**
+     * Permanently delete a Control Panel team member.
+     *
+     * @return array{deleted: bool, message: string}
+     */
+    public function deleteTeamMember(User $actor, User $user): array
+    {
+        if (! $user->isAdminAccount()) {
+            return [
+                'deleted' => false,
+                'message' => 'Only team accounts can be deleted from the Control Panel.',
+            ];
+        }
+
+        if ($actor->is($user)) {
+            return [
+                'deleted' => false,
+                'message' => 'You cannot delete your own account.',
+            ];
+        }
+
+        $this->accessControlService->assertCanManageUser($actor, $user);
+
+        if ($user->hasRole(RbacRegistry::ROLE_SUPER_ADMIN) && $this->isLastActiveSuperAdmin($user)) {
+            return [
+                'deleted' => false,
+                'message' => 'The last active super admin cannot be deleted.',
+            ];
+        }
+
+        $snapshot = [
+            'full_name' => $user->full_name ?: $user->name,
+            'email' => $user->email,
+            'role' => $user->primaryRole()?->name,
+        ];
+
+        DB::transaction(function () use ($actor, $user, $snapshot): void {
+            $this->rbacAuditLogger->log(
+                'team_member.deleted',
+                'users.update',
+                $actor,
+                'user',
+                $user->id,
+                $snapshot,
+            );
+
+            $user->delete();
+        });
+
+        return [
+            'deleted' => true,
+            'message' => 'Team member deleted successfully.',
+        ];
+    }
+
+    /**
      * Build user-profile placeholder datasets until related modules exist.
      *
      * @return array<string, array<int, array<string, string>>>

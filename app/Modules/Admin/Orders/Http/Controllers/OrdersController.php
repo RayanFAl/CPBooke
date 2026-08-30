@@ -5,11 +5,9 @@ namespace App\Modules\Admin\Orders\Http\Controllers;
 use App\Models\Order;
 use App\Models\FinancialTransaction;
 use App\Models\OrderHistory;
-use App\Modules\Admin\Orders\Http\Requests\StoreManualOrderRequest;
 use App\Modules\Admin\Orders\Http\Requests\UpdateOrderNotesRequest;
 use App\Modules\Admin\Orders\Http\Requests\UpdateOrderPaymentStatusRequest;
 use App\Modules\Admin\Orders\Http\Requests\UpdateOrderStatusRequest;
-use App\Modules\Admin\Orders\Services\ManualBookingService;
 use App\Modules\Admin\Orders\Services\OrderTicketPayloadBuilder;
 use App\Modules\Api\Orders\Services\OrderService;
 use App\Modules\Audit\Services\EntityTimelineService;
@@ -27,7 +25,6 @@ class OrdersController
         private readonly OrderService $orderService,
         private readonly OrderTicketPayloadBuilder $orderTicketPayloadBuilder,
         private readonly EntityTimelineService $entityTimelineService,
-        private readonly ManualBookingService $manualBookingService,
     ) {
     }
 
@@ -54,35 +51,6 @@ class OrdersController
             'filters' => $filters,
             'statuses' => $this->orderService->statusOptions(),
         ]);
-    }
-
-    /**
-     * Show the form to record a booking made on behalf of a customer.
-     */
-    public function create(Request $request): Response
-    {
-        Gate::authorize('orders.create');
-
-        $customerId = $request->integer('customer_id') ?: null;
-
-        return Inertia::render('admin/orders/pages/Create', [
-            'customers' => $this->manualBookingService->customerOptions($customerId),
-            'selected_customer_id' => $customerId,
-            'service_types' => Order::serviceTypes(),
-            'default_currency' => $this->manualBookingService->defaultCurrency(),
-        ]);
-    }
-
-    /**
-     * Record a manual booking.
-     */
-    public function store(StoreManualOrderRequest $request): RedirectResponse
-    {
-        $order = $this->manualBookingService->record($request->user(), $request->validated());
-
-        return redirect()
-            ->route('admin.orders.show', $order)
-            ->with('success', 'Booking recorded for the customer.');
     }
 
     /**

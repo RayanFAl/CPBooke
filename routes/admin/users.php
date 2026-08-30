@@ -20,5 +20,6 @@ Route::controller(UsersController::class)->group(function (): void {
 	Route::get('/users/{user}/edit', 'edit')->middleware('permission:users.update')->name('users.edit');
 	Route::put('/users/{user}', 'update')->middleware('permission:users.update')->name('users.update');
 	Route::post('/users/{user}/toggle-status', 'toggleStatus')->middleware('permission:users.update')->name('users.toggle-status');
+	Route::delete('/users/{user}', 'destroy')->middleware('permission:users.update')->name('users.destroy');
 	Route::get('/users/{user}', 'show')->middleware('permission:users.view')->name('users.show');
 });

@@ -167,6 +167,24 @@ class UsersController
     }
 
     /**
+     * Permanently delete a Control Panel team member.
+     */
+    public function destroy(User $user): RedirectResponse
+    {
+        abort_unless($user->isAdminAccount(), 404);
+
+        $result = $this->userService->deleteTeamMember(request()->user(), $user);
+
+        if (! $result['deleted']) {
+            return back()->with('error', $result['message']);
+        }
+
+        return redirect()
+            ->route('admin.team.index')
+            ->with('success', $result['message']);
+    }
+
+    /**
      * Render a directory listing locked to one account type.
      */
     private function listing(Request $request, string $accountType): Response

@@ -34,7 +34,6 @@ const form = useForm({
     full_name: props.user.full_name ?? '',
     email: props.user.email ?? '',
     phone: props.user.phone ?? '',
-    country: props.user.country ?? '',
     role: props.user.role ?? '',
     permissions: props.user.permissions ?? [],
 });
@@ -109,28 +108,15 @@ const submit = () => {
                         <InputError class="mt-2" :message="form.errors.email" />
                     </div>
 
-                    <div class="grid gap-6 md:grid-cols-2">
-                        <div>
-                            <InputLabel for="phone" :value="t('Phone')" />
-                            <TextInput
-                                id="phone"
-                                v-model="form.phone"
-                                type="text"
-                                class="mt-2 block w-full"
-                            />
-                            <InputError class="mt-2" :message="form.errors.phone" />
-                        </div>
-
-                        <div>
-                            <InputLabel for="country" :value="t('Country')" />
-                            <TextInput
-                                id="country"
-                                v-model="form.country"
-                                type="text"
-                                class="mt-2 block w-full"
-                            />
-                            <InputError class="mt-2" :message="form.errors.country" />
-                        </div>
+                    <div>
+                        <InputLabel for="phone" :value="t('Phone')" />
+                        <TextInput
+                            id="phone"
+                            v-model="form.phone"
+                            type="text"
+                            class="mt-2 block w-full"
+                        />
+                        <InputError class="mt-2" :message="form.errors.phone" />
                     </div>
 
                     <div>
@@ -176,7 +162,7 @@ const submit = () => {
                     <ul class="mt-4 space-y-3 text-sm leading-6 text-slate-600">
                         <li>{{ t('Full name updates the canonical user display name across the admin area.') }}</li>
                         <li>{{ t('Email remains unique and validated at the backend layer.') }}</li>
-                        <li>{{ t('Phone and country stay optional to support incomplete customer profiles.') }}</li>
+                        <li>{{ t('Phone stays optional for staff contact details.') }}</li>
                         <li>{{ t("Role changes are validated against the current operator's RBAC scope.") }}</li>
                         <li>{{ t('Permission changes take effect immediately after saving this form.') }}</li>
                     </ul>

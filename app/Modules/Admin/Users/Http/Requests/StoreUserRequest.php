@@ -33,7 +33,6 @@ class StoreUserRequest extends FormRequest
             'full_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:191', Rule::unique('users', 'email')],
             'phone' => ['nullable', 'string', 'max:30'],
-            'country' => ['nullable', 'string', 'max:100'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role' => ['required', 'string', Rule::in($assignableRoles)],
             'permissions' => [

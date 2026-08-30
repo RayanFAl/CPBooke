@@ -32,7 +32,6 @@ const form = useForm({
     full_name: '',
     email: '',
     phone: '',
-    country: '',
     password: '',
     password_confirmation: '',
     role: initialRole,
@@ -92,18 +91,10 @@ const submit = () => {
                         <InputError class="mt-2" :message="form.errors.email" />
                     </div>
 
-                    <div class="grid gap-6 md:grid-cols-2">
-                        <div>
-                            <InputLabel for="phone" :value="t('Phone')" />
-                            <TextInput id="phone" v-model="form.phone" type="text" class="mt-2 block w-full" />
-                            <InputError class="mt-2" :message="form.errors.phone" />
-                        </div>
-
-                        <div>
-                            <InputLabel for="country" :value="t('Country')" />
-                            <TextInput id="country" v-model="form.country" type="text" class="mt-2 block w-full" />
-                            <InputError class="mt-2" :message="form.errors.country" />
-                        </div>
+                    <div>
+                        <InputLabel for="phone" :value="t('Phone')" />
+                        <TextInput id="phone" v-model="form.phone" type="text" class="mt-2 block w-full" />
+                        <InputError class="mt-2" :message="form.errors.phone" />
                     </div>
 
                     <div>

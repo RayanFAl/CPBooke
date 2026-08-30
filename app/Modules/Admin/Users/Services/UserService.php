@@ -293,7 +293,6 @@ class UserService
                 'full_name' => $data['full_name'],
                 'email' => $data['email'],
                 'phone' => $data['phone'] ?: null,
-                'country' => $data['country'] ?: null,
                 'password' => $data['password'],
                 'is_admin' => true,
                 'account_type' => User::ACCOUNT_TYPE_ADMIN,
@@ -337,7 +336,6 @@ class UserService
                 'full_name' => $data['full_name'],
                 'email' => $data['email'],
                 'phone' => $data['phone'] ?: null,
-                'country' => $data['country'] ?: null,
             ])->save();
 
             $user->syncRolesByName([$nextRoleName]);

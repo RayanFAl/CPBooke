@@ -94,9 +94,9 @@ class MobileCatalogSeeder extends Seeder
 
         foreach ($types as $type) {
             MobileCatalogType::query()->updateOrCreate(
-                ['public_id' => $type['public_id']],
+                ['key' => $type['key']],
                 [
-                    'key' => $type['key'],
+                    'public_id' => $type['public_id'],
                     'title_en' => $type['title_en'],
                     'title_ar' => $type['title_ar'],
                     'subtitle_en' => $type['subtitle_en'],

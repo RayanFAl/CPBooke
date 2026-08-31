@@ -20,6 +20,10 @@ Route::get('/suppliers/{supplier}', [SupplierController::class, 'show'])
     ->middleware('permission:suppliers.view')
     ->name('suppliers.show');
 
+Route::get('/suppliers/{supplier}/print', [SupplierController::class, 'printProfile'])
+    ->middleware('permission:suppliers.view')
+    ->name('suppliers.print');
+
 Route::get('/suppliers/{supplier}/edit', [SupplierController::class, 'edit'])
     ->middleware('permission:suppliers.manage')
     ->name('suppliers.edit');

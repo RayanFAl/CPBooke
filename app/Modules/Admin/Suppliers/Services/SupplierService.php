@@ -55,6 +55,7 @@ class SupplierService
         return Provider::query()->create([
             ...$this->normalizePayload($data),
             'key' => $key,
+            'integration_status' => $data['integration_status'] ?? Provider::INTEGRATION_NOT_CONFIGURED,
         ]);
     }
 
@@ -64,6 +65,10 @@ class SupplierService
     public function update(Provider $provider, array $data): Provider
     {
         $payload = $this->normalizePayload($data);
+
+        if (array_key_exists('integration_status', $data)) {
+            $payload['integration_status'] = $data['integration_status'];
+        }
 
         if (array_key_exists('key', $data)) {
             $key = $this->normalizeKey((string) $data['key']);
@@ -116,7 +121,6 @@ class SupplierService
             'contact_name' => $data['contact_name'] ?? null,
             'contact_email' => $data['contact_email'] ?? null,
             'contact_phone' => $data['contact_phone'] ?? null,
-            'integration_status' => $data['integration_status'] ?? Provider::INTEGRATION_NOT_CONFIGURED,
             'contract_starts_at' => $data['contract_starts_at'] ?? null,
             'contract_ends_at' => $data['contract_ends_at'] ?? null,
             'contract_notes' => $data['contract_notes'] ?? null,

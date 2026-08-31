@@ -117,109 +117,117 @@ const prettyAction = (item) => {
             </div>
 
             <div v-if="tab === 'banners'" class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                <table class="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                        <tr>
-                            <th class="px-4 py-3">{{ t('Preview') }}</th>
-                            <th class="px-4 py-3">{{ t('Title') }}</th>
-                            <th class="px-4 py-3">{{ t('Action') }}</th>
-                            <th class="px-4 py-3">{{ t('Order') }}</th>
-                            <th class="px-4 py-3">{{ t('Status') }}</th>
-                            <th class="px-4 py-3" />
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <tr v-for="banner in banners" :key="banner.id">
-                            <td class="px-4 py-3">
-                                <img
-                                    v-if="banner.image_url"
-                                    :src="banner.image_url"
-                                    alt=""
-                                    class="h-12 w-20 rounded-lg object-cover"
-                                >
-                                <span v-else class="text-slate-400">—</span>
-                            </td>
-                            <td class="px-4 py-3">
-                                <p class="font-medium text-slate-950">{{ banner.title_en }}</p>
-                                <p class="text-xs text-slate-500">{{ banner.public_id }}</p>
-                            </td>
-                            <td class="px-4 py-3 text-slate-600">{{ prettyAction(banner) }}</td>
-                            <td class="px-4 py-3">{{ banner.sort_order }}</td>
-                            <td class="px-4 py-3">
-                                <span :class="banner.is_active ? 'text-emerald-700' : 'text-slate-400'">
-                                    {{ banner.is_active ? t('Active') : t('Inactive') }}
-                                </span>
-                            </td>
-                            <td class="px-4 py-3 text-right">
-                                <Link :href="route('admin.home.banners.edit', banner.id)" class="text-cyan-700 hover:underline">
-                                    {{ t('Edit') }}
-                                </Link>
-                                <button type="button" class="ms-3 text-rose-600 hover:underline" @click="destroyBanner(banner)">
-                                    {{ t('Delete') }}
-                                </button>
-                            </td>
-                        </tr>
-                        <tr v-if="banners.length === 0">
-                            <td colspan="6" class="px-4 py-10 text-center text-slate-500">
-                                {{ t('No banners yet.') }}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="overflow-x-auto">
+                    <table class="admin-data-table min-w-full divide-y divide-slate-200 text-sm">
+                        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                            <tr>
+                                <th class="w-[6.5rem] px-4 py-3">{{ t('Preview') }}</th>
+                                <th class="w-[24%] px-4 py-3">{{ t('Title') }}</th>
+                                <th class="w-[30%] px-4 py-3">{{ t('Action') }}</th>
+                                <th class="w-20 px-4 py-3">{{ t('Order') }}</th>
+                                <th class="w-24 px-4 py-3">{{ t('Status') }}</th>
+                                <th class="w-36 px-4 py-3" />
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr v-for="banner in banners" :key="banner.id">
+                                <td class="px-4 py-3">
+                                    <img
+                                        v-if="banner.image_url"
+                                        :src="banner.image_url"
+                                        alt=""
+                                        class="h-12 w-20 rounded-lg object-cover"
+                                    >
+                                    <span v-else class="text-slate-400">—</span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <p class="font-medium text-slate-950">{{ banner.title_en }}</p>
+                                    <p class="text-xs text-slate-500">{{ banner.public_id }}</p>
+                                </td>
+                                <td class="px-4 py-3 text-slate-600">{{ prettyAction(banner) }}</td>
+                                <td class="px-4 py-3 tabular-nums">{{ banner.sort_order }}</td>
+                                <td class="px-4 py-3">
+                                    <span :class="banner.is_active ? 'text-emerald-700' : 'text-slate-400'">
+                                        {{ banner.is_active ? t('Active') : t('Inactive') }}
+                                    </span>
+                                </td>
+                                <td class="admin-table-actions px-4 py-3">
+                                    <div class="inline-flex flex-wrap items-center justify-end gap-3">
+                                        <Link :href="route('admin.home.banners.edit', banner.id)" class="text-cyan-700 hover:underline">
+                                            {{ t('Edit') }}
+                                        </Link>
+                                        <button type="button" class="text-rose-600 hover:underline" @click="destroyBanner(banner)">
+                                            {{ t('Delete') }}
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr v-if="banners.length === 0">
+                                <td colspan="6" class="px-4 py-10 text-center text-slate-500">
+                                    {{ t('No banners yet.') }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <div v-else class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                <table class="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                        <tr>
-                            <th class="px-4 py-3">{{ t('Preview') }}</th>
-                            <th class="px-4 py-3">{{ t('Title') }}</th>
-                            <th class="px-4 py-3">{{ t('Category') }}</th>
-                            <th class="px-4 py-3">{{ t('Action') }}</th>
-                            <th class="px-4 py-3">{{ t('Order') }}</th>
-                            <th class="px-4 py-3">{{ t('Status') }}</th>
-                            <th class="px-4 py-3" />
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <tr v-for="offer in offers" :key="offer.id">
-                            <td class="px-4 py-3">
-                                <img
-                                    v-if="offer.image_url"
-                                    :src="offer.image_url"
-                                    alt=""
-                                    class="h-12 w-20 rounded-lg object-cover"
-                                >
-                                <span v-else class="text-slate-400">—</span>
-                            </td>
-                            <td class="px-4 py-3">
-                                <p class="font-medium text-slate-950">{{ offer.title_en }}</p>
-                                <p class="text-xs text-slate-500">{{ offer.badge_en || offer.public_id }}</p>
-                            </td>
-                            <td class="px-4 py-3">{{ offer.category }}</td>
-                            <td class="px-4 py-3 text-slate-600">{{ prettyAction(offer) }}</td>
-                            <td class="px-4 py-3">{{ offer.sort_order }}</td>
-                            <td class="px-4 py-3">
-                                <span :class="offer.is_active ? 'text-emerald-700' : 'text-slate-400'">
-                                    {{ offer.is_active ? t('Active') : t('Inactive') }}
-                                </span>
-                            </td>
-                            <td class="px-4 py-3 text-right">
-                                <Link :href="route('admin.home.offers.edit', offer.id)" class="text-cyan-700 hover:underline">
-                                    {{ t('Edit') }}
-                                </Link>
-                                <button type="button" class="ms-3 text-rose-600 hover:underline" @click="destroyOffer(offer)">
-                                    {{ t('Delete') }}
-                                </button>
-                            </td>
-                        </tr>
-                        <tr v-if="offers.length === 0">
-                            <td colspan="7" class="px-4 py-10 text-center text-slate-500">
-                                {{ t('No offers yet.') }}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="overflow-x-auto">
+                    <table class="admin-data-table min-w-full divide-y divide-slate-200 text-sm">
+                        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                            <tr>
+                                <th class="w-[6.5rem] px-4 py-3">{{ t('Preview') }}</th>
+                                <th class="w-[22%] px-4 py-3">{{ t('Title') }}</th>
+                                <th class="w-[12%] px-4 py-3">{{ t('Category') }}</th>
+                                <th class="w-[24%] px-4 py-3">{{ t('Action') }}</th>
+                                <th class="w-20 px-4 py-3">{{ t('Order') }}</th>
+                                <th class="w-24 px-4 py-3">{{ t('Status') }}</th>
+                                <th class="w-36 px-4 py-3" />
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr v-for="offer in offers" :key="offer.id">
+                                <td class="px-4 py-3">
+                                    <img
+                                        v-if="offer.image_url"
+                                        :src="offer.image_url"
+                                        alt=""
+                                        class="h-12 w-20 rounded-lg object-cover"
+                                    >
+                                    <span v-else class="text-slate-400">—</span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <p class="font-medium text-slate-950">{{ offer.title_en }}</p>
+                                    <p class="text-xs text-slate-500">{{ offer.badge_en || offer.public_id }}</p>
+                                </td>
+                                <td class="px-4 py-3">{{ offer.category }}</td>
+                                <td class="px-4 py-3 text-slate-600">{{ prettyAction(offer) }}</td>
+                                <td class="px-4 py-3 tabular-nums">{{ offer.sort_order }}</td>
+                                <td class="px-4 py-3">
+                                    <span :class="offer.is_active ? 'text-emerald-700' : 'text-slate-400'">
+                                        {{ offer.is_active ? t('Active') : t('Inactive') }}
+                                    </span>
+                                </td>
+                                <td class="admin-table-actions px-4 py-3">
+                                    <div class="inline-flex flex-wrap items-center justify-end gap-3">
+                                        <Link :href="route('admin.home.offers.edit', offer.id)" class="text-cyan-700 hover:underline">
+                                            {{ t('Edit') }}
+                                        </Link>
+                                        <button type="button" class="text-rose-600 hover:underline" @click="destroyOffer(offer)">
+                                            {{ t('Delete') }}
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr v-if="offers.length === 0">
+                                <td colspan="7" class="px-4 py-10 text-center text-slate-500">
+                                    {{ t('No offers yet.') }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
     </AdminLayout>

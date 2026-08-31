@@ -37,17 +37,35 @@ html[dir='rtl'] .guest-shell {
 	text-rendering: optimizeLegibility;
 }
 
-html[lang='ar'] .admin-shell .overflow-x-auto > table.min-w-full {
+html[lang='ar'] .admin-shell .overflow-x-auto > table.min-w-full,
+html[dir='rtl'] .admin-shell .overflow-x-auto > table.min-w-full,
+html[lang='ar'] .admin-shell table.admin-data-table,
+html[dir='rtl'] .admin-shell table.admin-data-table {
 	table-layout: fixed;
 }
 
 .admin-shell .overflow-x-auto > table.min-w-full th,
-.admin-shell .overflow-x-auto > table.min-w-full td {
+.admin-shell .overflow-x-auto > table.min-w-full td,
+.admin-shell table.admin-data-table th,
+.admin-shell table.admin-data-table td {
 	text-align: start;
+	vertical-align: top;
+}
+
+.admin-shell .overflow-x-auto > table.min-w-full .admin-table-actions,
+.admin-shell table.admin-data-table .admin-table-actions {
+	text-align: end;
+	white-space: nowrap;
 }
 
 html[lang='ar'] .admin-shell .overflow-x-auto > table.min-w-full th,
-html[lang='ar'] .admin-shell .overflow-x-auto > table.min-w-full td {
+html[lang='ar'] .admin-shell .overflow-x-auto > table.min-w-full td,
+html[dir='rtl'] .admin-shell .overflow-x-auto > table.min-w-full th,
+html[dir='rtl'] .admin-shell .overflow-x-auto > table.min-w-full td,
+html[lang='ar'] .admin-shell table.admin-data-table th,
+html[lang='ar'] .admin-shell table.admin-data-table td,
+html[dir='rtl'] .admin-shell table.admin-data-table th,
+html[dir='rtl'] .admin-shell table.admin-data-table td {
 	overflow-wrap: anywhere;
 }
 

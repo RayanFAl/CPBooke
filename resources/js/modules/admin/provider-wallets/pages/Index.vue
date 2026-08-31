@@ -56,28 +56,31 @@ const openWallet = (wallet) => {
 
 <template>
     <AdminLayout>
-        <Head :title="t('Provider Wallets')" />
+        <Head :title="t('Provider ledger')" />
 
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
-                            {{ t('Finance') }}
+                            {{ t('Step 2') }}
                         </p>
-                        <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Provider Wallets') }}</h2>
+                        <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Provider ledger') }}</h2>
                         <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                            {{ t('Track prepaid balances deposited with flight suppliers and debits from synced bookings.') }}
+                            {{ t('Track internal prepaid balances: manual deposits and booking debits recorded in Booke.') }}
+                        </p>
+                        <p class="mt-2 max-w-2xl text-sm text-slate-500">
+                            {{ t('Not the supplier portal balance — that appears on settlement pages for reference only.') }}
                         </p>
                         <p class="mt-3 text-sm text-slate-500">{{ walletsCountLabel }}</p>
                     </div>
 
                     <Link
                         v-if="can_manage"
-                        :href="route('admin.provider-wallets.create')"
-                        class="inline-flex items-center justify-center rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+                        :href="route('admin.suppliers.index')"
+                        class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
                     >
-                        {{ t('Create wallet') }}
+                        {{ t('Add from provider profile') }}
                     </Link>
                 </div>
             </div>
@@ -133,7 +136,6 @@ const openWallet = (wallet) => {
                             >
                                 <td class="px-4 py-3">
                                     <p class="font-medium text-slate-950">{{ wallet.provider_name }}</p>
-                                    <p class="text-xs text-slate-500">{{ wallet.provider_key }} · {{ wallet.environment }}</p>
                                 </td>
                                 <td class="px-4 py-3 text-slate-700">{{ wallet.currency }}</td>
                                 <td class="px-4 py-3">

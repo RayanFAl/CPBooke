@@ -15,13 +15,13 @@ Route::post('/provider-wallets', [ProviderWalletController::class, 'store'])
     ->middleware('permission:provider-wallets.manage')
     ->name('provider-wallets.store');
 
-Route::post('/provider-wallets/providers', [ProviderWalletController::class, 'storeProvider'])
-    ->middleware('permission:provider-wallets.manage')
-    ->name('provider-wallets.providers.store');
-
 Route::get('/provider-wallets/{providerWallet}', [ProviderWalletController::class, 'show'])
     ->middleware('permission:provider-wallets.view')
     ->name('provider-wallets.show');
+
+Route::get('/provider-wallets/{providerWallet}/print', [ProviderWalletController::class, 'printStatement'])
+    ->middleware('permission:provider-wallets.view')
+    ->name('provider-wallets.print');
 
 Route::post('/provider-wallets/{providerWallet}/deposit', [ProviderWalletController::class, 'deposit'])
     ->middleware('permission:provider-wallets.manage')

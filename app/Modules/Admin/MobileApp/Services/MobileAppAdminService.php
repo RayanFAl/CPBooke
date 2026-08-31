@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\MobileApp\Services;
 
 use App\Modules\Content\Services\MobileAppReleaseService;
+use App\Support\PhpIniSize;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
 
@@ -136,7 +137,75 @@ class MobileAppAdminService
         $filename = $this->buildApkFilename($version, $versionCode);
         $file->move($this->releasesDirectory(), $filename);
 
-        $existing = $this->readManifestForForm();
+        $this->finalizeUpload($version, $versionCode, $filename);
+
+        return $filename;
+    }
+
+    /**
+     * @param  array{
+     *     version: string,
+     *     version_code: int,
+     *     apk: string,
+     *     force_update: bool,
+     *     min_version_code: int|null,
+     *     notes_ar: string,
+     *     notes_en: string,
+     * }|null  $existing
+     */
+    public function uploadApkFromPath(string $targetPath, string $version, int $versionCode, ?array $existing = null): void
+    {
+        $this->finalizeUpload($version, $versionCode, basename($targetPath), $existing);
+    }
+
+    /**
+     * @return array{
+     *     max_upload_kb: int,
+     *     php_upload_max_kb: int,
+     *     php_post_max_kb: int,
+     *     effective_max_kb: int,
+     *     php_upload_max_label: string,
+     *     php_post_max_label: string,
+     *     php_ready: bool,
+     * }
+     */
+    public function uploadLimits(): array
+    {
+        $maxUploadKb = max(1, (int) config('mobile_app.max_upload_kb', 512000));
+        $phpUploadKb = PhpIniSize::toKilobytes((string) ini_get('upload_max_filesize'));
+        $phpPostKb = PhpIniSize::toKilobytes((string) ini_get('post_max_size'));
+        $effectiveKb = max(1, min($maxUploadKb, $phpUploadKb, $phpPostKb));
+
+        return [
+            'max_upload_kb' => $maxUploadKb,
+            'php_upload_max_kb' => $phpUploadKb,
+            'php_post_max_kb' => $phpPostKb,
+            'effective_max_kb' => $effectiveKb,
+            'php_upload_max_label' => (string) ini_get('upload_max_filesize'),
+            'php_post_max_label' => (string) ini_get('post_max_size'),
+            'php_ready' => $effectiveKb >= min($maxUploadKb, 131072),
+        ];
+    }
+
+    public function buildApkFilename(string $version, int $versionCode): string
+    {
+        return sprintf('booke-%s+%d.apk', $version, $versionCode);
+    }
+
+    /**
+     * @param  array{
+     *     version: string,
+     *     version_code: int,
+     *     apk: string,
+     *     force_update: bool,
+     *     min_version_code: int|null,
+     *     notes_ar: string,
+     *     notes_en: string,
+     * }|null  $existing
+     */
+    private function finalizeUpload(string $version, int $versionCode, string $filename, ?array $existing = null): void
+    {
+        $existing ??= $this->readManifestForForm();
 
         $this->writeManifest([
             'version' => $version,
@@ -149,30 +218,6 @@ class MobileAppAdminService
         ]);
 
         $this->releaseService->flushCache();
-
-        return $filename;
-    }
-
-    /**
-     * @param array{
-     *     version: string,
-     *     version_code: int,
-     *     apk: string,
-     *     force_update?: bool,
-     *     min_version_code?: int|null,
-     *     notes_ar?: string|null,
-     *     notes_en?: string|null,
-     * } $data
-     */
-    public function updateReleaseManifest(array $data): void
-    {
-        $this->writeManifest($data);
-        $this->releaseService->flushCache();
-    }
-
-    public function buildApkFilename(string $version, int $versionCode): string
-    {
-        return sprintf('booke-%s+%d.apk', $version, $versionCode);
     }
 
     /**
@@ -200,6 +245,14 @@ class MobileAppAdminService
                 'en' => trim((string) ($data['notes_en'] ?? '')),
             ],
         ];
+
+        $apkPath = $this->releasesDirectory().DIRECTORY_SEPARATOR.$data['apk'];
+
+        if (array_key_exists('sha256', $data) && is_string($data['sha256']) && $data['sha256'] !== '') {
+            $manifest['sha256'] = $data['sha256'];
+        } elseif (File::isFile($apkPath)) {
+            $manifest['sha256'] = hash_file('sha256', $apkPath) ?: null;
+        }
 
         if (array_key_exists('min_version_code', $data) && $data['min_version_code'] !== null) {
             $manifest['min_version_code'] = (int) $data['min_version_code'];

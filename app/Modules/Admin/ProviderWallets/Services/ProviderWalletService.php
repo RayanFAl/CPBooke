@@ -30,14 +30,6 @@ class ProviderWalletService
     }
 
     /**
-     * @param  array{name: string, key: string, status?: string}  $data
-     */
-    public function createProvider(array $data): Provider
-    {
-        return $this->walletService->createProvider($data);
-    }
-
-    /**
      * @param  array{amount: string|float|int, note?: string|null}  $data
      */
     public function deposit(ProviderWallet $wallet, array $data, User $actor): ProviderWalletTransaction

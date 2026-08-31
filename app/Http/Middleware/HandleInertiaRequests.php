@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Modules\Settings\Services\SystemSettingsService;
+use App\Modules\Content\Services\MobileAppReleaseService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -49,6 +50,11 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
             ],
             'platform' => fn () => app(SystemSettingsService::class)->platformPayload(),
+            'mobileApp' => fn () => [
+                'download_url' => route('app.download.file'),
+                'page_url' => route('app.download.page'),
+                'available' => app(MobileAppReleaseService::class)->hasAvailableRelease(),
+            ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),

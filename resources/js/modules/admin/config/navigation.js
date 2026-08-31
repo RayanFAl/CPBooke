@@ -82,14 +82,14 @@ export const navigationItems = [
         icon: 'suppliers',
         children: [
             {
-                label: 'Provider profiles',
+                label: 'Providers',
                 route: 'admin.suppliers.index',
                 startsWith: '/admin/suppliers',
                 permission: 'suppliers.view',
                 icon: 'suppliers',
             },
             {
-                label: 'Provider Wallets',
+                label: 'Provider ledger',
                 route: 'admin.provider-wallets.index',
                 startsWith: '/admin/provider-wallets',
                 permission: 'provider-wallets.view',

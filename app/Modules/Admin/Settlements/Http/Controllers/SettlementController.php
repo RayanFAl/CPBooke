@@ -19,10 +19,12 @@ use App\Modules\Settlements\Services\SettlementResolutionService;
 use App\Modules\Settlements\Services\SettlementService;
 use App\Modules\Settlements\Support\SettlementInvoiceParser;
 use App\Modules\Settings\Services\SystemSettingsService;
+use App\Modules\Wallets\Services\ProviderWalletBalanceQueryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\View\View;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -36,6 +38,7 @@ class SettlementController
         private readonly SettlementInvoiceParser $settlementInvoiceParser,
         private readonly EntityTimelineService $entityTimelineService,
         private readonly SystemSettingsService $systemSettingsService,
+        private readonly ProviderWalletBalanceQueryService $providerWalletBalanceQuery,
     ) {
     }
 
@@ -116,8 +119,22 @@ class SettlementController
             ->withQueryString()
             ->through(fn (SettlementItem $item): array => $this->serializeItem($item));
 
+        $provider = $settlement->provider;
+
         return Inertia::render('admin/settlements/pages/Show', [
-            'settlement' => $this->serializeSettlement($settlement, detailed: true),
+            'settlement' => array_merge($this->serializeSettlement($settlement, detailed: true), [
+                'print_url' => route('admin.settlements.print', $settlement, absolute: false),
+                'export_csv_url' => route('admin.settlements.export.csv', $settlement, absolute: false),
+            ]),
+            'provider_api_wallets' => $provider
+                ? $this->providerWalletBalanceQuery->fetchForProvider($provider)
+                : [
+                    'available' => false,
+                    'error' => null,
+                    'wallet_count' => 0,
+                    'wallets' => [],
+                    'fetched_at' => null,
+                ],
             'items' => $items,
             'attachments' => $settlement->attachments
                 ->map(fn (SettlementAttachment $attachment): array => $this->serializeAttachment($attachment))
@@ -307,6 +324,74 @@ class SettlementController
         return redirect()
             ->route('admin.settlements.show', $settlement)
             ->with('success', 'Settlement period reopened.');
+    }
+
+    public function printReport(Settlement $settlement): View
+    {
+        Gate::authorize('settlements.view');
+
+        $settlement->load(['provider:id,name,key,settlement_cycle']);
+
+        $items = $settlement->items()
+            ->orderBy('id')
+            ->get()
+            ->map(fn (SettlementItem $item): array => $this->serializeItem($item))
+            ->all();
+
+        $portalWallets = $settlement->provider
+            ? $this->providerWalletBalanceQuery->fetchForProvider($settlement->provider)
+            : ['wallets' => []];
+
+        return view('admin.settlements.report-print', [
+            'company' => $this->systemSettingsService->companyName(),
+            'generated_at' => now()->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+            'settlement' => $this->serializeSettlement($settlement, detailed: true),
+            'items' => $items,
+            'portal_wallets' => $portalWallets,
+        ]);
+    }
+
+    public function exportCsv(Settlement $settlement): StreamedResponse
+    {
+        Gate::authorize('settlements.view');
+
+        $settlement->load('provider:id,name');
+
+        $filename = sprintf(
+            'settlement-%d-%s-%s.csv',
+            $settlement->id,
+            $settlement->provider?->key ?? 'provider',
+            optional($settlement->period_start)?->format('Y-m'),
+        );
+
+        $items = $settlement->items()->orderBy('id')->get();
+
+        return response()->streamDownload(function () use ($settlement, $items): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'booking_reference',
+                'booke_cost',
+                'wallet_debit',
+                'invoice_amount',
+                'difference',
+                'status',
+            ]);
+
+            foreach ($items as $item) {
+                fputcsv($handle, [
+                    $item->booking_reference,
+                    $item->supplier_cost,
+                    $item->wallet_debit,
+                    $item->supplier_invoice_cost,
+                    $item->difference,
+                    $item->status,
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
     }
 
     /**

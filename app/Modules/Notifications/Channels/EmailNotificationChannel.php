@@ -34,7 +34,12 @@ class EmailNotificationChannel implements NotificationChannel
         }
 
         try {
-            Mail::to($user->email)->send(new TemplateNotificationMail($log->subject, $log->body));
+            $locale = data_get($variables, 'locale');
+            Mail::to($user->email)->send(new TemplateNotificationMail(
+                $log->subject,
+                $log->body,
+                is_string($locale) ? $locale : null,
+            ));
         } catch (Throwable $exception) {
             Log::warning('Notification email delivery failed', [
                 'user_id' => $user->id,

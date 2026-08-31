@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Provider;
 use App\Models\ProviderService;
+use App\Modules\Providers\Services\ProviderApiConfigFromEnvService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Schema;
 
@@ -29,7 +30,17 @@ class ProviderSeeder extends Seeder
         );
 
         $this->enableAllServices($provider);
+        $this->syncApiConfigFromEnv($provider);
         $this->retireSplitBookeProviders();
+    }
+
+    private function syncApiConfigFromEnv(Provider $provider): void
+    {
+        if (! Schema::hasTable('provider_api_configs')) {
+            return;
+        }
+
+        app(ProviderApiConfigFromEnvService::class)->syncForProvider($provider);
     }
 
     private function enableAllServices(Provider $provider): void

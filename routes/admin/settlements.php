@@ -19,6 +19,14 @@ Route::get('/settlements/{settlement}', [SettlementController::class, 'show'])
     ->middleware('permission:settlements.view')
     ->name('settlements.show');
 
+Route::get('/settlements/{settlement}/print', [SettlementController::class, 'printReport'])
+    ->middleware('permission:settlements.view')
+    ->name('settlements.print');
+
+Route::get('/settlements/{settlement}/export.csv', [SettlementController::class, 'exportCsv'])
+    ->middleware('permission:settlements.view')
+    ->name('settlements.export.csv');
+
 Route::post('/settlements/{settlement}/import-invoice', [SettlementController::class, 'importInvoice'])
     ->middleware('permission:settlements.manage')
     ->name('settlements.import-invoice');

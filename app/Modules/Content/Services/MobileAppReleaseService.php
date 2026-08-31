@@ -94,6 +94,11 @@ class MobileAppReleaseService
         Cache::forget(self::CACHE_KEY);
     }
 
+    public function hasAvailableRelease(): bool
+    {
+        return $this->latestRelease() !== null;
+    }
+
     /**
      * @return array{
      *     version: string,
@@ -331,7 +336,10 @@ class MobileAppReleaseService
         if (File::isFile($selected['apk_path'])) {
             $publishedAt = date('c', (int) File::lastModified($selected['apk_path']));
             $fileSize = File::size($selected['apk_path']);
-            $sha256 = hash_file('sha256', $selected['apk_path']) ?: null;
+        }
+
+        if (is_array($manifest) && isset($manifest['sha256']) && is_string($manifest['sha256']) && $manifest['sha256'] !== '') {
+            $sha256 = $manifest['sha256'];
         }
 
         return [

@@ -37,7 +37,7 @@ class StoreSupplierRequest extends FormRequest
             'contact_name' => ['nullable', 'string', 'max:120'],
             'contact_email' => ['nullable', 'email', 'max:160'],
             'contact_phone' => ['nullable', 'string', 'max:40'],
-            'integration_status' => ['required', 'string', Rule::in(Provider::integrationStatuses())],
+            'integration_status' => ['nullable', 'string', Rule::in(Provider::integrationStatuses())],
             'contract_starts_at' => ['nullable', 'date'],
             'contract_ends_at' => ['nullable', 'date', 'after_or_equal:contract_starts_at'],
             'contract_notes' => ['nullable', 'string', 'max:5000'],

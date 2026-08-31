@@ -1,6 +1,5 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
-import SystemTimeline from '../../components/SystemTimeline.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
@@ -15,10 +14,19 @@ const props = defineProps({
     can_reopen: { type: Boolean, default: false },
     item_statuses: { type: Array, default: () => [] },
     resolution_reasons: { type: Object, default: () => ({}) },
-    system_timeline: { type: Array, default: () => [] },
+    provider_api_wallets: {
+        type: Object,
+        default: () => ({
+            available: false,
+            error: null,
+            wallet_count: 0,
+            wallets: [],
+            fetched_at: null,
+        }),
+    },
 });
 
-const { t, backArrow, forwardArrow } = useAdminLocale();
+const { locale, t, backArrow, forwardArrow, settlementStatusLabel, settlementItemStatusLabel } = useAdminLocale();
 const resolvingId = ref(null);
 
 const filterForm = reactive({
@@ -63,6 +71,26 @@ const canApprove = computed(() => props.can_manage
     && props.settlement.status === 'open'
     && Number(props.settlement.review_count) === 0
     && Number(props.settlement.pending_approvals) === 0);
+
+const workflowStep = computed(() => {
+    if (props.settlement.status === 'closed') {
+        return 4;
+    }
+
+    if (canClose.value || props.settlement.status === 'approved') {
+        return 4;
+    }
+
+    if (Number(props.settlement.review_count) > 0) {
+        return 3;
+    }
+
+    if (Number(props.settlement.supplier_invoice_total) > 0 || props.invoice_imports.length > 0) {
+        return 3;
+    }
+
+    return 2;
+});
 
 const applyItemFilter = () => {
     router.get(route('admin.settlements.show', props.settlement.id), {
@@ -135,7 +163,28 @@ const submitResolve = () => {
     });
 };
 
-const formatStatus = (status) => status.replaceAll('_', ' ');
+const formatMoney = (amount, currency) => new Intl.NumberFormat(locale.value, {
+    style: 'currency',
+    currency: currency || props.settlement.currency || 'LYD',
+}).format(Number(amount ?? 0));
+
+const formatFetchedAt = (value) => {
+    if (!value) {
+        return '—';
+    }
+
+    return new Intl.DateTimeFormat(locale.value, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+    }).format(new Date(value));
+};
+
+const workflowSteps = [
+    { n: 1, label: 'Create period' },
+    { n: 2, label: 'Import invoice' },
+    { n: 3, label: 'Fix differences' },
+    { n: 4, label: 'Approve & close' },
+];
 </script>
 
 <template>
@@ -154,270 +203,195 @@ const formatStatus = (status) => status.replaceAll('_', ' ');
                             {{ settlement.period_start }} {{ forwardArrow }} {{ settlement.period_end }}
                         </h2>
                         <p class="mt-2 text-sm text-slate-600">
-                            {{ settlement.currency }} · {{ settlement.status }} · {{ settlement.orders_count }} {{ t('orders') }}
+                            {{ settlementStatusLabel(settlement.status) }} · {{ settlement.orders_count }} {{ t('orders') }}
                         </p>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <button
-                            v-if="canMutate"
-                            type="button"
+                        <a
+                            v-if="settlement.print_url"
+                            :href="settlement.print_url"
+                            target="_blank"
+                            rel="noopener"
                             class="rounded-xl border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
-                            @click="compare"
                         >
-                            {{ t('Re-compare') }}
-                        </button>
-                        <button
-                            v-if="canApprove"
-                            type="button"
+                            {{ t('Print report') }}
+                        </a>
+                        <a
+                            v-if="settlement.export_csv_url"
+                            :href="settlement.export_csv_url"
                             class="rounded-xl border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
-                            @click="approvePeriod"
                         >
+                            {{ t('Export CSV') }}
+                        </a>
+                        <button v-if="canApprove" type="button" class="rounded-xl border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50" @click="approvePeriod">
                             {{ t('Approve period') }}
                         </button>
-                        <button
-                            v-if="canClose"
-                            type="button"
-                            class="rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                            @click="closePeriod"
-                        >
+                        <button v-if="canClose" type="button" class="rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800" @click="closePeriod">
                             {{ t('Close period') }}
                         </button>
                     </div>
                 </div>
+
+                <div class="mt-6 grid gap-2 sm:grid-cols-4">
+                    <div
+                        v-for="step in workflowSteps"
+                        :key="step.n"
+                        class="rounded-xl border px-3 py-2 text-center text-xs"
+                        :class="workflowStep >= step.n ? 'border-cyan-300 bg-cyan-50 text-cyan-950' : 'border-slate-200 bg-slate-50 text-slate-500'"
+                    >
+                        <span class="font-semibold">{{ step.n }}.</span> {{ t(step.label) }}
+                    </div>
+                </div>
             </div>
 
-            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <div class="grid gap-4 sm:grid-cols-3">
                 <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-wide text-slate-500">{{ t('Expected') }}</p>
-                    <p class="mt-2 text-xl font-semibold text-slate-950">{{ settlement.expected_cost }}</p>
+                    <p class="text-xs text-slate-500">{{ t('Booke cost') }}</p>
+                    <p class="mt-2 text-xl font-semibold">{{ settlement.expected_cost }}</p>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-wide text-slate-500">{{ t('Wallet') }}</p>
-                    <p class="mt-2 text-xl font-semibold text-slate-950">{{ settlement.wallet_debit_total }}</p>
+                    <p class="text-xs text-slate-500">{{ t('Invoice amount') }}</p>
+                    <p class="mt-2 text-xl font-semibold">{{ settlement.supplier_invoice_total || '—' }}</p>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-wide text-slate-500">{{ t('Invoice') }}</p>
-                    <p class="mt-2 text-xl font-semibold text-slate-950">{{ settlement.supplier_invoice_total }}</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-wide text-slate-500">{{ t('Difference') }}</p>
+                    <p class="text-xs text-slate-500">{{ t('Difference') }}</p>
                     <p class="mt-2 text-xl font-semibold" :class="Number(settlement.difference) !== 0 ? 'text-amber-700' : 'text-slate-950'">
                         {{ settlement.difference }}
                     </p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-wide text-slate-500">{{ t('Need review') }}</p>
-                    <p class="mt-2 text-xl font-semibold text-slate-950">
-                        {{ settlement.review_count }}
-                        <span class="text-sm font-normal text-slate-500">/ {{ settlement.matched_count }} {{ t('matched') }}</span>
-                    </p>
-                    <p class="mt-1 text-xs text-slate-500">{{ settlement.pending_approvals }} {{ t('pending approvals') }}</p>
-                    <p v-if="settlement.resolved_count" class="mt-1 text-xs text-slate-500">
-                        {{ settlement.resolved_count }} {{ t('resolved') }} · {{ settlement.adjustment_total }} {{ t('adjustments') }}
-                    </p>
+                    <p class="mt-1 text-xs text-slate-500">{{ settlement.review_count }} {{ t('Need review') }}</p>
                 </div>
             </div>
 
-            <div v-if="settlement.close_snapshot" class="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
-                <h3 class="text-sm font-semibold text-emerald-950">{{ t('Close snapshot') }}</h3>
-                <p class="mt-1 text-xs text-emerald-800">{{ t('Frozen totals at close. Later order or wallet changes do not rewrite this period.') }}</p>
-                <dl class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+            <div class="rounded-3xl border border-cyan-200 bg-cyan-50 p-5 shadow-sm">
+                <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <dt class="text-emerald-700">{{ t('Expected total') }}</dt>
-                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.expected_total }}</dd>
+                        <h3 class="text-sm font-semibold text-cyan-950">{{ t('Supplier portal balance (reference)') }}</h3>
+                        <p class="mt-1 text-xs text-cyan-900">{{ t('For settlement comparison only — not stored in Booke.') }}</p>
                     </div>
-                    <div>
-                        <dt class="text-emerald-700">{{ t('Wallet total') }}</dt>
-                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.wallet_total }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-emerald-700">{{ t('Invoice total') }}</dt>
-                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.invoice_total }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-emerald-700">{{ t('Variance total') }}</dt>
-                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.variance_total }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-emerald-700">{{ t('Matched') }}</dt>
-                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.matched_count }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-emerald-700">{{ t('Resolved') }}</dt>
-                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.resolved_count }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-emerald-700">{{ t('Adjustment total') }}</dt>
-                        <dd class="font-medium text-emerald-950">{{ settlement.close_snapshot.adjustment_total }}</dd>
-                    </div>
-                </dl>
-            </div>
-
-            <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 class="text-sm font-semibold text-slate-950">{{ t('Invoice imports') }}</h3>
-                <p class="mt-1 text-sm text-slate-600">{{ t('Re-import replaces the active invoice. Previous imports stay in the audit trail.') }}</p>
-                <ul class="mt-4 space-y-2 text-sm">
-                    <li v-for="item in invoice_imports" :key="item.id" class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 px-3 py-2">
-                        <span>
-                            {{ t('Import') }} #{{ item.sequence }}
-                            <span v-if="item.is_active" class="ms-2 rounded-full bg-cyan-50 px-2 py-0.5 text-xs font-medium text-cyan-800">{{ t('Active') }}</span>
-                        </span>
-                        <span class="text-xs text-slate-500">
-                            {{ item.row_count }} {{ t('rows') }} · {{ item.matched_count }} {{ t('matched') }} · {{ item.extra_count }} {{ t('extra') }} · {{ item.error_count }} {{ t('errors') }}
-                        </span>
-                    </li>
-                    <li v-if="invoice_imports.length === 0" class="text-slate-500">{{ t('No invoice imports yet.') }}</li>
-                </ul>
-            </div>
-
-            <div v-if="canMutate" class="grid gap-6 lg:grid-cols-2">
-                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h3 class="text-sm font-semibold text-slate-950">{{ t('Import supplier invoice') }}</h3>
-                    <p class="mt-1 text-sm text-slate-600">
-                        {{ t('Paste CSV or upload CSV/XLSX: booking_reference,amount') }}
+                    <p v-if="provider_api_wallets.fetched_at" class="text-xs text-cyan-800">
+                        {{ t('Fetched at') }}: {{ formatFetchedAt(provider_api_wallets.fetched_at) }}
                     </p>
-                    <form class="mt-4 space-y-3" @submit.prevent="importInvoice">
-                        <textarea
-                            v-model="invoiceForm.csv_text"
-                            rows="5"
-                            class="w-full rounded-xl border border-slate-300 px-3 py-2.5 font-mono text-sm"
-                            placeholder="BK-1001,531.00&#10;BK-1002,420.50"
-                        />
-                        <input
-                            type="file"
-                            accept=".csv,.txt,.xlsx,.xlsm"
-                            class="block w-full text-sm"
-                            @change="invoiceForm.invoice_file = $event.target.files[0]"
-                        >
-                        <p v-if="invoiceForm.errors.lines" class="text-xs text-rose-600">{{ invoiceForm.errors.lines }}</p>
+                </div>
+                <p v-if="provider_api_wallets.error" class="mt-3 text-sm text-rose-800">{{ provider_api_wallets.error }}</p>
+                <p
+                    v-else-if="provider_api_wallets.available && provider_api_wallets.wallet_count === 0"
+                    class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+                >
+                    {{ t('Connected to supplier portal. Atom returned 0 wallets for this tenant.') }}
+                </p>
+                <p v-else-if="provider_api_wallets.wallet_count === 0" class="mt-3 text-sm text-cyan-900">
+                    {{ t('No provider wallets returned by the API.') }}
+                </p>
+                <div v-else class="mt-3 flex flex-wrap gap-3">
+                    <div v-for="wallet in provider_api_wallets.wallets" :key="wallet.currency" class="rounded-xl border border-cyan-200 bg-white px-4 py-3">
+                        <p class="text-xs text-slate-500">{{ wallet.currency }}</p>
+                        <p class="text-lg font-semibold">{{ formatMoney(wallet.balance, wallet.currency) }}</p>
+                    </div>
+                    <p class="self-center text-xs text-cyan-800">
+                        {{ provider_api_wallets.wallet_count }} {{ provider_api_wallets.wallet_count === 1 ? t('wallet') : t('wallets') }}
+                    </p>
+                </div>
+            </div>
+
+            <div v-if="canMutate" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 class="text-base font-semibold text-slate-950">{{ t('Import invoice') }}</h3>
+                <p class="mt-1 text-sm text-slate-600">{{ t('Paste CSV or upload CSV/XLSX: booking_reference,amount') }}</p>
+                <form class="mt-4 space-y-3" @submit.prevent="importInvoice">
+                    <textarea
+                        v-model="invoiceForm.csv_text"
+                        rows="4"
+                        class="w-full rounded-xl border border-slate-300 px-3 py-2.5 font-mono text-sm"
+                        placeholder="BK-1001,531.00&#10;BK-1002,420.50"
+                    />
+                    <input type="file" accept=".csv,.txt,.xlsx,.xlsm" class="block w-full text-sm" @change="invoiceForm.invoice_file = $event.target.files[0]">
+                    <div class="flex gap-2">
                         <button type="submit" class="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-800" :disabled="invoiceForm.processing">
                             {{ t('Import & compare') }}
                         </button>
-                    </form>
-                </div>
-                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h3 class="text-sm font-semibold text-slate-950">{{ t('Attachments') }}</h3>
-                    <p class="mt-1 text-sm text-slate-600">{{ t('Store the provider invoice PDF, CSV, or Excel on this period.') }}</p>
-                    <form class="mt-4 space-y-3" @submit.prevent="uploadAttachment">
-                        <input
-                            type="file"
-                            accept=".csv,.txt,.xlsx,.xlsm,.pdf"
-                            class="block w-full text-sm"
-                            @change="attachmentForm.file = $event.target.files[0]"
-                        >
-                        <button type="submit" class="rounded-xl border border-slate-300 px-4 py-2 text-sm" :disabled="attachmentForm.processing">
-                            {{ t('Upload attachment') }}
+                        <button type="button" class="rounded-xl border border-slate-300 px-4 py-2 text-sm" @click="compare">
+                            {{ t('Re-compare') }}
                         </button>
-                    </form>
-                    <ul class="mt-4 space-y-2 text-sm">
-                        <li v-for="file in attachments" :key="file.id">
-                            <a
-                                :href="route('admin.settlements.attachments.download', [settlement.id, file.id])"
-                                class="text-cyan-700 hover:text-cyan-800"
-                            >
-                                {{ file.original_name }}
-                            </a>
-                            <span class="text-xs text-slate-500"> · {{ file.kind }}</span>
-                        </li>
-                        <li v-if="attachments.length === 0" class="text-slate-500">{{ t('No attachments yet.') }}</li>
-                    </ul>
-                </div>
+                    </div>
+                </form>
             </div>
-
-            <div v-else class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 class="text-sm font-semibold text-slate-950">{{ t('Attachments') }}</h3>
-                <ul class="mt-4 space-y-2 text-sm">
-                    <li v-for="file in attachments" :key="file.id">
-                        <a
-                            :href="route('admin.settlements.attachments.download', [settlement.id, file.id])"
-                            class="text-cyan-700 hover:text-cyan-800"
-                        >
-                            {{ file.original_name }}
-                        </a>
-                    </li>
-                </ul>
-            </div>
-
-            <form
-                v-if="can_reopen && settlement.status === 'closed'"
-                class="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm space-y-3"
-                @submit.prevent="reopenPeriod"
-            >
-                <h3 class="text-sm font-semibold text-amber-950">{{ t('Reopen period') }}</h3>
-                <textarea v-model="reopenForm.reason" rows="2" class="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm" />
-                <p v-if="reopenForm.errors.reason" class="text-xs text-rose-700">{{ reopenForm.errors.reason }}</p>
-                <button type="submit" class="rounded-xl bg-amber-700 px-4 py-2 text-sm font-medium text-white">{{ t('Reopen') }}</button>
-            </form>
-
-            <form class="flex gap-3" @submit.prevent="applyItemFilter">
-                <select v-model="filterForm.item_status" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                    <option value="">{{ t('All item statuses') }}</option>
-                    <option v-for="status in item_statuses" :key="status" :value="status">{{ formatStatus(status) }}</option>
-                </select>
-                <button type="submit" class="rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white">{{ t('Filter') }}</button>
-            </form>
 
             <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                <table class="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        <tr>
-                            <th class="px-4 py-3">{{ t('Booking') }}</th>
-                            <th class="px-4 py-3">{{ t('Cost') }}</th>
-                            <th class="px-4 py-3">{{ t('Wallet') }}</th>
-                            <th class="px-4 py-3">{{ t('Invoice') }}</th>
-                            <th class="px-4 py-3">{{ t('Difference') }}</th>
-                            <th class="px-4 py-3">{{ t('Status') }}</th>
-                            <th class="px-4 py-3">{{ t('Actions') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <tr v-for="item in items.data" :key="item.id" class="hover:bg-slate-50/80">
-                            <td class="px-4 py-3">
-                                <p class="font-medium text-slate-950">{{ item.booking_reference || '—' }}</p>
-                                <p class="text-xs text-slate-500">
-                                    <span v-if="item.order_id">Order #{{ item.order_id }} · {{ item.expected_cost_source }}</span>
-                                    <span v-else>{{ t('Invoice only') }}</span>
-                                </p>
-                            </td>
-                            <td class="px-4 py-3">{{ item.supplier_cost ?? '—' }}</td>
-                            <td class="px-4 py-3">{{ item.wallet_debit ?? '—' }}</td>
-                            <td class="px-4 py-3">{{ item.supplier_invoice_cost ?? '—' }}</td>
-                            <td class="px-4 py-3">{{ item.difference }}</td>
-                            <td class="px-4 py-3">
-                                <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-slate-700">
-                                    {{ formatStatus(item.status) }}
-                                </span>
-                                <p v-if="item.pending_approval_id" class="mt-1 text-xs text-amber-700">{{ t('Pending approval') }}</p>
-                            </td>
-                            <td class="px-4 py-3">
-                                <button
-                                    v-if="canMutate && item.needs_review && !item.pending_approval_id"
-                                    type="button"
-                                    class="text-xs font-medium text-cyan-700 hover:text-cyan-800"
-                                    @click="openResolve(item)"
-                                >
-                                    {{ t('Resolve') }}
-                                </button>
-                                <span v-else class="text-xs text-slate-400">—</span>
-                            </td>
-                        </tr>
-                        <tr v-if="items.data.length === 0">
-                            <td colspan="7" class="px-4 py-10 text-center text-slate-500">{{ t('No settlement items.') }}</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 class="text-base font-semibold text-slate-950">{{ t('Line items') }}</h3>
+                    <form class="flex gap-2" @submit.prevent="applyItemFilter">
+                        <select v-model="filterForm.item_status" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                            <option value="">{{ t('All item statuses') }}</option>
+                            <option v-for="status in item_statuses" :key="status" :value="status">
+                                {{ settlementItemStatusLabel(status) }}
+                            </option>
+                        </select>
+                        <button type="submit" class="rounded-xl bg-slate-950 px-3 py-2 text-sm font-medium text-white">{{ t('Filter') }}</button>
+                    </form>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-200 text-sm">
+                        <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            <tr>
+                                <th class="px-4 py-3">{{ t('Booking') }}</th>
+                                <th class="px-4 py-3">{{ t('Booke cost') }}</th>
+                                <th class="px-4 py-3">{{ t('Invoice amount') }}</th>
+                                <th class="px-4 py-3">{{ t('Difference') }}</th>
+                                <th class="px-4 py-3">{{ t('Status') }}</th>
+                                <th class="px-4 py-3">{{ t('Actions') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr v-for="item in items.data" :key="item.id" class="hover:bg-slate-50/80">
+                                <td class="px-4 py-3 font-medium">{{ item.booking_reference || '—' }}</td>
+                                <td class="px-4 py-3">{{ item.supplier_cost ?? item.wallet_debit ?? '—' }}</td>
+                                <td class="px-4 py-3">{{ item.supplier_invoice_cost ?? '—' }}</td>
+                                <td class="px-4 py-3">{{ item.difference }}</td>
+                                <td class="px-4 py-3">
+                                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                                        {{ settlementItemStatusLabel(item.status) }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <button
+                                        v-if="canMutate && item.needs_review && !item.pending_approval_id"
+                                        type="button"
+                                        class="text-xs font-medium text-cyan-700 hover:text-cyan-800"
+                                        @click="openResolve(item)"
+                                    >
+                                        {{ t('Resolve') }}
+                                    </button>
+                                    <span v-else class="text-xs text-slate-400">—</span>
+                                </td>
+                            </tr>
+                            <tr v-if="items.data.length === 0">
+                                <td colspan="6" class="px-4 py-10 text-center text-slate-500">{{ t('No settlement items.') }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <div v-if="resolvingId" class="rounded-3xl border border-cyan-200 bg-cyan-50 p-5 shadow-sm">
-                <h3 class="text-sm font-semibold text-cyan-950">{{ t('Resolve item') }} #{{ resolvingId }}</h3>
+                <h3 class="text-sm font-semibold text-cyan-950">{{ t('Resolve item') }}</h3>
                 <form class="mt-3 space-y-3" @submit.prevent="submitResolve">
-                    <select v-model="resolveForm.resolution" class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm">
-                        <option value="accept_variance">{{ t('Accept variance') }}</option>
-                        <option value="correct_data">{{ t('Correct data') }}</option>
-                    </select>
-                    <select v-model="resolveForm.reason" class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm">
-                        <option v-for="reason in reasonOptions" :key="reason.value" :value="reason.value">{{ formatStatus(reason.value) }}</option>
-                    </select>
+                    <div class="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            class="rounded-xl px-4 py-2 text-sm"
+                            :class="resolveForm.resolution === 'accept_variance' ? 'bg-cyan-700 text-white' : 'border border-cyan-200 bg-white text-cyan-950'"
+                            @click="resolveForm.resolution = 'accept_variance'"
+                        >
+                            {{ t('Accept difference') }}
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-xl px-4 py-2 text-sm"
+                            :class="resolveForm.resolution === 'correct_data' ? 'bg-cyan-700 text-white' : 'border border-cyan-200 bg-white text-cyan-950'"
+                            @click="resolveForm.resolution = 'correct_data'"
+                        >
+                            {{ t('Fix invoice line') }}
+                        </button>
+                    </div>
                     <input
                         v-if="resolveForm.resolution === 'accept_variance'"
                         v-model="resolveForm.amount"
@@ -429,21 +403,16 @@ const formatStatus = (status) => status.replaceAll('_', ' ');
                     <template v-if="resolveForm.resolution === 'correct_data'">
                         <input v-model="resolveForm.booking_reference" class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm" :placeholder="t('Booking reference')">
                         <input v-model="resolveForm.supplier_invoice_cost" type="number" step="0.01" class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm" :placeholder="t('Invoice amount')">
-                        <label class="flex items-center gap-2 text-sm text-cyan-950">
-                            <input v-model="resolveForm.drop_invoice_line" type="checkbox">
-                            {{ t('Drop unmatched invoice line') }}
-                        </label>
                     </template>
-                    <textarea
-                        v-model="resolveForm.resolution_note"
-                        rows="3"
-                        class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm"
-                        :placeholder="t('Explain how this variance was handled')"
-                    />
-                    <p v-if="resolveForm.errors.resolution" class="text-xs text-rose-700">{{ resolveForm.errors.resolution }}</p>
-                    <p v-if="resolveForm.errors.reason" class="text-xs text-rose-700">{{ resolveForm.errors.reason }}</p>
-                    <p v-if="resolveForm.errors.amount" class="text-xs text-rose-700">{{ resolveForm.errors.amount }}</p>
-                    <p v-if="resolveForm.errors.resolution_note" class="text-xs text-rose-700">{{ resolveForm.errors.resolution_note }}</p>
+                    <textarea v-model="resolveForm.resolution_note" rows="2" class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm" :placeholder="t('Explain how this variance was handled')" />
+                    <details>
+                        <summary class="cursor-pointer text-xs font-medium text-cyan-900">{{ t('More resolution options') }}</summary>
+                        <select v-model="resolveForm.reason" class="mt-2 w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm">
+                            <option v-for="reason in reasonOptions" :key="reason.value" :value="reason.value">
+                                {{ settlementItemStatusLabel(reason.value) }}
+                            </option>
+                        </select>
+                    </details>
                     <div class="flex gap-2">
                         <button type="submit" class="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-medium text-white">{{ t('Confirm resolve') }}</button>
                         <button type="button" class="rounded-xl border border-cyan-200 px-4 py-2 text-sm" @click="resolvingId = null">{{ t('Cancel') }}</button>
@@ -451,7 +420,54 @@ const formatStatus = (status) => status.replaceAll('_', ' ');
                 </form>
             </div>
 
-            <SystemTimeline :events="system_timeline" />
+            <details class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <summary class="cursor-pointer text-base font-semibold text-slate-950">{{ t('More details') }}</summary>
+                <div class="mt-4 space-y-6">
+                    <div v-if="settlement.close_snapshot" class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
+                        <h4 class="font-semibold text-emerald-950">{{ t('Close snapshot') }}</h4>
+                        <p class="mt-2 text-emerald-900">{{ settlement.close_snapshot.expected_total }} · {{ settlement.close_snapshot.invoice_total }} · {{ settlement.close_snapshot.variance_total }}</p>
+                    </div>
+
+                    <div>
+                        <h4 class="text-sm font-semibold">{{ t('Invoice history') }}</h4>
+                        <ul class="mt-2 space-y-1 text-sm text-slate-600">
+                            <li v-for="item in invoice_imports" :key="item.id">
+                                #{{ item.sequence }} · {{ item.row_count }} {{ t('rows') }}
+                                <span v-if="item.is_active" class="text-cyan-700">({{ t('Active') }})</span>
+                            </li>
+                            <li v-if="invoice_imports.length === 0">{{ t('No invoice imports yet.') }}</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 class="text-sm font-semibold">{{ t('Attachments') }}</h4>
+                        <ul class="mt-2 space-y-1 text-sm">
+                            <li v-for="file in attachments" :key="file.id">
+                                <a :href="route('admin.settlements.attachments.download', [settlement.id, file.id])" class="text-cyan-700 hover:text-cyan-800">
+                                    {{ file.original_name }}
+                                </a>
+                            </li>
+                            <li v-if="attachments.length === 0" class="text-slate-500">{{ t('No attachments yet.') }}</li>
+                        </ul>
+                        <form v-if="canMutate" class="mt-3 flex gap-2" @submit.prevent="uploadAttachment">
+                            <input type="file" accept=".csv,.txt,.xlsx,.xlsm,.pdf" class="text-sm" @change="attachmentForm.file = $event.target.files[0]">
+                            <button type="submit" class="rounded-xl border border-slate-300 px-3 py-1.5 text-sm" :disabled="attachmentForm.processing">
+                                {{ t('Upload attachment') }}
+                            </button>
+                        </form>
+                    </div>
+
+                    <form
+                        v-if="can_reopen && settlement.status === 'closed'"
+                        class="space-y-2"
+                        @submit.prevent="reopenPeriod"
+                    >
+                        <h4 class="text-sm font-semibold text-amber-950">{{ t('Reopen period') }}</h4>
+                        <textarea v-model="reopenForm.reason" rows="2" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                        <button type="submit" class="rounded-xl bg-amber-700 px-4 py-2 text-sm font-medium text-white">{{ t('Reopen') }}</button>
+                    </form>
+                </div>
+            </details>
         </section>
     </AdminLayout>
 </template>

@@ -18,4 +18,9 @@ return [
         'production',
         'sandbox',
     ],
+
+    'provider_balance' => [
+        'path' => env('PROVIDER_WALLET_BALANCE_PATH', '/agency/{tenant}/api/v1/wallet/balance'),
+        'tenant' => env('PROVIDER_AGENCY_TENANT'),
+    ],
 ];

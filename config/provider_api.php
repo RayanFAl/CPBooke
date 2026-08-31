@@ -26,9 +26,26 @@ return [
 
     'default_timeout' => (int) env('PROVIDER_API_DEFAULT_TIMEOUT', 30),
 
+    'base_url' => env('PROVIDER_API_BASE_URL'),
+
+    'access_token' => env('PROVIDER_API_TOKEN'),
+
+    'environment' => env('PROVIDER_API_ENVIRONMENT', 'production'),
+
+    'auth_type' => env('PROVIDER_API_AUTH_TYPE', 'bearer_token'),
+
     'connection_test_path' => env('PROVIDER_API_CONNECTION_TEST_PATH', '/'),
 
     'api_key_header' => env('PROVIDER_API_KEY_HEADER', 'X-API-Key'),
+
+    /*
+    | SSL verification for outbound provider HTTP (Windows/local PHP often needs a CA bundle).
+    | Auto-uses storage/certs/cacert.pem when present. Set PROVIDER_API_SSL_VERIFY=false
+    | only for local development as a last resort.
+    */
+    'ssl_verify' => env('PROVIDER_API_SSL_VERIFY'),
+
+    'ca_bundle' => env('PROVIDER_API_CA_BUNDLE', storage_path('certs/cacert.pem')),
 
     'endpoint_catalog' => [
         'flight.search' => ['service' => 'flight', 'method' => 'POST', 'path' => '/flights/search', 'label' => 'Search Flights'],
@@ -54,6 +71,7 @@ return [
         'esim.select' => ['service' => 'esim', 'method' => 'POST', 'path' => '/esim/select', 'label' => 'Select eSIM Package'],
         'esim.book' => ['service' => 'esim', 'method' => 'POST', 'path' => '/esim/book', 'label' => 'Book eSIM'],
         'esim.refund' => ['service' => 'esim', 'method' => 'POST', 'path' => '/orders/{order_id}/esim-items/{item_id}/refund', 'label' => 'Refund eSIM Item'],
+        'wallet.balance' => ['service' => 'system', 'method' => 'GET', 'path' => '/agency/{tenant}/api/v1/wallet/balance', 'label' => 'Provider Wallet Balance'],
         'provider.connection_test' => ['service' => 'system', 'method' => 'GET', 'path' => '/', 'label' => 'Provider Connection Test'],
         'sync.flight' => ['service' => 'flight', 'method' => 'POST', 'path' => '/api/v1/orders/sync-flight', 'label' => 'Sync Flight Order'],
         'sync.hotel' => ['service' => 'hotel', 'method' => 'POST', 'path' => '/api/v1/orders/sync-hotel', 'label' => 'Sync Hotel Order'],

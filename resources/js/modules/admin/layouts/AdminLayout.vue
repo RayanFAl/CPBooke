@@ -6,6 +6,7 @@ import AdminBreadcrumbs from '../components/AdminBreadcrumbs.vue';
 import AdminToastHost from '../components/AdminToastHost.vue';
 import AdminConfirmDialog from '../components/AdminConfirmDialog.vue';
 import AdminGlobalSearch from '../components/AdminGlobalSearch.vue';
+import AdminMobileAppHeaderLink from '../components/AdminMobileAppHeaderLink.vue';
 import AdminInfoTip from '../components/AdminInfoTip.vue';
 import { bindAdminNavigation } from '../composables/useAdminNavigation';
 import { useAdminLocale } from '../composables/useAdminLocale';
@@ -196,6 +197,7 @@ onMounted(() => {
                         </div>
 
                         <div class="flex shrink-0 items-center gap-3 text-sm">
+                            <AdminMobileAppHeaderLink />
                             <AdminGlobalSearch />
 
                             <button

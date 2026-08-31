@@ -105,13 +105,13 @@ export const pageHelpEntries = [
     },
     {
         match: 'admin.suppliers.show',
-        en: 'One provider: contract, services (flight, hotel, insurance, eSIM), API config, and integration status.',
-        ar: 'مزوّد واحد: العقد، الخدمات (طيران، فندق، تأمين، eSIM)، إعدادات الـ API، وحالة الربط.',
+        en: 'One provider: commercial terms, linked wallets, contacts, and contract notes.',
+        ar: 'مزوّد واحد: الشروط التجارية، المحافظ المرتبطة، جهات الاتصال، وملاحظات العقد.',
     },
     {
         match: 'admin.suppliers',
-        en: 'Travel suppliers such as BookNow. Enable which products they sell. This is not the Partners page for external API companies.',
-        ar: 'مزوّدو السفر مثل BookNow. فعّل المنتجات التي يبيعونها. هذه ليست صفحة الشركاء الخاصة بالشركات التقنية الخارجية.',
+        en: 'Travel supplier profiles: commission, settlement cycle, credit limits, and linked wallets.',
+        ar: 'ملفات مزوّدي السفر: العمولة، دورة التسوية، حدود الائتمان، والمحافظ المرتبطة.',
     },
     {
         match: 'admin.provider-wallets.create',

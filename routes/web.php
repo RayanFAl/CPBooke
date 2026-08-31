@@ -36,6 +36,13 @@ Route::prefix('app')->as('app.')->controller(AppDownloadController::class)->grou
 
 Route::redirect('/download', '/app');
 
+if (app()->environment('local') || config('app.debug')) {
+    Route::prefix('_dev/mail-preview')->as('dev.mail.')->controller(\App\Http\Controllers\Dev\MailPreviewController::class)->group(function (): void {
+        Route::get('/', 'index')->name('index');
+        Route::get('/render', 'show')->name('preview');
+    });
+}
+
 Route::get('/support/attachments/{message}', SupportAttachmentDownloadController::class)
     ->middleware(['signed', 'throttle:60,1'])
     ->whereNumber('message')

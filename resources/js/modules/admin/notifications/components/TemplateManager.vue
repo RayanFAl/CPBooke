@@ -447,21 +447,49 @@ watch([search, categoryFilter, statusFilter, channelFilter], ensureSelection);
                     </div>
 
                     <div v-else class="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-                        <aside class="rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white">
-                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ t('Mobile preview') }}</p>
-                            <div class="mt-4 rounded-3xl bg-white/10 p-4 backdrop-blur">
-                                <div class="flex items-center gap-2 text-xs text-slate-300">
-                                    <span class="inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                                    Booke · {{ pretty(selectedDraft.channels?.[0] ?? 'push') }}
+                        <div class="space-y-4">
+                            <aside class="rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white">
+                                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ t('Mobile preview') }}</p>
+                                <div class="mt-4 rounded-3xl bg-white/10 p-4 backdrop-blur">
+                                    <div class="flex items-center gap-2 text-xs text-slate-300">
+                                        <span class="inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                                        Booke · {{ pretty(selectedDraft.channels?.[0] ?? 'push') }}
+                                    </div>
+                                    <p class="mt-3 text-sm font-semibold" :dir="previewFor.rtl ? 'rtl' : 'ltr'">
+                                        {{ previewFor.title || t('Notification title') }}
+                                    </p>
+                                    <p class="mt-2 text-sm leading-6 text-slate-200" :dir="previewFor.rtl ? 'rtl' : 'ltr'">
+                                        {{ previewFor.body || t('Notification body preview will appear here.') }}
+                                    </p>
                                 </div>
-                                <p class="mt-3 text-sm font-semibold" :dir="previewFor.rtl ? 'rtl' : 'ltr'">
-                                    {{ previewFor.title || t('Notification title') }}
-                                </p>
-                                <p class="mt-2 text-sm leading-6 text-slate-200" :dir="previewFor.rtl ? 'rtl' : 'ltr'">
-                                    {{ previewFor.body || t('Notification body preview will appear here.') }}
-                                </p>
-                            </div>
-                        </aside>
+                            </aside>
+
+                            <aside
+                                v-if="selectedDraft.channels.includes('email')"
+                                class="overflow-hidden rounded-2xl border border-[#E8EDF3] bg-[#F8FAFD]"
+                            >
+                                <p class="px-4 pt-4 text-xs font-semibold uppercase tracking-[0.18em] text-[#7F8C8D]">{{ t('Email preview') }}</p>
+                                <div class="p-4">
+                                    <div class="overflow-hidden rounded-2xl border border-[#E8EDF3] bg-white shadow-sm">
+                                        <div class="h-1 bg-[#FFC107]" />
+                                        <div class="bg-gradient-to-r from-[#4A90E2] to-[#3469B2] px-4 py-4">
+                                            <p class="text-lg font-bold text-white">Booke</p>
+                                        </div>
+                                        <div class="space-y-3 bg-[#FCFDFE] p-4" :dir="previewFor.rtl ? 'rtl' : 'ltr'">
+                                            <p class="text-base font-semibold text-[#2C3E50]">
+                                                {{ previewFor.title || t('Notification title') }}
+                                            </p>
+                                            <p class="whitespace-pre-line text-sm leading-6 text-[#2C3E50]">
+                                                {{ previewFor.body || t('Notification body preview will appear here.') }}
+                                            </p>
+                                        </div>
+                                        <div class="border-t border-[#E8EDF3] bg-[#F8FAFD] p-4 text-xs leading-5 text-[#7F8C8D]" :dir="previewFor.rtl ? 'rtl' : 'ltr'">
+                                            <p>{{ previewFor.rtl ? 'هل تحتاج مساعدة؟ تواصل معنا على support@booke.ly' : 'Need help? Contact us at support@booke.ly' }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </aside>
+                        </div>
 
                         <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
                             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Sample data') }}</p>

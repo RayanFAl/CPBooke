@@ -136,8 +136,9 @@ const snapshotLine = (approval) => {
             </form>
 
             <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                <table class="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <div class="overflow-x-auto">
+                    <table class="admin-data-table min-w-full divide-y divide-slate-200 text-sm">
+                    <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                         <tr>
                             <th class="px-4 py-3">#</th>
                             <th class="px-4 py-3">{{ t('Type') }}</th>
@@ -205,6 +206,7 @@ const snapshotLine = (approval) => {
                         </tr>
                     </tbody>
                 </table>
+                </div>
             </div>
 
             <div

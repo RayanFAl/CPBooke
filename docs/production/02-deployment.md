@@ -80,7 +80,7 @@ server {
     ssl_certificate     /etc/letsencrypt/live/ops.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/ops.example.com/privkey.pem;
 
-    client_max_body_size 25M;
+    client_max_body_size 512M;
 
     location / {
         try_files $uri $uri/ /index.php?$query_string;
@@ -102,9 +102,9 @@ Obtain certificates with Certbot (`certbot --nginx`).
 ## 5. PHP-FPM
 
 - `pm.max_children` sized to RAM
-- `upload_max_filesize=25M`
-- `post_max_size=25M`
-- `memory_limit=256M`
+- `upload_max_filesize=512M`
+- `post_max_size=512M`
+- `memory_limit=512M`
 
 ## 6. Supervisor — queue workers
 

@@ -117,8 +117,9 @@ const slotsText = (summary) => {
             </form>
 
             <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                <table class="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                <div class="overflow-x-auto">
+                    <table class="admin-data-table min-w-full divide-y divide-slate-200 text-sm">
+                    <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                         <tr>
                             <th class="px-4 py-3">{{ t('When') }}</th>
                             <th class="px-4 py-3">{{ t('Message') }}</th>
@@ -176,6 +177,7 @@ const slotsText = (summary) => {
                         </tr>
                     </tbody>
                 </table>
+                </div>
             </div>
 
             <div v-if="logs.links?.length > 3" class="flex flex-wrap gap-2">

@@ -63,10 +63,11 @@ class MobileAppAdminTest extends TestCase
                 ->component('admin/mobile-app/pages/Index', false)
                 ->has('manifest')
                 ->has('apk_files')
+                ->has('upload_limits')
             );
     }
 
-    public function test_super_admin_can_upload_apk_and_update_release_settings(): void
+    public function test_super_admin_can_upload_apk(): void
     {
         $this->seed(RolesAndPermissionsSeeder::class);
 
@@ -83,31 +84,15 @@ class MobileAppAdminTest extends TestCase
 
         $this->assertFileExists($this->releasesDirectory.DIRECTORY_SEPARATOR.'booke-1.2.0+120.apk');
 
-        $this->actingAs($actor)
-            ->put(route('admin.mobile-app.release.update'), [
-                'version' => '1.2.0',
-                'version_code' => 120,
-                'apk' => 'booke-1.2.0+120.apk',
-                'force_update' => true,
-                'min_version_code' => 100,
-                'notes_ar' => 'إصلاحات',
-                'notes_en' => 'Fixes',
-            ])
-            ->assertRedirect(route('admin.mobile-app.index'))
-            ->assertSessionHas('success');
-
         $manifest = json_decode((string) File::get($this->releasesDirectory.DIRECTORY_SEPARATOR.'release.json'), true);
 
         $this->assertSame('1.2.0', $manifest['version']);
         $this->assertSame(120, $manifest['version_code']);
-        $this->assertTrue($manifest['force_update']);
-        $this->assertSame('Fixes', $manifest['notes']['en']);
+        $this->assertSame('booke-1.2.0+120.apk', $manifest['apk']);
 
         $this->getJson('/api/v1/app/update?version_code=100&locale=en')
             ->assertOk()
-            ->assertJsonPath('data.update_available', true)
-            ->assertJsonPath('data.force_update', true)
-            ->assertJsonPath('data.notes', 'Fixes');
+            ->assertJsonPath('data.update_available', true);
     }
 
     private function superAdmin(): User

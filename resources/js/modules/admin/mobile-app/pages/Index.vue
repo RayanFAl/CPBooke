@@ -2,10 +2,9 @@
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import AdminButton from '../../components/AdminButton.vue';
 import AdminInput from '../../components/AdminInput.vue';
-import AdminTextarea from '../../components/AdminTextarea.vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 import { useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     release: { type: Object, default: null },
@@ -15,8 +14,8 @@ const props = defineProps({
     download_file_url: { type: String, required: true },
     update_check_url: { type: String, required: true },
     upload_url: { type: String, required: true },
-    release_update_url: { type: String, required: true },
     expected_filename: { type: String, required: true },
+    upload_limits: { type: Object, required: true },
 });
 
 const { t, forwardArrow } = useAdminLocale();
@@ -31,29 +30,6 @@ const uploadForm = useForm({
     version_code: props.manifest.version_code ?? 1,
 });
 
-const releaseForm = useForm({
-    version: props.manifest.version ?? '1.0.0',
-    version_code: props.manifest.version_code ?? 1,
-    apk: props.manifest.apk ?? '',
-    force_update: Boolean(props.manifest.force_update),
-    min_version_code: props.manifest.min_version_code ?? '',
-    notes_ar: props.manifest.notes_ar ?? '',
-    notes_en: props.manifest.notes_en ?? '',
-});
-
-watch(
-    () => [uploadForm.version, uploadForm.version_code],
-    ([version, versionCode]) => {
-        if (!version || !versionCode) {
-            return;
-        }
-
-        releaseForm.version = version;
-        releaseForm.version_code = Number(versionCode);
-        releaseForm.apk = `booke-${version}+${Number(versionCode)}.apk`;
-    },
-);
-
 const expectedUploadFilename = computed(() => {
     if (!uploadForm.version || !uploadForm.version_code) {
         return props.expected_filename;
@@ -61,6 +37,12 @@ const expectedUploadFilename = computed(() => {
 
     return `booke-${uploadForm.version}+${Number(uploadForm.version_code)}.apk`;
 });
+
+const effectiveMaxBytes = computed(() => Number(props.upload_limits.effective_max_kb ?? 0) * 1024);
+const phpUploadTooLow = computed(() => !props.upload_limits.php_ready);
+const selectedApkTooLarge = computed(() => (
+    uploadForm.apk instanceof File && uploadForm.apk.size > effectiveMaxBytes.value
+));
 
 const formatBytes = (bytes) => {
     if (!bytes || Number(bytes) <= 0) {
@@ -84,6 +66,10 @@ const onApkSelected = (event) => {
 };
 
 const submitUpload = () => {
+    if (selectedApkTooLarge.value) {
+        return;
+    }
+
     uploadForm.post(props.upload_url, {
         forceFormData: true,
         preserveScroll: true,
@@ -95,34 +81,12 @@ const submitUpload = () => {
         },
     });
 };
-
-const submitRelease = () => {
-    releaseForm.transform((data) => ({
-        ...data,
-        version_code: Number(data.version_code),
-        min_version_code: data.min_version_code === '' || data.min_version_code === null
-            ? null
-            : Number(data.min_version_code),
-    })).put(props.release_update_url, {
-        preserveScroll: true,
-    });
-};
-
-const selectApkFile = (filename) => {
-    releaseForm.apk = filename;
-    const match = filename.match(/(\d+\.\d+\.\d+)\+(\d+)\.apk$/i);
-
-    if (match) {
-        releaseForm.version = match[1];
-        releaseForm.version_code = Number(match[2]);
-    }
-};
 </script>
 
 <template>
     <AdminLayout
         title="Mobile App"
-        description="Upload Android APK releases, manage release notes, and share public download links."
+        description="Upload Android APK releases and share public download links."
     >
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -180,6 +144,13 @@ const selectApkFile = (filename) => {
                         {{ t('Use semantic version and version_code. The file will be saved as') }}
                         <code class="rounded bg-slate-100 px-1.5 py-0.5 text-xs">{{ expectedUploadFilename }}</code>
                     </p>
+                    <p class="mt-2 text-xs text-slate-500">
+                        {{ t('Maximum upload size') }}: {{ formatBytes(effectiveMaxBytes) }}
+                        <span v-if="upload_limits.php_upload_max_label"> · PHP {{ upload_limits.php_upload_max_label }}</span>
+                    </p>
+                    <p v-if="phpUploadTooLow" class="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        {{ t('PHP upload limit is too low for large APK files. Restart with composer dev or run: php artisan mobile-app:import-apk path/to/app.apk') }}
+                    </p>
 
                     <form class="mt-5 space-y-4" @submit.prevent="submitUpload">
                         <AdminInput
@@ -206,76 +177,17 @@ const selectApkFile = (filename) => {
                                 @change="onApkSelected"
                             />
                             <p v-if="uploadForm.errors.apk" class="mt-1 text-sm text-rose-600">{{ uploadForm.errors.apk }}</p>
+                            <p v-else-if="selectedApkTooLarge" class="mt-1 text-sm text-rose-600">
+                                {{ t('The selected APK is too large.') }} ({{ formatBytes(uploadForm.apk?.size) }} / {{ formatBytes(effectiveMaxBytes) }})
+                            </p>
                         </label>
 
-                        <AdminButton type="submit" :disabled="uploadForm.processing">
+                        <AdminButton type="submit" :disabled="uploadForm.processing || selectedApkTooLarge || phpUploadTooLow">
                             {{ uploadForm.processing ? t('Uploading…') : t('Upload APK') }}
                         </AdminButton>
                     </form>
                 </section>
             </div>
-
-            <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 class="text-lg font-semibold text-slate-950">{{ t('Release settings') }}</h3>
-                <p class="mt-2 text-sm text-slate-600">
-                    {{ t('Edit release.json metadata used by the update dialog and public download page.') }}
-                </p>
-
-                <form class="mt-5 grid gap-4 md:grid-cols-2" @submit.prevent="submitRelease">
-                    <AdminInput
-                        v-model="releaseForm.version"
-                        :label="t('Version')"
-                        :error="releaseForm.errors.version"
-                    />
-                    <AdminInput
-                        v-model="releaseForm.version_code"
-                        :label="t('Version code')"
-                        type="number"
-                        min="1"
-                        :error="releaseForm.errors.version_code"
-                    />
-                    <div class="md:col-span-2">
-                        <AdminInput
-                            v-model="releaseForm.apk"
-                            :label="t('Active APK filename')"
-                            :error="releaseForm.errors.apk"
-                        />
-                    </div>
-                    <AdminInput
-                        v-model="releaseForm.min_version_code"
-                        :label="t('Minimum supported version code')"
-                        type="number"
-                        min="0"
-                        :error="releaseForm.errors.min_version_code"
-                    />
-                    <label class="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm">
-                        <input v-model="releaseForm.force_update" type="checkbox" class="rounded border-slate-300 text-slate-950 focus:ring-slate-400" />
-                        <span>{{ t('Force update') }}</span>
-                    </label>
-                    <div class="md:col-span-2">
-                        <AdminTextarea
-                            v-model="releaseForm.notes_en"
-                            :label="t('Release notes (English)')"
-                            rows="3"
-                            :error="releaseForm.errors.notes_en"
-                        />
-                    </div>
-                    <div class="md:col-span-2">
-                        <AdminTextarea
-                            v-model="releaseForm.notes_ar"
-                            :label="t('Release notes (Arabic)')"
-                            rows="3"
-                            :error="releaseForm.errors.notes_ar"
-                        />
-                    </div>
-
-                    <div class="md:col-span-2">
-                        <AdminButton type="submit" :disabled="releaseForm.processing">
-                            {{ releaseForm.processing ? t('Saving…') : t('Save release settings') }}
-                        </AdminButton>
-                    </div>
-                </form>
-            </section>
 
             <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h3 class="text-lg font-semibold text-slate-950">{{ t('Stored APK files') }}</h3>
@@ -284,14 +196,13 @@ const selectApkFile = (filename) => {
                 </p>
 
                 <div v-if="apk_files.length" class="mt-4 overflow-x-auto">
-                    <table class="min-w-full text-left text-sm">
+                    <table class="admin-data-table min-w-full text-sm">
                         <thead class="border-b border-slate-200 text-slate-500">
                             <tr>
                                 <th class="px-3 py-2 font-medium">{{ t('Filename') }}</th>
                                 <th class="px-3 py-2 font-medium">{{ t('Version') }}</th>
                                 <th class="px-3 py-2 font-medium">{{ t('Version code') }}</th>
                                 <th class="px-3 py-2 font-medium">{{ t('File size') }}</th>
-                                <th class="px-3 py-2 font-medium"></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -300,11 +211,6 @@ const selectApkFile = (filename) => {
                                 <td class="px-3 py-3">{{ file.version ?? '—' }}</td>
                                 <td class="px-3 py-3">{{ file.version_code ?? '—' }}</td>
                                 <td class="px-3 py-3">{{ formatBytes(file.size) }}</td>
-                                <td class="px-3 py-3">
-                                    <button type="button" class="text-cyan-700 hover:underline" @click="selectApkFile(file.filename)">
-                                        {{ t('Use in release settings') }}
-                                    </button>
-                                </td>
                             </tr>
                         </tbody>
                     </table>

@@ -3,14 +3,13 @@
 namespace App\Modules\Admin\Suppliers\Http\Controllers;
 
 use App\Models\Provider;
-use App\Models\ProviderApiConfig;
 use App\Modules\Admin\Suppliers\Http\Requests\StoreSupplierRequest;
 use App\Modules\Admin\Suppliers\Http\Requests\UpdateSupplierRequest;
 use App\Modules\Admin\Suppliers\Services\SupplierService;
-use App\Modules\Providers\Services\ProviderApiConfigPresenter;
-use App\Modules\Providers\Services\ProviderApiMonitoringService;
+use App\Modules\Settings\Services\SystemSettingsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -18,8 +17,7 @@ class SupplierController
 {
     public function __construct(
         private readonly SupplierService $supplierService,
-        private readonly ProviderApiConfigPresenter $apiConfigPresenter,
-        private readonly ProviderApiMonitoringService $providerApiMonitoringService,
+        private readonly SystemSettingsService $systemSettingsService,
     ) {
     }
 
@@ -44,17 +42,24 @@ class SupplierController
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
         return Inertia::render('admin/suppliers/pages/Form', [
             'supplier' => null,
             'options' => $this->options(),
+            'next' => $request->query('next') === 'wallet' ? 'wallet' : null,
         ]);
     }
 
     public function store(StoreSupplierRequest $request): RedirectResponse
     {
         $supplier = $this->supplierService->create($request->validated());
+
+        if ($request->input('next') === 'wallet' && $request->user()?->can('provider-wallets.manage')) {
+            return redirect()
+                ->route('admin.provider-wallets.create', ['provider_id' => $supplier->id])
+                ->with('success', 'Provider created. Now create a wallet for it.');
+        }
 
         return redirect()
             ->route('admin.suppliers.show', $supplier)
@@ -65,50 +70,13 @@ class SupplierController
     {
         $supplier->load([
             'wallets' => fn ($query) => $query->orderBy('currency')->orderBy('environment'),
-            'apiConfigs',
-            'providerServices',
         ]);
-
-        $canViewCredentials = $request->user()?->can('suppliers.credentials.view') ?? false;
-        $logFilters = [
-            'service' => $request->input('service', ''),
-            'endpoint' => $request->input('endpoint', ''),
-            'success' => $request->input('success', ''),
-            'status_code' => $request->input('status_code', ''),
-            'date_from' => $request->input('date_from', ''),
-            'date_to' => $request->input('date_to', ''),
-        ];
 
         return Inertia::render('admin/suppliers/pages/Show', [
             'supplier' => $this->serialize($supplier, true),
-            'api_configs' => $supplier->apiConfigs
-                ->map(fn ($config) => $this->apiConfigPresenter->serializeConfig($config, $canViewCredentials))
-                ->values()
-                ->all(),
-            'services' => $this->apiConfigPresenter->serializeServices($supplier),
-            'api_monitoring' => $this->providerApiMonitoringService->endpointMetrics($supplier, $logFilters),
-            'api_logs' => $this->providerApiMonitoringService->recentLogs($supplier, 60, $logFilters),
-            'api_log_filters' => $logFilters,
-            'api_options' => [
-                'environments' => ProviderApiConfig::environments(),
-                'auth_types' => ProviderApiConfig::authTypes(),
-                'statuses' => [
-                    ProviderApiConfig::STATUS_ACTIVE,
-                    ProviderApiConfig::STATUS_DISABLED,
-                ],
-                'endpoint_catalog' => collect(config('provider_api.endpoint_catalog', []))
-                    ->map(fn (array $meta, string $key): array => [
-                        'key' => $key,
-                        'label' => (string) ($meta['label'] ?? $key),
-                        'service' => (string) ($meta['service'] ?? 'unknown'),
-                    ])
-                    ->values()
-                    ->all(),
-            ],
             'can_manage' => $request->user()?->can('suppliers.manage') ?? false,
-            'can_manage_api_config' => $request->user()?->can('suppliers.api-config.manage') ?? false,
-            'can_view_credentials' => $canViewCredentials,
             'can_view_wallets' => $request->user()?->can('provider-wallets.view') ?? false,
+            'can_view_settlements' => $request->user()?->can('settlements.view') ?? false,
         ]);
     }
 
@@ -129,6 +97,19 @@ class SupplierController
             ->with('success', 'Supplier updated.');
     }
 
+    public function printProfile(Provider $supplier): View
+    {
+        $supplier->load([
+            'wallets' => fn ($query) => $query->orderBy('currency'),
+        ]);
+
+        return view('admin.suppliers.profile-print', [
+            'company' => $this->systemSettingsService->companyName(),
+            'generated_at' => now()->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+            'supplier' => $this->serialize($supplier, true),
+        ]);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -147,7 +128,6 @@ class SupplierController
             'contact_name' => $provider->contact_name,
             'contact_email' => $provider->contact_email,
             'contact_phone' => $provider->contact_phone,
-            'integration_status' => $provider->integration_status,
             'contract_starts_at' => optional($provider->contract_starts_at)?->toDateString(),
             'contract_ends_at' => optional($provider->contract_ends_at)?->toDateString(),
             'contract_notes' => $provider->contract_notes,
@@ -155,6 +135,7 @@ class SupplierController
             'website' => $provider->website,
             'wallets_count' => $provider->wallets_count ?? $provider->wallets()->count(),
             'updated_at' => optional($provider->updated_at)?->toIso8601String(),
+            'print_url' => route('admin.suppliers.print', $provider, absolute: false),
         ];
 
         if ($withWallets) {
@@ -180,7 +161,6 @@ class SupplierController
         return [
             'statuses' => [Provider::STATUS_ACTIVE, Provider::STATUS_INACTIVE],
             'settlement_cycles' => Provider::settlementCycles(),
-            'integration_statuses' => Provider::integrationStatuses(),
         ];
     }
 }

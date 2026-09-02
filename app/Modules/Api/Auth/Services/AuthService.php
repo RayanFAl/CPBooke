@@ -88,6 +88,26 @@ class AuthService
     }
 
     /**
+     * Issue a session for an already-resolved customer (e.g. Google sign-in).
+     *
+     * Skips password and 2FA checks because the identity provider verified the user.
+     *
+     * @throws ValidationException
+     */
+    public function loginViaProvider(User $user, string $deviceName, bool $rememberMe, ?string $ip = null): AuthResultDTO
+    {
+        if (! $user->is_active) {
+            throw ValidationException::withMessages([
+                'id_token' => ['This account has been deactivated.'],
+            ]);
+        }
+
+        $this->ensureCustomerAccount($user, 'id_token');
+
+        return $this->completeLogin($user, $deviceName, $rememberMe, $ip);
+    }
+
+    /**
      * Complete login after a valid 2FA code.
      *
      * @throws ValidationException
@@ -105,7 +125,7 @@ class AuthService
     }
 
     /**
-     * Authenticate an administrative API user and return a token pair.
+     * Complete login after a valid 2FA code.
      *
      * @throws ValidationException
      */
@@ -261,14 +281,14 @@ class AuthService
      *
      * @throws ValidationException
      */
-    private function ensureCustomerAccount(User $user): void
+    private function ensureCustomerAccount(User $user, string $field = 'login'): void
     {
         if ($user->isCustomerAccount()) {
             return;
         }
 
         throw ValidationException::withMessages([
-            'login' => ['Administrative accounts cannot access the mobile application.'],
+            $field => ['Administrative accounts cannot access the mobile application.'],
         ]);
     }
 

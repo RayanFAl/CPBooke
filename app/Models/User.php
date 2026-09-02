@@ -20,6 +20,7 @@ use Laravel\Sanctum\HasApiTokens;
     'name',
     'full_name',
     'email',
+    'google_id',
     'phone',
     'country',
     'preferred_locale',

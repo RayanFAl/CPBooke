@@ -13,6 +13,9 @@ Route::prefix('auth')
         Route::post('/login', 'login')
             ->middleware('throttle:10,1')
             ->name('login');
+        Route::post('/google', 'google')
+            ->middleware('throttle:10,1')
+            ->name('google');
         Route::post('/refresh', 'refresh')
             ->middleware('throttle:30,1')
             ->name('refresh');

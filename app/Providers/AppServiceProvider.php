@@ -2,7 +2,8 @@
 
 namespace App\Providers;
 
-use App\Models\Favorite;
+use App\Modules\Api\Auth\Contracts\GoogleIdTokenVerifierInterface;
+use App\Modules\Api\Auth\Services\GoogleIdTokenVerifier;
 use App\Models\FinancialTransaction;
 use App\Models\HotelReview;
 use App\Models\LinkedAccount;
@@ -45,6 +46,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(GoogleIdTokenVerifierInterface::class, fn (): GoogleIdTokenVerifier => GoogleIdTokenVerifier::make());
+
         $this->app->singleton(PricingSnapshotFactory::class);
         $this->app->singleton(PricingVersionService::class);
         $this->app->singleton(LoyaltyPricingProvider::class);

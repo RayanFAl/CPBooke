@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Api\Auth\Http\Requests\ChangePasswordRequest;
 use App\Modules\Api\Auth\Http\Requests\ConfirmTwoFactorRequest;
 use App\Modules\Api\Auth\Http\Requests\DisableTwoFactorRequest;
-use App\Modules\Api\Auth\Http\Requests\ForgotPasswordRequest;
+use App\Modules\Api\Auth\Http\Requests\GoogleAuthRequest;
 use App\Modules\Api\Auth\Http\Requests\LoginRequest;
 use App\Modules\Api\Auth\Http\Requests\RefreshTokenRequest;
 use App\Modules\Api\Auth\Http\Requests\RegisterRequest;
@@ -14,6 +14,7 @@ use App\Modules\Api\Auth\Http\Requests\ResetPasswordRequest;
 use App\Modules\Api\Auth\Http\Requests\VerifyResetOtpRequest;
 use App\Modules\Api\Auth\Http\Requests\VerifyTwoFactorRequest;
 use App\Modules\Api\Auth\Services\AuthService;
+use App\Modules\Api\Auth\Services\GoogleAuthService;
 use App\Modules\Api\Auth\Services\PasswordResetService;
 use App\Modules\Api\Auth\Services\TwoFactorService;
 use App\Modules\Api\DTO\AuthResultDTO;
@@ -27,6 +28,7 @@ class AuthController extends Controller
 {
     public function __construct(
         private readonly AuthService $authService,
+        private readonly GoogleAuthService $googleAuthService,
         private readonly PasswordResetService $passwordResetService,
         private readonly TwoFactorService $twoFactorService,
     ) {
@@ -55,6 +57,16 @@ class AuthController extends Controller
 
         return ApiResponse::success(
             new AuthUserResource($result),
+            'Login completed successfully.',
+        );
+    }
+
+    public function google(GoogleAuthRequest $request): JsonResponse
+    {
+        return ApiResponse::success(
+            new AuthUserResource(
+                $this->googleAuthService->authenticate($request->toDto(), $request->ip()),
+            ),
             'Login completed successfully.',
         );
     }

@@ -35,6 +35,24 @@ return [
         ],
     ],
 
+    /*
+    | Google Sign-In (mobile app → POST /api/v1/auth/google)
+    |
+    | GOOGLE_CLIENT_ID must be the **Web** OAuth client ID (used as ID token `aud`).
+    | Do NOT set the Android client ID here — `azp` in the token stays Android and is
+    | not validated. The endpoint verifies the **id_token** JWT, not an access token.
+    |
+    | Local Windows/PHP: ensure storage/certs/cacert.pem exists so the server can fetch
+    | https://www.googleapis.com/oauth2/v3/certs (no internet/firewall → 401).
+    */
+    'google' => [
+        'client_id' => env(
+            'GOOGLE_CLIENT_ID',
+            '769318459-qk6rtuti9liddd0csfppjh99h24i50r9.apps.googleusercontent.com',
+        ),
+        'ca_bundle' => env('GOOGLE_CA_BUNDLE', storage_path('certs/cacert.pem')),
+    ],
+
     'notifications' => [
         'fcm_server_key' => env('FCM_SERVER_KEY'),
         'fcm_sender_id' => env('FCM_SENDER_ID'),

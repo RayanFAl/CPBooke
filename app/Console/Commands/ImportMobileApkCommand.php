@@ -11,7 +11,7 @@ class ImportMobileApkCommand extends Command
 {
     protected $signature = 'mobile-app:import-apk
                             {path : Absolute or relative path to the APK file}
-                            {--version= : Semantic version like 1.0.0}
+                            {--apk-version= : Semantic version like 1.0.0 (cannot use --version; that flag is reserved by Artisan)}
                             {--version-code= : Integer version code like 1}';
 
     protected $description = 'Import a local APK into storage/app/releases (useful when web upload hits PHP size limits)';
@@ -29,7 +29,7 @@ class ImportMobileApkCommand extends Command
         $filename = basename($path);
         [$parsedVersion, $parsedVersionCode] = $this->parseVersionFromFilename($filename);
 
-        $version = (string) ($this->option('version') ?: $parsedVersion ?: config('mobile_app.version', '1.0.0'));
+        $version = (string) ($this->option('apk-version') ?: $parsedVersion ?: config('mobile_app.version', '1.0.0'));
         $versionCode = (int) ($this->option('version-code') ?: $parsedVersionCode ?: config('mobile_app.version_code', 1));
 
         if (! preg_match('/^\d+\.\d+\.\d+$/', $version)) {

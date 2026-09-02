@@ -95,6 +95,26 @@ class MobileAppAdminTest extends TestCase
             ->assertJsonPath('data.update_available', true);
     }
 
+    public function test_import_apk_command_uses_apk_version_option(): void
+    {
+        $source = $this->releasesDirectory.DIRECTORY_SEPARATOR.'source.apk';
+        File::put($source, 'apk-bytes');
+
+        $this->artisan('mobile-app:import-apk', [
+            'path' => $source,
+            '--apk-version' => '1.0.0',
+            '--version-code' => 1,
+        ])->assertSuccessful();
+
+        $this->assertFileExists($this->releasesDirectory.DIRECTORY_SEPARATOR.'booke-1.0.0+1.apk');
+
+        $manifest = json_decode((string) File::get($this->releasesDirectory.DIRECTORY_SEPARATOR.'release.json'), true);
+
+        $this->assertSame('1.0.0', $manifest['version']);
+        $this->assertSame(1, $manifest['version_code']);
+        $this->assertSame('booke-1.0.0+1.apk', $manifest['apk']);
+    }
+
     private function superAdmin(): User
     {
         $actor = User::factory()->create([

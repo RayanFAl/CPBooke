@@ -28,7 +28,6 @@ class AuthController extends Controller
 {
     public function __construct(
         private readonly AuthService $authService,
-        private readonly GoogleAuthService $googleAuthService,
         private readonly PasswordResetService $passwordResetService,
         private readonly TwoFactorService $twoFactorService,
     ) {
@@ -61,11 +60,11 @@ class AuthController extends Controller
         );
     }
 
-    public function google(GoogleAuthRequest $request): JsonResponse
+    public function google(GoogleAuthRequest $request, GoogleAuthService $googleAuthService): JsonResponse
     {
         return ApiResponse::success(
             new AuthUserResource(
-                $this->googleAuthService->authenticate($request->toDto(), $request->ip()),
+                $googleAuthService->authenticate($request->toDto(), $request->ip()),
             ),
             'Login completed successfully.',
         );

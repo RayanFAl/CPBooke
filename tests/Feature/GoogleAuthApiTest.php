@@ -24,6 +24,32 @@ class GoogleAuthApiTest extends TestCase
         $this->app->instance(GoogleIdTokenVerifierInterface::class, $verifier);
     }
 
+    public function test_email_login_does_not_construct_google_verifier(): void
+    {
+        $this->app->singleton(GoogleIdTokenVerifierInterface::class, function (): never {
+            throw new HttpException(
+                500,
+                'Google sign-in requires phpseclib/phpseclib. Run: composer require phpseclib/phpseclib:^3.0',
+            );
+        });
+
+        User::factory()->create([
+            'email' => 'customer@example.com',
+            'password' => 'Password123!',
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $this->postJson('/api/v1/auth/login', [
+            'login' => 'customer@example.com',
+            'password' => 'Password123!',
+            'device_name' => 'mobile_app',
+        ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.email', 'customer@example.com');
+    }
+
     public function test_google_auth_creates_customer_and_returns_token_pair(): void
     {
         $this->mockGoogleToken([

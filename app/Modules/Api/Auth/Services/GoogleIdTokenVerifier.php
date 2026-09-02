@@ -18,13 +18,6 @@ class GoogleIdTokenVerifier implements GoogleIdTokenVerifierInterface
 
     public static function make(): self
     {
-        if (! class_exists(\phpseclib3\Crypt\RSA::class)) {
-            throw new HttpException(
-                500,
-                'Google sign-in requires phpseclib/phpseclib. Run: composer require phpseclib/phpseclib:^3.0',
-            );
-        }
-
         self::ensureSslCertificates();
 
         $cacert = self::cacertPath();
@@ -41,6 +34,13 @@ class GoogleIdTokenVerifier implements GoogleIdTokenVerifierInterface
      */
     public function verify(string $idToken): array
     {
+        if (! class_exists(\phpseclib3\Crypt\RSA::class)) {
+            throw new HttpException(
+                500,
+                'Google sign-in requires phpseclib/phpseclib. Run: composer require phpseclib/phpseclib:^3.0',
+            );
+        }
+
         $clientId = (string) config('services.google.client_id');
 
         if ($clientId === '') {

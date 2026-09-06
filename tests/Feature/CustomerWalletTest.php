@@ -5,9 +5,13 @@ namespace Tests\Feature;
 use App\Exceptions\InsufficientCustomerWalletBalanceException;
 use App\Models\CustomerWallet;
 use App\Models\CustomerWalletTransaction;
+use App\Models\NotificationLog;
 use App\Models\Order;
 use App\Models\User;
 use App\Modules\CustomerWallets\Services\CustomerWalletService;
+use App\Modules\Notifications\Events\PassengerActionDue;
+use App\Modules\Notifications\Services\NotificationService;
+use App\Modules\Notifications\Support\NotificationChannels;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -105,6 +109,49 @@ class CustomerWalletTest extends TestCase
             'success',
             'Ahmed added 500.00 LYD to Customer Wallet. Before: 200.00 LYD. Added: +500.00 LYD. After: 700.00 LYD.',
         );
+    }
+
+    public function test_wallet_topup_notification_runs_synchronously_without_queue_worker(): void
+    {
+        $customer = $this->makeCustomer();
+        $customer->notificationDevices()->create([
+            'channel' => NotificationChannels::PUSH,
+            'platform' => 'android',
+            'device_token' => 'wallet-fcm-token-001',
+            'is_active' => true,
+        ]);
+
+        app(NotificationService::class)->dispatchForEvent(new PassengerActionDue(
+            $customer,
+            'WALLET_TOPUP_SUCCESS',
+            [
+                'amount' => '100.00',
+                'currency' => 'LYD',
+                'deep_link' => '/wallet',
+                'balance' => '100.00',
+            ],
+            'wallet_transaction',
+            1,
+        ));
+
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $customer->id,
+            'template_code' => 'WALLET_TOPUP_SUCCESS',
+        ]);
+
+        $this->assertDatabaseHas('notification_logs', [
+            'user_id' => $customer->id,
+            'template_code' => 'WALLET_TOPUP_SUCCESS',
+            'channel' => NotificationChannels::IN_APP,
+            'status' => NotificationLog::STATUS_SENT,
+        ]);
+
+        $this->assertDatabaseHas('notification_logs', [
+            'user_id' => $customer->id,
+            'template_code' => 'WALLET_TOPUP_SUCCESS',
+            'channel' => NotificationChannels::PUSH,
+            'status' => NotificationLog::STATUS_SENT,
+        ]);
     }
 
     public function test_admin_can_print_wallet_receipt_and_statement(): void

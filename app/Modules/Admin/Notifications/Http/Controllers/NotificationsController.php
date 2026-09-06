@@ -9,6 +9,8 @@ use App\Models\UserNotification;
 use App\Modules\Admin\Notifications\Http\Requests\SendTestPushRequest;
 use App\Modules\Admin\Notifications\Http\Requests\SendTestTemplateRequest;
 use App\Modules\Admin\Notifications\Http\Requests\UpdateNotificationTemplateRequest;
+use App\Modules\Admin\Notifications\Http\Requests\UploadFirebaseCredentialsRequest;
+use App\Modules\Notifications\Services\FcmHttpV1Client;
 use App\Modules\Notifications\Services\NotificationChannelManager;
 use App\Modules\Notifications\Services\NotificationService;
 use App\Modules\Notifications\Services\NotificationTemplateSyncService;
@@ -21,6 +23,7 @@ use App\Modules\Notifications\Support\WhatsAppSandboxInbox;
 use App\Support\Rbac\RbacAuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
@@ -32,6 +35,7 @@ class NotificationsController
         private readonly NotificationService $notificationService,
         private readonly NotificationChannelManager $channelManager,
         private readonly NotificationTemplateSyncService $templateSyncService,
+        private readonly FcmHttpV1Client $fcmHttpV1Client,
         private readonly RbacAuditLogger $rbacAuditLogger,
     ) {}
 
@@ -58,8 +62,10 @@ class NotificationsController
                     'sample_variables' => NotificationTemplateSamples::defaults(),
                     'available_channels' => NotificationChannels::all(),
                     'push_targets' => $this->pushTargets(),
+                    'push_audience_count' => $this->pushAudienceCount(),
                     'test_targets' => $this->testTargets(),
                     'whatsapp_sandbox' => app(WhatsAppSandboxInbox::class)->all(),
+                    'firebase' => $this->firebaseStatus(),
                 ],
             ]);
         }
@@ -102,8 +108,10 @@ class NotificationsController
                 'sample_variables' => NotificationTemplateSamples::defaults(),
                 'available_channels' => NotificationChannels::all(),
                 'push_targets' => $this->pushTargets(),
+                'push_audience_count' => $this->pushAudienceCount(),
                 'test_targets' => $this->testTargets(),
                 'whatsapp_sandbox' => app(WhatsAppSandboxInbox::class)->all(),
+                'firebase' => $this->firebaseStatus(),
             ],
         ]);
     }
@@ -128,16 +136,279 @@ class NotificationsController
             ->with('success', "Templates synced — created {$result['created']}, existing {$result['existing']}, Arabic seeded {$result['translations_seeded']}, metadata updated {$result['metadata_updated']}.");
     }
 
+    public function uploadFirebaseCredentials(UploadFirebaseCredentialsRequest $request): RedirectResponse
+    {
+        Gate::authorize('notifications.manage-templates');
+
+        $file = $request->file('credentials');
+        $raw = (string) file_get_contents($file->getRealPath());
+        /** @var array<string, mixed>|null $payload */
+        $payload = json_decode($raw, true);
+
+        if (! is_array($payload)) {
+            return redirect()
+                ->route('admin.notifications.index', ['tab' => 'status', 'setup' => 'firebase'])
+                ->with('error', 'Firebase file must be valid JSON.');
+        }
+
+        $required = ['type', 'project_id', 'private_key', 'client_email'];
+        foreach ($required as $key) {
+            if (! filled($payload[$key] ?? null)) {
+                return redirect()
+                    ->route('admin.notifications.index', ['tab' => 'status', 'setup' => 'firebase'])
+                    ->with('error', "Firebase JSON is missing \"{$key}\".");
+            }
+        }
+
+        if (($payload['type'] ?? '') !== 'service_account') {
+            return redirect()
+                ->route('admin.notifications.index', ['tab' => 'status', 'setup' => 'firebase'])
+                ->with('error', 'Firebase JSON type must be service_account.');
+        }
+
+        $targetPath = $this->firebaseCredentialsTargetPath();
+        File::ensureDirectoryExists(dirname($targetPath));
+        File::put($targetPath, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL);
+
+        $this->rbacAuditLogger->log(
+            'notifications.firebase_credentials.uploaded',
+            'notifications.manage-templates',
+            auth()->user(),
+            'firebase_credentials',
+            null,
+            [
+                'project_id' => (string) $payload['project_id'],
+                'client_email' => (string) $payload['client_email'],
+            ],
+        );
+
+        return redirect()
+            ->route('admin.notifications.index', ['tab' => 'status', 'setup' => 'firebase'])
+            ->with('success', 'Firebase credentials saved. Push is ready.');
+    }
+
+    public function testFirebase(): RedirectResponse
+    {
+        Gate::authorize('notifications.view');
+
+        $result = $this->fcmHttpV1Client->verifyConnection();
+
+        $this->rbacAuditLogger->log(
+            'notifications.firebase_credentials.tested',
+            'notifications.view',
+            auth()->user(),
+            'firebase_credentials',
+            null,
+            [
+                'ok' => $result['ok'],
+                'project_id' => $result['project_id'] ?? null,
+                'reason' => $result['reason'] ?? null,
+            ],
+        );
+
+        if (($result['ok'] ?? false) === true) {
+            $projectId = (string) ($result['project_id'] ?? '');
+
+            return redirect()
+                ->route('admin.notifications.index', ['tab' => 'status', 'setup' => 'firebase'])
+                ->with('success', $projectId !== ''
+                    ? "Firebase works. Project: {$projectId}."
+                    : 'Firebase works.');
+        }
+
+        $reason = (string) ($result['reason'] ?? 'unknown');
+        $message = match ($reason) {
+            'missing_credentials' => 'Firebase file is missing. Upload it first.',
+            default => "Firebase test failed: {$reason}",
+        };
+
+        return redirect()
+            ->route('admin.notifications.index', ['tab' => 'status', 'setup' => 'firebase'])
+            ->with('error', $message);
+    }
+
+    public function disconnectFirebase(): RedirectResponse
+    {
+        Gate::authorize('notifications.manage-templates');
+
+        $targetPath = $this->firebaseCredentialsTargetPath();
+
+        if (! is_file($targetPath)) {
+            return redirect()
+                ->route('admin.notifications.index', ['tab' => 'status', 'setup' => 'firebase'])
+                ->with('error', 'No Firebase file to hide.');
+        }
+
+        $hiddenPath = $this->firebaseHiddenCredentialsPath();
+        File::ensureDirectoryExists(dirname($hiddenPath));
+
+        if (is_file($hiddenPath)) {
+            File::delete($hiddenPath);
+        }
+
+        File::move($targetPath, $hiddenPath);
+
+        $this->rbacAuditLogger->log(
+            'notifications.firebase_credentials.disconnected',
+            'notifications.manage-templates',
+            auth()->user(),
+            'firebase_credentials',
+            null,
+            ['hidden' => true],
+        );
+
+        return redirect()
+            ->route('admin.notifications.index', ['tab' => 'status', 'setup' => 'firebase'])
+            ->with('success', 'Firebase disconnected. Upload the file again to reconnect.');
+    }
+
+    public function restoreFirebase(): RedirectResponse
+    {
+        Gate::authorize('notifications.manage-templates');
+
+        $hiddenPath = $this->firebaseHiddenCredentialsPath();
+        $targetPath = $this->firebaseCredentialsTargetPath();
+
+        if (! is_file($hiddenPath)) {
+            return redirect()
+                ->route('admin.notifications.index', ['tab' => 'status', 'setup' => 'firebase'])
+                ->with('error', 'No hidden Firebase file to restore.');
+        }
+
+        File::ensureDirectoryExists(dirname($targetPath));
+
+        if (is_file($targetPath)) {
+            File::delete($targetPath);
+        }
+
+        File::move($hiddenPath, $targetPath);
+
+        $this->rbacAuditLogger->log(
+            'notifications.firebase_credentials.restored',
+            'notifications.manage-templates',
+            auth()->user(),
+            'firebase_credentials',
+            null,
+            ['restored' => true],
+        );
+
+        return redirect()
+            ->route('admin.notifications.index', ['tab' => 'status', 'setup' => 'firebase'])
+            ->with('success', 'Previous Firebase file restored.');
+    }
+
+    /**
+     * Safe public status for the admin UI — never expose private_key.
+     *
+     * @return array{configured: bool, project_id: string|null, client_email: string|null, path: string, has_backup: bool}
+     */
+    private function firebaseStatus(): array
+    {
+        $path = $this->fcmHttpV1Client->credentialsPath();
+        $target = $this->firebaseCredentialsTargetPath();
+        $hasBackup = is_file($this->firebaseHiddenCredentialsPath());
+
+        if ($path === null) {
+            return [
+                'configured' => false,
+                'project_id' => null,
+                'client_email' => null,
+                'path' => $this->displayPath($target),
+                'has_backup' => $hasBackup,
+            ];
+        }
+
+        /** @var array<string, mixed> $json */
+        $json = json_decode((string) file_get_contents($path), true) ?: [];
+        $email = trim((string) ($json['client_email'] ?? ''));
+
+        return [
+            'configured' => true,
+            'project_id' => filled($json['project_id'] ?? null) ? (string) $json['project_id'] : null,
+            'client_email' => $email !== '' ? $this->maskEmail($email) : null,
+            'path' => $this->displayPath($path),
+            'has_backup' => $hasBackup,
+        ];
+    }
+
+    private function firebaseCredentialsTargetPath(): string
+    {
+        $configured = trim((string) config('services.notifications.firebase_credentials'));
+
+        if ($configured === '') {
+            return storage_path('app/firebase/firebase_credentials.json');
+        }
+
+        if (str_starts_with($configured, '/') || (bool) preg_match('/^[A-Za-z]:[\\\\\\/]/', $configured)) {
+            return $configured;
+        }
+
+        return base_path($configured);
+    }
+
+    private function firebaseHiddenCredentialsPath(): string
+    {
+        return $this->firebaseCredentialsTargetPath().'.hidden';
+    }
+
+    private function displayPath(string $absolutePath): string
+    {
+        $base = str_replace('\\', '/', base_path());
+        $path = str_replace('\\', '/', $absolutePath);
+
+        if (str_starts_with($path, $base.'/')) {
+            return substr($path, strlen($base) + 1);
+        }
+
+        return 'storage/app/firebase/firebase_credentials.json';
+    }
+
+    private function maskEmail(string $email): string
+    {
+        [$local, $domain] = array_pad(explode('@', $email, 2), 2, '');
+
+        if ($domain === '') {
+            return '***';
+        }
+
+        $prefix = substr($local, 0, min(3, strlen($local)));
+
+        return $prefix.'***@'.$domain;
+    }
+
     public function sendTestPush(SendTestPushRequest $request): RedirectResponse
     {
         Gate::authorize('notifications.view');
 
-        $user = User::query()->findOrFail((int) $request->validated('user_id'));
+        $audience = (string) $request->validated('user_id');
+        $title = $request->validated('title');
+        $body = $request->validated('body');
+
+        if ($audience === 'all') {
+            $summary = $this->notificationService->sendTestPushToAllWithDevices($title, $body);
+
+            $this->rbacAuditLogger->log(
+                'notifications.push_test.broadcast',
+                'notifications.view',
+                auth()->user(),
+                'user',
+                null,
+                $summary,
+            );
+
+            $message = "Custom push sent to {$summary['recipients']} users with devices (ok: {$summary['delivered']}, failed: {$summary['failed']}).";
+
+            return redirect()
+                ->route('admin.notifications.index', ['tab' => 'send'])
+                ->with($summary['recipients'] > 0 && $summary['failed'] === $summary['recipients'] ? 'error' : 'success', $message);
+        }
+
+        $user = User::query()->findOrFail((int) $audience);
 
         $result = $this->notificationService->sendTestPush(
             $user,
-            $request->validated('title'),
-            $request->validated('body'),
+            $title,
+            $body,
         );
 
         $push = is_array($result['push'] ?? null) ? $result['push'] : [];
@@ -167,7 +438,7 @@ class NotificationsController
                 .'.';
 
         return redirect()
-            ->route('admin.notifications.index', ['tab' => 'tools'])
+            ->route('admin.notifications.index', ['tab' => 'send'])
             ->with($delivered ? 'success' : 'error', $message);
     }
 
@@ -226,7 +497,7 @@ class NotificationsController
         }
 
         return redirect()
-            ->route('admin.notifications.index', ['tab' => 'tools'])
+            ->route('admin.notifications.index', ['tab' => 'send'])
             ->with('success', "Test sent to {$user->email}: {$label} ({$via}). Check Logs, and Tools for the WhatsApp sandbox.");
     }
 
@@ -297,6 +568,19 @@ class NotificationsController
             ])
             ->values()
             ->all();
+    }
+
+    private function pushAudienceCount(): int
+    {
+        if (! Schema::hasTable('user_notification_devices')) {
+            return 0;
+        }
+
+        return User::query()
+            ->whereHas('notificationDevices', function ($query): void {
+                $query->where('is_active', true);
+            })
+            ->count();
     }
 
     /**

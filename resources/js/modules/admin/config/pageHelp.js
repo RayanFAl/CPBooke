@@ -205,8 +205,8 @@ export const pageHelpEntries = [
     },
     {
         match: 'admin.notifications',
-        en: 'Push, SMS, and email: templates, failed deliveries, and channel health. Retry a failed send from here.',
-        ar: 'الإشعارات (دفع، SMS، بريد): القوالب، الإرسالات الفاشلة، وصحة القنوات. أعد إرسال الفاشل من هنا.',
+        en: 'Send a message, check if it arrived, or edit the saved texts.',
+        ar: 'أرسل رسالة، راجع هل وصلت، أو عدّل النصوص المحفوظة.',
     },
     {
         match: 'admin.search',
@@ -255,8 +255,8 @@ export const pageHelpEntries = [
     },
     {
         match: 'admin.mobile-app',
-        en: 'Android APK releases and update links. Upload a build so the app can tell users to update.',
-        ar: 'إصدارات تطبيق أندرويد وروابط التحديث. ارفع نسخة حتى يطلب التطبيق من المستخدمين التحديث.',
+        en: 'Upload APKs and control force update / minimum version. The Flutter app checks the update API on launch.',
+        ar: 'ارفع ملفات APK وتحكّم بالتحديث الإجباري وأدنى إصدار. تطبيق Flutter يفحص API التحديث عند الفتح.',
     },
     {
         match: 'admin.ai.logs',

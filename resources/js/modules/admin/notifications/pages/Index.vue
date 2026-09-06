@@ -1,10 +1,12 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import AdminBadge from '../../components/AdminBadge.vue';
+import AdminButton from '../../components/AdminButton.vue';
 import TemplateManager from '../components/TemplateManager.vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 import { useAdminConfirm } from '../../composables/useAdminConfirm';
-import { useForm, usePage } from '@inertiajs/vue3';
 
 const props = defineProps({
     dashboard: {
@@ -13,75 +15,160 @@ const props = defineProps({
     },
 });
 
-const { t, isArabic, forwardArrow } = useAdminLocale();
+const { t, isArabic } = useAdminLocale();
 const { confirm } = useAdminConfirm();
 const page = usePage();
+const firebaseInput = ref(null);
+const moreMenuOpen = ref(false);
+const showFirebaseSetup = ref(false);
 
-const allowedTabs = ['overview', 'channels', 'logs', 'templates', 'tools'];
-const requestedTab = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search).get('tab');
-const activeTab = ref(allowedTabs.includes(requestedTab) ? requestedTab : 'overview');
+const tabAliases = {
+    overview: 'status',
+    channels: 'status',
+    logs: 'status',
+    templates: 'messages',
+    tools: 'send',
+    status: 'status',
+    messages: 'messages',
+    send: 'send',
+};
+
+const requestedParams = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
+const requestedTab = requestedParams.get('tab');
+const activeTab = ref(tabAliases[requestedTab] ?? 'send');
+showFirebaseSetup.value = requestedParams.get('setup') === 'firebase';
 
 const flashSuccess = computed(() => page.props.flash?.success ?? '');
 const flashError = computed(() => page.props.flash?.error ?? '');
+const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
+const canManageFirebase = computed(() => permissions.value.includes('notifications.manage-templates'));
 
-const tabs = computed(() => [
-    { id: 'overview', label: 'Overview' },
-    { id: 'channels', label: 'Channels' },
-    { id: 'logs', label: 'Logs' },
-    { id: 'templates', label: 'Templates', count: props.dashboard.templates?.length ?? 0 },
-    { id: 'tools', label: 'Tools' },
-]);
+const failedLogs = computed(() => props.dashboard.failed_logs ?? []);
+const recentLogs = computed(() => (props.dashboard.logs ?? []).slice(0, 12));
+const failedCount = computed(() => props.dashboard.metrics?.failed_logs ?? failedLogs.value.length);
+const sentCount = computed(() => props.dashboard.metrics?.sent_logs ?? 0);
+const firebase = computed(() => props.dashboard.firebase ?? {
+    configured: false,
+    project_id: null,
+    client_email: null,
+    path: '',
+    has_backup: false,
+});
+
+const tabs = [
+    { id: 'send', label: 'Send' },
+    { id: 'status', label: 'Status' },
+    { id: 'messages', label: 'Texts' },
+];
 
 const pushTargets = computed(() => props.dashboard.push_targets ?? []);
-const testTargets = computed(() => {
-    const targets = props.dashboard.test_targets ?? [];
-
-    return targets.length > 0 ? targets : pushTargets.value;
-});
+const pushAudienceCount = computed(() => props.dashboard.push_audience_count ?? pushTargets.value.length);
 const templates = computed(() => props.dashboard.templates ?? []);
 const templateCategories = computed(() => props.dashboard.template_categories ?? []);
 const availableChannels = computed(() => props.dashboard.available_channels ?? ['in_app', 'email', 'push', 'sms', 'whatsapp']);
-const activeTemplates = computed(() => templates.value.filter((template) => template.is_active));
 
 const pushForm = useForm({
-    user_id: pushTargets.value[0]?.id ?? '',
-    title: 'Booke News',
-    body: 'مرحباً! هذا إشعار تجريبي من Booke.',
+    user_id: 'all',
+    title: '',
+    body: '',
 });
 
-const templateTestForm = useForm({
-    user_id: testTargets.value[0]?.id ?? '',
-    template_code: 'ALL',
-    include_email: false,
-    include_whatsapp: true,
+const firebaseForm = useForm({
+    credentials: null,
 });
 
-const selectedTemplate = computed(() => {
-    if (templateTestForm.template_code === 'ALL') {
-        return null;
-    }
+const firebaseTestForm = useForm({});
+const firebaseDisconnectForm = useForm({});
+const firebaseRestoreForm = useForm({});
 
-    return templates.value.find((template) => template.code === templateTestForm.template_code) ?? null;
-});
-
-const sendTestPush = () => {
-    pushForm.post(route('admin.notifications.push-test'), {
-        preserveScroll: true,
-    });
+const setTab = (tabId) => {
+    activeTab.value = tabId;
 };
 
-const sendTestTemplate = async () => {
-    if (templateTestForm.template_code === 'ALL') {
+const openFirebaseSetup = () => {
+    moreMenuOpen.value = false;
+    showFirebaseSetup.value = true;
+};
+
+const closeFirebaseSetup = () => {
+    showFirebaseSetup.value = false;
+};
+
+watch(activeTab, (tabId) => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', tabId);
+    window.history.replaceState({}, '', url);
+});
+
+watch(showFirebaseSetup, (open) => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (open) {
+        url.searchParams.set('setup', 'firebase');
+    } else {
+        url.searchParams.delete('setup');
+    }
+    window.history.replaceState({}, '', url);
+});
+
+const sendTestPush = async () => {
+    if (String(pushForm.user_id) === 'all') {
         if (!await confirm({
-            title: 'Confirm action',
-            message: t('This will send every active template to the selected user. Continue?'),
-            confirmLabel: 'Confirm',
+            title: t('Confirm action'),
+            message: t('Send this message to everyone with the app?'),
+            confirmLabel: t('Send'),
         })) {
             return;
         }
     }
 
-    templateTestForm.post(route('admin.notifications.template-test'), {
+    pushForm.post(route('admin.notifications.push-test'), {
+        preserveScroll: true,
+    });
+};
+
+const onFirebaseSelected = (event) => {
+    firebaseForm.credentials = event.target.files?.[0] ?? null;
+};
+
+const uploadFirebase = () => {
+    if (!firebaseForm.credentials) return;
+
+    firebaseForm.post(route('admin.notifications.firebase-credentials'), {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            firebaseForm.reset('credentials');
+            if (firebaseInput.value) {
+                firebaseInput.value.value = '';
+            }
+        },
+    });
+};
+
+const testFirebase = () => {
+    firebaseTestForm.post(route('admin.notifications.firebase-test'), {
+        preserveScroll: true,
+    });
+};
+
+const disconnectFirebase = async () => {
+    if (!await confirm({
+        title: t('Confirm action'),
+        message: t('Hide the current Firebase file temporarily? You can upload again or restore later.'),
+        confirmLabel: t('Disconnect'),
+    })) {
+        return;
+    }
+
+    firebaseDisconnectForm.post(route('admin.notifications.firebase-disconnect'), {
+        preserveScroll: true,
+    });
+};
+
+const restoreFirebase = () => {
+    firebaseRestoreForm.post(route('admin.notifications.firebase-restore'), {
         preserveScroll: true,
     });
 };
@@ -92,441 +179,313 @@ const retryLog = (id) => {
     });
 };
 
-const pretty = (value) => {
-    if (!value) {
-        return t('Not available');
-    }
+const channelName = (channel) => {
+    const map = {
+        in_app: t('App'),
+        email: t('Email'),
+        push: t('Phone'),
+        sms: t('SMS'),
+        whatsapp: t('WhatsApp'),
+    };
 
-    return String(value).replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+    return map[channel] ?? channel;
 };
 
-const staffLabel = (template) => {
-    if (!template) return '';
+const statusLabel = (status) => {
+    const map = {
+        sent: 'OK',
+        delivered: 'OK',
+        pending: 'Sending…',
+        queued: 'Sending…',
+        failed: 'Failed',
+    };
 
-    return isArabic.value
-        ? (template.label_ar || template.name || template.code)
-        : (template.label || template.name || template.code);
+    return map[String(status || '').toLowerCase()] ?? status;
+};
+
+const statusVariant = (status) => {
+    const map = {
+        sent: 'success',
+        delivered: 'success',
+        pending: 'warning',
+        queued: 'warning',
+        failed: 'error',
+    };
+
+    return map[String(status || '').toLowerCase()] ?? 'neutral';
 };
 
 const logLabel = (log) => {
     if (!log) return t('Unknown');
-
     return isArabic.value
         ? (log.template_label_ar || log.template_code)
         : (log.template_label || log.template_code);
 };
 
-const categoryLabel = (template) => {
-    if (!template) return '';
-
-    return isArabic.value
-        ? (template.category_label_ar || template.category_label || '')
-        : (template.category_label || '');
-};
+const inputClass = 'mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-400';
 </script>
 
 <template>
-    <AdminLayout
-        title="Notifications"
-        description="Delivery health, logs, templates, and push tools for the notification engine."
-    >
-        <section class="space-y-6">
-            <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Engagement') }}</p>
-                <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Notifications') }}</h2>
-                <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                    {{ t('Manage push delivery, monitor channels, review logs, and edit bilingual templates from one workspace.') }}
-                </p>
-                <p v-if="flashSuccess" class="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                    {{ flashSuccess }}
-                </p>
-                <p v-if="flashError" class="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                    {{ flashError }}
-                </p>
-            </div>
+    <Head :title="t('Notifications')" />
 
-            <div class="flex flex-wrap gap-2">
-                <button
-                    v-for="tab in tabs"
-                    :key="tab.id"
-                    type="button"
-                    class="inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-medium transition"
-                    :class="activeTab === tab.id ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
-                    @click="activeTab = tab.id"
-                >
-                    <span>{{ t(tab.label) }}</span>
-                    <span
-                        v-if="tab.count !== undefined"
-                        class="rounded-full px-2 py-0.5 text-xs"
-                        :class="activeTab === tab.id ? 'bg-white/15 text-white' : 'bg-white text-slate-500'"
-                    >
-                        {{ tab.count }}
-                    </span>
-                </button>
-            </div>
+    <AdminLayout title="Notifications" description="Send messages, check status, edit texts.">
+        <section class="space-y-4">
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="text-xl font-semibold text-slate-950">{{ t('Notifications') }}</h2>
+                        <p class="mt-1 text-sm text-slate-600">
+                            {{ t('Send · check · edit texts') }}
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2 text-sm">
+                        <span class="rounded-lg bg-emerald-50 px-3 py-1.5 font-medium text-emerald-800">
+                            {{ sentCount }} {{ t('OK') }}
+                        </span>
+                        <span
+                            class="rounded-lg px-3 py-1.5 font-medium"
+                            :class="failedCount > 0 ? 'bg-rose-50 text-rose-800' : 'bg-slate-100 text-slate-600'"
+                        >
+                            {{ failedCount }} {{ t('Failed') }}
+                        </span>
 
-            <!-- Overview -->
-            <div v-show="activeTab === 'overview'" class="space-y-4">
-                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                    <article
-                        v-for="metric in [
-                            { key: 'total_logs', label: 'Total logs' },
-                            { key: 'pending_logs', label: 'Pending' },
-                            { key: 'sent_logs', label: 'Sent' },
-                            { key: 'failed_logs', label: 'Failed' },
-                            { key: 'unread_in_app', label: 'Unread in-app' },
-                        ]"
-                        :key="metric.key"
-                        class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-                    >
-                        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{{ t(metric.label) }}</p>
-                        <p class="mt-3 text-3xl font-semibold text-slate-950">{{ dashboard.metrics[metric.key] }}</p>
-                    </article>
-                </div>
-
-                <div class="grid gap-4 xl:grid-cols-2">
-                    <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <h3 class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Quick actions') }}</h3>
-                        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div class="relative">
                             <button
                                 type="button"
-                                class="rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
-                                @click="activeTab = 'templates'"
+                                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                                :aria-expanded="moreMenuOpen"
+                                :aria-label="t('More')"
+                                @click="moreMenuOpen = !moreMenuOpen"
                             >
-                                {{ t('Edit templates') }}
+                                <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5" aria-hidden="true">
+                                    <path d="M3 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM8.5 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM14 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0z" />
+                                </svg>
                             </button>
-                            <button
-                                type="button"
-                                class="rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
-                                @click="activeTab = 'logs'"
-                            >
-                                {{ t('View delivery logs') }}
-                            </button>
-                            <button
-                                type="button"
-                                class="rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
-                                @click="activeTab = 'channels'"
-                            >
-                                {{ t('Check channel status') }}
-                            </button>
-                            <button
-                                type="button"
-                                class="rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
-                                @click="activeTab = 'tools'"
-                            >
-                                {{ t('Send test push') }}
-                            </button>
-                        </div>
-                    </article>
-
-                    <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <h3 class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">{{ t('Failed deliveries') }}</h3>
-                        <div v-if="dashboard.failed_logs.length === 0" class="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                            {{ t('No failed notification deliveries were recorded.') }}
-                        </div>
-                        <div v-else class="mt-4 space-y-2">
                             <div
-                                v-for="log in dashboard.failed_logs.slice(0, 3)"
-                                :key="log.id"
-                                class="rounded-2xl bg-slate-50 px-4 py-3 text-sm"
+                                v-if="moreMenuOpen"
+                                class="absolute end-0 z-50 mt-1 min-w-[12rem] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
                             >
-                                <p class="font-medium text-slate-950">{{ logLabel(log) }} · {{ pretty(log.channel) }}</p>
-                                <p class="mt-1 text-xs text-slate-500">{{ log.user.name || log.user.email || t('Unknown user') }}</p>
-                            </div>
-                            <button
-                                type="button"
-                                class="mt-2 text-sm font-medium text-cyan-700 hover:text-cyan-800"
-                                @click="activeTab = 'logs'"
-                            >
-                                {{ t('View all failed deliveries') }} {{ forwardArrow }}
-                            </button>
-                        </div>
-                    </article>
-                </div>
-            </div>
-
-            <!-- Channels -->
-            <div v-show="activeTab === 'channels'" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 class="text-lg font-semibold text-slate-950">{{ t('Channel status monitoring') }}</h3>
-                <p class="mt-1 text-sm text-slate-600">{{ t('Provider configuration for each delivery channel.') }}</p>
-                <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    <div
-                        v-for="channel in dashboard.channel_statuses"
-                        :key="channel.channel"
-                        class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4"
-                    >
-                        <div class="flex items-center justify-between gap-4">
-                            <div>
-                                <p class="text-sm font-semibold text-slate-950">{{ pretty(channel.channel) }}</p>
-                                <p class="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500">{{ channel.provider }}</p>
-                            </div>
-                            <span
-                                class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]"
-                                :class="channel.configured ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'"
-                            >
-                                {{ channel.configured ? t('Configured') : t('Fallback') }}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Logs -->
-            <div v-show="activeTab === 'logs'" class="space-y-4">
-                <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Failed deliveries') }}</h3>
-                    <div v-if="dashboard.failed_logs.length === 0" class="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                        {{ t('No failed notification deliveries were recorded.') }}
-                    </div>
-                    <div v-else class="mt-4 space-y-3">
-                        <div v-for="log in dashboard.failed_logs" :key="log.id" class="rounded-2xl border border-slate-200 px-4 py-4">
-                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                <div>
-                                    <p class="text-sm font-semibold text-slate-950">{{ logLabel(log) }} · {{ pretty(log.channel) }}</p>
-                                    <p class="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500">{{ log.user.name || log.user.email || t('Unknown user') }}</p>
-                                </div>
                                 <button
                                     type="button"
-                                    class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                                    @click="retryLog(log.id)"
+                                    class="block w-full px-4 py-2 text-start text-sm text-slate-700 transition hover:bg-slate-50"
+                                    @click="openFirebaseSetup"
                                 >
-                                    {{ t('Retry') }}
+                                    {{ t('Firebase setup') }}
                                 </button>
                             </div>
-                            <p class="mt-3 text-sm text-slate-600">{{ log.response_payload.error || t('Unknown failure') }}</p>
                         </div>
                     </div>
-                </article>
+                </div>
 
-                <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h3 class="text-lg font-semibold text-slate-950">{{ t('Notification logs') }}</h3>
-                    <div class="mt-4 overflow-x-auto">
-                        <table class="min-w-full divide-y divide-slate-200 text-sm text-slate-700">
-                            <thead class="bg-slate-50 text-xs uppercase tracking-[0.18em] text-slate-500">
-                                <tr>
-                                    <th class="px-4 py-3 text-left font-semibold">{{ t('User') }}</th>
-                                    <th class="px-4 py-3 text-left font-semibold">{{ t('Template') }}</th>
-                                    <th class="px-4 py-3 text-left font-semibold">{{ t('Channel') }}</th>
-                                    <th class="px-4 py-3 text-left font-semibold">{{ t('Status') }}</th>
-                                    <th class="px-4 py-3 text-left font-semibold">{{ t('Retries') }}</th>
-                                    <th class="px-4 py-3 text-left font-semibold">{{ t('Created') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-100 bg-white">
-                                <tr v-for="log in dashboard.logs" :key="log.id">
-                                    <td class="px-4 py-3">{{ log.user.name || log.user.email || t('Unknown user') }}</td>
-                                    <td class="px-4 py-3">
-                                        <p>{{ logLabel(log) }}</p>
-                                        <p class="mt-0.5 font-mono text-[11px] text-slate-400">{{ log.template_code }}</p>
-                                    </td>
-                                    <td class="px-4 py-3">{{ pretty(log.channel) }}</td>
-                                    <td class="px-4 py-3">{{ pretty(log.status) }}</td>
-                                    <td class="px-4 py-3">{{ log.retry_count }}</td>
-                                    <td class="px-4 py-3">{{ log.created_at }}</td>
-                                </tr>
-                                <tr v-if="dashboard.logs.length === 0">
-                                    <td colspan="6" class="px-4 py-8 text-center text-slate-500">{{ t('No notification logs yet.') }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </article>
+                <p v-if="flashSuccess" class="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{{ flashSuccess }}</p>
+                <p v-if="flashError" class="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">{{ flashError }}</p>
+
+                <div class="mt-4 flex gap-1 rounded-lg bg-slate-100 p-1">
+                    <button
+                        v-for="tab in tabs"
+                        :key="tab.id"
+                        type="button"
+                        class="flex-1 rounded-md px-3 py-2 text-sm font-medium transition"
+                        :class="activeTab === tab.id ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+                        @click="setTab(tab.id)"
+                    >
+                        {{ t(tab.label) }}
+                    </button>
+                </div>
             </div>
 
-            <!-- Templates -->
-            <div v-show="activeTab === 'templates'">
+            <!-- Hidden Firebase setup (⋯ menu) -->
+            <div v-if="showFirebaseSetup" class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 sm:p-5">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h3 class="text-base font-semibold text-slate-950">{{ t('Firebase setup') }}</h3>
+                        <p class="mt-1 text-sm text-slate-600">
+                            {{ t('Upload the service account JSON so phone notifications work.') }}
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <AdminBadge
+                            :variant="firebase.configured ? 'success' : 'warning'"
+                            :label="firebase.configured ? 'Ready' : 'Missing file'"
+                        />
+                        <button
+                            type="button"
+                            class="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-white hover:text-slate-800"
+                            @click="closeFirebaseSetup"
+                        >
+                            {{ t('Close') }}
+                        </button>
+                    </div>
+                </div>
+
+                <dl class="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+                    <div class="rounded-lg bg-white px-3 py-2">
+                        <dt class="text-xs text-slate-500">{{ t('Project') }}</dt>
+                        <dd class="mt-0.5 font-medium text-slate-900">{{ firebase.project_id || '—' }}</dd>
+                    </div>
+                    <div class="rounded-lg bg-white px-3 py-2">
+                        <dt class="text-xs text-slate-500">{{ t('Account') }}</dt>
+                        <dd class="mt-0.5 font-medium text-slate-900">{{ firebase.client_email || '—' }}</dd>
+                    </div>
+                </dl>
+
+                <p class="mt-2 text-xs text-slate-400">{{ firebase.path }}</p>
+
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <AdminButton
+                        variant="secondary"
+                        :processing="firebaseTestForm.processing"
+                        :disabled="!firebase.configured"
+                        @click="testFirebase"
+                    >
+                        {{ t('Test connection') }}
+                    </AdminButton>
+
+                    <AdminButton
+                        v-if="canManageFirebase && firebase.configured"
+                        variant="ghost"
+                        :processing="firebaseDisconnectForm.processing"
+                        @click="disconnectFirebase"
+                    >
+                        {{ t('Disconnect') }}
+                    </AdminButton>
+
+                    <AdminButton
+                        v-if="canManageFirebase && !firebase.configured && firebase.has_backup"
+                        variant="secondary"
+                        :processing="firebaseRestoreForm.processing"
+                        @click="restoreFirebase"
+                    >
+                        {{ t('Restore previous') }}
+                    </AdminButton>
+                </div>
+
+                <p class="mt-2 text-xs text-slate-500">
+                    {{ firebase.configured
+                        ? t('Checks the current file with Google. Does not send any message.')
+                        : t('Disconnected. Upload a JSON file to reconnect, or restore the previous one.') }}
+                </p>
+
+                <form
+                    v-if="canManageFirebase"
+                    class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-end"
+                    @submit.prevent="uploadFirebase"
+                >
+                    <label class="block min-w-0 flex-1">
+                        <span class="text-sm text-slate-600">{{ t('JSON file') }}</span>
+                        <input
+                            ref="firebaseInput"
+                            type="file"
+                            accept=".json,application/json"
+                            class="mt-1.5 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-800 hover:file:bg-slate-100"
+                            @change="onFirebaseSelected"
+                        >
+                        <p v-if="firebaseForm.errors.credentials" class="mt-1 text-xs text-rose-600">
+                            {{ firebaseForm.errors.credentials }}
+                        </p>
+                    </label>
+                    <AdminButton
+                        type="submit"
+                        :processing="firebaseForm.processing"
+                        :disabled="!firebaseForm.credentials"
+                    >
+                        {{ firebase.configured ? t('Replace file') : t('Reconnect') }}
+                    </AdminButton>
+                </form>
+
+                <p v-else class="mt-3 text-sm text-slate-500">
+                    {{ t('Ask an admin with template access to upload the Firebase file.') }}
+                </p>
+            </div>
+
+            <!-- Send -->
+            <div v-show="activeTab === 'send'" class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                <h3 class="text-base font-semibold text-slate-950">{{ t('New message') }}</h3>
+
+                <form class="mt-4 space-y-3" @submit.prevent="sendTestPush">
+                    <label class="block">
+                        <span class="text-sm text-slate-600">{{ t('To') }}</span>
+                        <select v-model="pushForm.user_id" :class="inputClass" required>
+                            <option value="all">{{ t('Everyone') }} ({{ pushAudienceCount }})</option>
+                            <option v-for="target in pushTargets" :key="target.id" :value="target.id">
+                                {{ target.name || target.email }}
+                            </option>
+                        </select>
+                    </label>
+
+                    <label class="block">
+                        <span class="text-sm text-slate-600">{{ t('Title') }}</span>
+                        <input v-model="pushForm.title" type="text" maxlength="120" :class="inputClass" required>
+                    </label>
+
+                    <label class="block">
+                        <span class="text-sm text-slate-600">{{ t('Message') }}</span>
+                        <textarea v-model="pushForm.body" rows="3" maxlength="500" :class="inputClass" required />
+                    </label>
+
+                    <AdminButton type="submit" :processing="pushForm.processing" :disabled="pushAudienceCount === 0">
+                        {{ String(pushForm.user_id) === 'all' ? t('Send to everyone') : t('Send') }}
+                    </AdminButton>
+
+                    <p v-if="pushAudienceCount === 0" class="text-sm text-amber-700">
+                        {{ t('No phones registered yet.') }}
+                    </p>
+                </form>
+            </div>
+
+            <!-- Status -->
+            <div v-show="activeTab === 'status'" class="space-y-4">
+                <div v-if="failedLogs.length > 0" class="rounded-xl border border-rose-200 bg-white p-4 shadow-sm sm:p-5">
+                    <h3 class="text-base font-semibold text-slate-950">{{ t('Failed') }}</h3>
+                    <div class="mt-3 space-y-2">
+                        <div
+                            v-for="log in failedLogs"
+                            :key="log.id"
+                            class="flex flex-col gap-2 rounded-lg bg-rose-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                            <div class="min-w-0">
+                                <p class="truncate text-sm font-medium text-slate-900">{{ logLabel(log) }}</p>
+                                <p class="truncate text-xs text-slate-500">
+                                    {{ log.user.name || log.user.email }} · {{ channelName(log.channel) }}
+                                </p>
+                            </div>
+                            <AdminButton size="sm" @click="retryLog(log.id)">{{ t('Retry') }}</AdminButton>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                    <h3 class="text-base font-semibold text-slate-950">{{ t('Recent') }}</h3>
+
+                    <p v-if="recentLogs.length === 0" class="mt-3 text-sm text-slate-500">
+                        {{ t('Nothing sent yet.') }}
+                    </p>
+
+                    <div v-else class="mt-3 divide-y divide-slate-100">
+                        <div
+                            v-for="log in recentLogs"
+                            :key="log.id"
+                            class="flex items-start justify-between gap-3 py-3"
+                        >
+                            <div class="min-w-0">
+                                <p class="truncate text-sm font-medium text-slate-900">{{ logLabel(log) }}</p>
+                                <p class="truncate text-xs text-slate-500">
+                                    {{ log.user.name || log.user.email }} · {{ channelName(log.channel) }} · {{ log.created_at }}
+                                </p>
+                            </div>
+                            <AdminBadge :variant="statusVariant(log.status)" :label="statusLabel(log.status)" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Texts -->
+            <div v-show="activeTab === 'messages'">
                 <TemplateManager
-                    :templates="dashboard.templates ?? []"
+                    :templates="templates"
                     :template-categories="templateCategories"
                     :available-channels="availableChannels"
                 />
-            </div>
-
-            <!-- Tools -->
-            <div v-show="activeTab === 'tools'" class="space-y-4">
-                <article class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-700">{{ t('Tester') }}</p>
-                            <h3 class="mt-1 text-lg font-semibold text-slate-950">{{ t('Test existing notifications') }}</h3>
-                            <p class="mt-1 text-sm text-slate-600">
-                                {{ t('Send any current template (or all of them) to a user. In-app inbox is always written; push is sent when the user has a device.') }}
-                            </p>
-                        </div>
-                        <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
-                            {{ activeTemplates.length }} {{ t('active templates') }}
-                        </span>
-                    </div>
-
-                    <form class="mt-5 grid gap-4 lg:grid-cols-[1.2fr_1.4fr_auto]" @submit.prevent="sendTestTemplate">
-                        <label class="block">
-                            <span class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Recipient') }}</span>
-                            <select
-                                v-model="templateTestForm.user_id"
-                                class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
-                                required
-                            >
-                                <option disabled value="">{{ t('Select a user') }}</option>
-                                <option
-                                    v-for="target in testTargets"
-                                    :key="target.id"
-                                    :value="target.id"
-                                >
-                                    #{{ target.id }} · {{ target.name || target.email }}
-                                    <template v-if="target.phone"> · {{ target.phone }}</template>
-                                    <template v-if="target.devices"> · {{ target.devices }} {{ t('devices') }}</template>
-                                </option>
-                            </select>
-                            <p v-if="templateTestForm.errors.user_id" class="mt-1 text-xs text-rose-600">{{ templateTestForm.errors.user_id }}</p>
-                        </label>
-
-                        <label class="block">
-                            <span class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Notification') }}</span>
-                            <select
-                                v-model="templateTestForm.template_code"
-                                class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
-                                required
-                            >
-                                <option value="ALL">{{ t('All active templates') }} ({{ activeTemplates.length }})</option>
-                                <option
-                                    v-for="template in activeTemplates"
-                                    :key="template.code"
-                                    :value="template.code"
-                                >
-                                    {{ staffLabel(template) }}
-                                </option>
-                            </select>
-                            <p v-if="templateTestForm.errors.template_code" class="mt-1 text-xs text-rose-600">{{ templateTestForm.errors.template_code }}</p>
-                        </label>
-
-                        <div class="flex items-end">
-                            <button
-                                type="submit"
-                                class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                                :disabled="templateTestForm.processing || testTargets.length === 0 || activeTemplates.length === 0"
-                            >
-                                {{ templateTestForm.processing ? t('Sending...') : (templateTestForm.template_code === 'ALL' ? t('Send all') : t('Send this notification')) }}
-                            </button>
-                        </div>
-                    </form>
-
-                    <div class="mt-4 flex flex-wrap gap-4">
-                        <label class="inline-flex items-center gap-2 text-sm text-slate-700">
-                            <input v-model="templateTestForm.include_email" type="checkbox" class="rounded border-slate-300">
-                            {{ t('Also send email') }}
-                        </label>
-                        <label class="inline-flex items-center gap-2 text-sm text-slate-700">
-                            <input v-model="templateTestForm.include_whatsapp" type="checkbox" class="rounded border-slate-300">
-                            {{ t('Also send WhatsApp (local sandbox)') }}
-                        </label>
-                    </div>
-
-                    <p class="mt-2 text-xs text-slate-500">
-                        {{ t('WhatsApp does not go to a real phone in local mode. Messages appear in the sandbox below.') }}
-                    </p>
-
-                    <div v-if="selectedTemplate" class="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-700">
-                        <p class="font-medium text-slate-950">{{ staffLabel(selectedTemplate) }}</p>
-                        <p class="mt-1 text-xs text-slate-500">{{ categoryLabel(selectedTemplate) }} · {{ selectedTemplate.code }}</p>
-                        <p class="mt-3">{{ selectedTemplate.translations?.ar?.subject || selectedTemplate.subject }}</p>
-                        <p class="mt-1 text-slate-600">{{ selectedTemplate.translations?.ar?.body || selectedTemplate.body }}</p>
-                    </div>
-
-                    <p v-if="activeTemplates.length === 0" class="mt-3 text-sm text-amber-800">
-                        {{ t('No templates yet. Open the Templates tab and click Sync templates first.') }}
-                    </p>
-                </article>
-
-                <article class="rounded-3xl border border-emerald-200 bg-emerald-50/60 p-6 shadow-sm">
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">{{ t('WhatsApp sandbox') }}</p>
-                    <h3 class="mt-1 text-lg font-semibold text-slate-950">{{ t('Local inbox') }}</h3>
-                    <p class="mt-1 text-sm text-slate-600">
-                        {{ t('These are simulated WhatsApp messages. They do not appear on a real phone.') }}
-                    </p>
-                    <div v-if="(dashboard.whatsapp_sandbox ?? []).length === 0" class="mt-4 rounded-2xl bg-white px-4 py-4 text-sm text-slate-600">
-                        {{ t('No WhatsApp sandbox messages yet. Send a template test with WhatsApp enabled.') }}
-                    </div>
-                    <div v-else class="mt-4 space-y-3">
-                        <div
-                            v-for="(item, index) in dashboard.whatsapp_sandbox"
-                            :key="`${item.recorded_at}-${index}`"
-                            class="rounded-2xl border border-emerald-100 bg-white px-4 py-4 text-sm"
-                        >
-                            <p class="font-medium text-slate-950">{{ item.to }} · {{ item.template_code }}</p>
-                            <p class="mt-1 text-xs text-slate-500">{{ item.recorded_at }}</p>
-                            <p class="mt-2 whitespace-pre-wrap text-slate-700">{{ item.body }}</p>
-                        </div>
-                    </div>
-                </article>
-
-                <article class="rounded-3xl border border-amber-200 bg-amber-50/70 p-6 shadow-sm">
-                    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-amber-700">{{ t('Temporary') }}</p>
-                            <h3 class="mt-1 text-lg font-semibold text-slate-950">{{ t('Custom push') }}</h3>
-                            <p class="mt-1 text-sm text-slate-600">
-                                {{ t('Send a free-text FCM push, not tied to a catalog template.') }}
-                            </p>
-                        </div>
-                    </div>
-
-                    <form class="mt-4 grid gap-4 lg:grid-cols-[1.2fr_1fr_1fr_auto]" @submit.prevent="sendTestPush">
-                        <label class="block">
-                            <span class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Recipient') }}</span>
-                            <select
-                                v-model="pushForm.user_id"
-                                class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
-                                required
-                            >
-                                <option disabled value="">{{ t('Select a user with a device') }}</option>
-                                <option
-                                    v-for="target in pushTargets"
-                                    :key="target.id"
-                                    :value="target.id"
-                                >
-                                    #{{ target.id }} · {{ target.name || target.email }} · {{ target.devices }} {{ t('devices') }}
-                                </option>
-                            </select>
-                            <p v-if="pushForm.errors.user_id" class="mt-1 text-xs text-rose-600">{{ pushForm.errors.user_id }}</p>
-                        </label>
-
-                        <label class="block">
-                            <span class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Title') }}</span>
-                            <input
-                                v-model="pushForm.title"
-                                type="text"
-                                maxlength="120"
-                                class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
-                                required
-                            >
-                        </label>
-
-                        <label class="block">
-                            <span class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ t('Body') }}</span>
-                            <input
-                                v-model="pushForm.body"
-                                type="text"
-                                maxlength="500"
-                                class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
-                                required
-                            >
-                        </label>
-
-                        <div class="flex items-end">
-                            <button
-                                type="submit"
-                                class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                                :disabled="pushForm.processing || pushTargets.length === 0"
-                            >
-                                {{ pushForm.processing ? t('Sending...') : t('Send push') }}
-                            </button>
-                        </div>
-                    </form>
-
-                    <p v-if="pushTargets.length === 0" class="mt-3 text-sm text-amber-800">
-                        {{ t('No users with active push devices yet. Open the mobile app and register a device token first.') }}
-                    </p>
-                </article>
             </div>
         </section>
     </AdminLayout>

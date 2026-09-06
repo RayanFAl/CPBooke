@@ -95,6 +95,63 @@ class MobileAppAdminTest extends TestCase
             ->assertJsonPath('data.update_available', true);
     }
 
+    public function test_super_admin_can_upload_zip_containing_apk(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $actor = $this->superAdmin();
+
+        $apkSource = $this->releasesDirectory.DIRECTORY_SEPARATOR.'nested-app.apk';
+        $zipPath = $this->releasesDirectory.DIRECTORY_SEPARATOR.'release-bundle.zip';
+        File::put($apkSource, 'zipped-apk-bytes');
+
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($zipPath, \ZipArchive::CREATE) === true);
+        $zip->addFile($apkSource, 'app-release.apk');
+        $zip->close();
+
+        $this->actingAs($actor)
+            ->post(route('admin.mobile-app.apk.upload'), [
+                'version' => '2.0.0',
+                'version_code' => 200,
+                'apk' => new UploadedFile($zipPath, 'release-bundle.zip', 'application/zip', null, true),
+            ])
+            ->assertRedirect(route('admin.mobile-app.index'))
+            ->assertSessionHas('success');
+
+        $destination = $this->releasesDirectory.DIRECTORY_SEPARATOR.'booke-2.0.0+200.apk';
+        $this->assertFileExists($destination);
+        $this->assertSame('zipped-apk-bytes', File::get($destination));
+
+        $manifest = json_decode((string) File::get($this->releasesDirectory.DIRECTORY_SEPARATOR.'release.json'), true);
+        $this->assertSame('booke-2.0.0+200.apk', $manifest['apk']);
+    }
+
+    public function test_zip_without_apk_is_rejected(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $actor = $this->superAdmin();
+
+        $zipPath = $this->releasesDirectory.DIRECTORY_SEPARATOR.'empty-bundle.zip';
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($zipPath, \ZipArchive::CREATE) === true);
+        $zip->addFromString('readme.txt', 'no apk here');
+        $zip->close();
+
+        $this->actingAs($actor)
+            ->from(route('admin.mobile-app.index'))
+            ->post(route('admin.mobile-app.apk.upload'), [
+                'version' => '2.0.0',
+                'version_code' => 200,
+                'apk' => new UploadedFile($zipPath, 'empty-bundle.zip', 'application/zip', null, true),
+            ])
+            ->assertRedirect(route('admin.mobile-app.index'))
+            ->assertSessionHasErrors('apk');
+
+        $this->assertFileDoesNotExist($this->releasesDirectory.DIRECTORY_SEPARATOR.'booke-2.0.0+200.apk');
+    }
+
     public function test_import_apk_command_uses_apk_version_option(): void
     {
         $source = $this->releasesDirectory.DIRECTORY_SEPARATOR.'source.apk';
@@ -113,6 +170,40 @@ class MobileAppAdminTest extends TestCase
         $this->assertSame('1.0.0', $manifest['version']);
         $this->assertSame(1, $manifest['version_code']);
         $this->assertSame('booke-1.0.0+1.apk', $manifest['apk']);
+    }
+
+    public function test_super_admin_can_update_release_settings_and_force_update(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $actor = $this->superAdmin();
+        $apkName = 'booke-1.2.0+120.apk';
+        File::put($this->releasesDirectory.DIRECTORY_SEPARATOR.$apkName, 'apk-bytes');
+
+        $this->actingAs($actor)
+            ->put(route('admin.mobile-app.release.update'), [
+                'version' => '1.2.0',
+                'version_code' => 120,
+                'apk' => $apkName,
+                'force_update' => true,
+                'min_version_code' => 110,
+                'notes_ar' => 'تحديث إجباري',
+                'notes_en' => 'Mandatory update',
+            ])
+            ->assertRedirect(route('admin.mobile-app.index'))
+            ->assertSessionHas('success');
+
+        $manifest = json_decode((string) File::get($this->releasesDirectory.DIRECTORY_SEPARATOR.'release.json'), true);
+
+        $this->assertTrue($manifest['force_update']);
+        $this->assertSame(110, $manifest['min_version_code']);
+        $this->assertSame('تحديث إجباري', $manifest['notes']['ar']);
+        $this->assertSame('Mandatory update', $manifest['notes']['en']);
+
+        $this->getJson('/api/v1/app/update?version_code=100&locale=en')
+            ->assertOk()
+            ->assertJsonPath('data.update_available', true)
+            ->assertJsonPath('data.force_update', true);
     }
 
     private function superAdmin(): User

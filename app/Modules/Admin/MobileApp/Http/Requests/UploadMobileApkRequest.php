@@ -21,7 +21,7 @@ class UploadMobileApkRequest extends FormRequest
         $maxKb = max(1, (int) config('mobile_app.max_upload_kb', 512000));
 
         return [
-            'apk' => ['required', 'file', 'extensions:apk', 'max:'.$maxKb],
+            'apk' => ['required', 'file', 'extensions:apk,zip', 'max:'.$maxKb],
             'version' => ['required', 'string', 'regex:/^\d+\.\d+\.\d+$/'],
             'version_code' => ['required', 'integer', 'min:1'],
         ];
@@ -68,8 +68,8 @@ class UploadMobileApkRequest extends FormRequest
     {
         return [
             'version.regex' => 'Version must use semantic format like 1.2.0.',
-            'apk.extensions' => 'The uploaded file must be an Android APK.',
-            'apk.max' => 'The APK is too large for the configured upload limit.',
+            'apk.extensions' => 'The uploaded file must be an Android APK or a ZIP that contains one.',
+            'apk.max' => 'The APK/ZIP is too large for the configured upload limit.',
         ];
     }
 }

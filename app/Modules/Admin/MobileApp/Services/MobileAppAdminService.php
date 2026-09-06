@@ -6,6 +6,8 @@ use App\Modules\Content\Services\MobileAppReleaseService;
 use App\Support\PhpIniSize;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
+use Illuminate\Validation\ValidationException;
+use ZipArchive;
 
 class MobileAppAdminService
 {
@@ -135,11 +137,121 @@ class MobileAppAdminService
         File::ensureDirectoryExists($this->releasesDirectory());
 
         $filename = $this->buildApkFilename($version, $versionCode);
-        $file->move($this->releasesDirectory(), $filename);
+        $destination = $this->releasesDirectory().DIRECTORY_SEPARATOR.$filename;
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+
+        if ($extension === 'zip') {
+            $this->extractApkFromZip($file, $destination);
+        } else {
+            $file->move($this->releasesDirectory(), $filename);
+        }
 
         $this->finalizeUpload($version, $versionCode, $filename);
 
         return $filename;
+    }
+
+    private function extractApkFromZip(UploadedFile $file, string $destination): void
+    {
+        if (! class_exists(ZipArchive::class)) {
+            throw ValidationException::withMessages([
+                'apk' => 'ZIP support is unavailable on this server (ZipArchive missing).',
+            ]);
+        }
+
+        $zip = new ZipArchive;
+
+        if ($zip->open($file->getRealPath()) !== true) {
+            throw ValidationException::withMessages([
+                'apk' => 'The uploaded ZIP could not be opened.',
+            ]);
+        }
+
+        $apkEntries = [];
+
+        try {
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $entryName = (string) $zip->getNameIndex($index);
+
+                if ($entryName === '' || str_ends_with($entryName, '/')) {
+                    continue;
+                }
+
+                $normalized = str_replace('\\', '/', $entryName);
+
+                if (str_contains($normalized, '../') || str_starts_with($normalized, '/')) {
+                    continue;
+                }
+
+                if (! str_ends_with(strtolower($normalized), '.apk')) {
+                    continue;
+                }
+
+                $stat = $zip->statIndex($index);
+                $apkEntries[] = [
+                    'name' => $entryName,
+                    'size' => (int) ($stat['size'] ?? 0),
+                    'basename' => strtolower(basename($normalized)),
+                ];
+            }
+
+            if ($apkEntries === []) {
+                throw ValidationException::withMessages([
+                    'apk' => 'The ZIP must contain at least one .apk file.',
+                ]);
+            }
+
+            usort($apkEntries, function (array $left, array $right): int {
+                $preferred = ['app-release.apk', 'release.apk', 'app.apk'];
+
+                $leftRank = array_search($left['basename'], $preferred, true);
+                $rightRank = array_search($right['basename'], $preferred, true);
+                $leftRank = $leftRank === false ? PHP_INT_MAX : $leftRank;
+                $rightRank = $rightRank === false ? PHP_INT_MAX : $rightRank;
+
+                if ($leftRank !== $rightRank) {
+                    return $leftRank <=> $rightRank;
+                }
+
+                return $right['size'] <=> $left['size'];
+            });
+
+            $chosen = $apkEntries[0]['name'];
+            $stream = $zip->getStream($chosen);
+
+            if ($stream === false) {
+                throw ValidationException::withMessages([
+                    'apk' => 'Failed to read the APK inside the ZIP.',
+                ]);
+            }
+
+            $target = fopen($destination, 'wb');
+
+            if ($target === false) {
+                fclose($stream);
+
+                throw ValidationException::withMessages([
+                    'apk' => 'Failed to write the extracted APK.',
+                ]);
+            }
+
+            try {
+                stream_copy_to_stream($stream, $target);
+            } finally {
+                fclose($stream);
+                fclose($target);
+            }
+        } finally {
+            $zip->close();
+        }
+
+        if (! File::isFile($destination) || File::size($destination) < 1) {
+            File::delete($destination);
+
+            throw ValidationException::withMessages([
+                'apk' => 'The extracted APK is empty or missing.',
+            ]);
+        }
     }
 
     /**
@@ -221,6 +333,44 @@ class MobileAppAdminService
     }
 
     /**
+     * @param  array{
+     *     version: string,
+     *     version_code: int,
+     *     apk: string,
+     *     force_update?: bool,
+     *     min_version_code?: int|null,
+     *     notes_ar?: string|null,
+     *     notes_en?: string|null,
+     * }  $data
+     */
+    public function updateReleaseSettings(array $data): void
+    {
+        $apk = basename((string) $data['apk']);
+        $apkPath = $this->releasesDirectory().DIRECTORY_SEPARATOR.$apk;
+
+        if (! File::isFile($apkPath)) {
+            throw ValidationException::withMessages([
+                'apk' => 'The selected APK file was not found in storage/app/releases.',
+            ]);
+        }
+
+        $this->writeManifest([
+            'version' => $data['version'],
+            'version_code' => (int) $data['version_code'],
+            'apk' => $apk,
+            'force_update' => (bool) ($data['force_update'] ?? false),
+            'min_version_code' => array_key_exists('min_version_code', $data) && $data['min_version_code'] !== null
+                ? (int) $data['min_version_code']
+                : null,
+            'notes_ar' => $data['notes_ar'] ?? '',
+            'notes_en' => $data['notes_en'] ?? '',
+            'clear_min_version_code' => ! (array_key_exists('min_version_code', $data) && $data['min_version_code'] !== null),
+        ]);
+
+        $this->releaseService->flushCache();
+    }
+
+    /**
      * @param array{
      *     version: string,
      *     version_code: int,
@@ -229,6 +379,8 @@ class MobileAppAdminService
      *     min_version_code?: int|null,
      *     notes_ar?: string|null,
      *     notes_en?: string|null,
+     *     clear_min_version_code?: bool,
+     *     sha256?: string,
      * } $data
      */
     private function writeManifest(array $data): void
@@ -254,7 +406,9 @@ class MobileAppAdminService
             $manifest['sha256'] = hash_file('sha256', $apkPath) ?: null;
         }
 
-        if (array_key_exists('min_version_code', $data) && $data['min_version_code'] !== null) {
+        $shouldClearMin = (bool) ($data['clear_min_version_code'] ?? false);
+
+        if (! $shouldClearMin && array_key_exists('min_version_code', $data) && $data['min_version_code'] !== null) {
             $manifest['min_version_code'] = (int) $data['min_version_code'];
         }
 

@@ -94,6 +94,43 @@ class FcmHttpV1Client
         return $this->credentialsPath() !== null;
     }
 
+    /**
+     * Validate the current credentials file can obtain a Google access token.
+     * Does not send any push notification.
+     *
+     * @return array{ok: bool, project_id?: string, reason?: string}
+     */
+    public function verifyConnection(): array
+    {
+        $credentialsPath = $this->credentialsPath();
+
+        if ($credentialsPath === null) {
+            return [
+                'ok' => false,
+                'reason' => 'missing_credentials',
+            ];
+        }
+
+        try {
+            $projectId = $this->projectId($credentialsPath);
+            $this->accessToken($credentialsPath);
+
+            return [
+                'ok' => true,
+                'project_id' => $projectId,
+            ];
+        } catch (\Throwable $exception) {
+            Log::warning('Firebase credentials verification failed', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [
+                'ok' => false,
+                'reason' => $exception->getMessage(),
+            ];
+        }
+    }
+
     public function credentialsPath(): ?string
     {
         $configured = trim((string) config('services.notifications.firebase_credentials'));

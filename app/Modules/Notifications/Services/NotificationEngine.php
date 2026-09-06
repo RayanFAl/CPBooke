@@ -43,7 +43,9 @@ class NotificationEngine
 
             foreach ($this->uniqueUsers($definition['users'] ?? []) as $user) {
                 $channels = $this->preferenceResolver->allowedChannels($user, $templateChannels, $definition);
-                $this->deliverToUser($user, $template, $definition, $channels, $event::class, false);
+                // Wallet notifications run outbound sync so FCM does not depend on queue workers.
+                $syncOutbound = str_starts_with((string) ($definition['code'] ?? $template->code), 'WALLET_');
+                $this->deliverToUser($user, $template, $definition, $channels, $event::class, $syncOutbound);
             }
         }
     }

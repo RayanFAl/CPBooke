@@ -349,6 +349,43 @@ class NotificationService
     }
 
     /**
+     * Send a custom push (+ in-app) to every user that has at least one active device.
+     *
+     * @return array{recipients: int, delivered: int, failed: int}
+     */
+    public function sendTestPushToAllWithDevices(?string $title = null, ?string $body = null): array
+    {
+        $recipients = 0;
+        $delivered = 0;
+        $failed = 0;
+
+        User::query()
+            ->whereHas('notificationDevices', function ($query): void {
+                $query->where('is_active', true);
+            })
+            ->orderBy('id')
+            ->chunkById(50, function ($users) use ($title, $body, &$recipients, &$delivered, &$failed): void {
+                foreach ($users as $user) {
+                    $recipients++;
+                    $result = $this->sendTestPush($user, $title, $body);
+                    $push = is_array($result['push'] ?? null) ? $result['push'] : [];
+
+                    if (($push['delivered'] ?? false) === true) {
+                        $delivered++;
+                    } else {
+                        $failed++;
+                    }
+                }
+            });
+
+        return [
+            'recipients' => $recipients,
+            'delivered' => $delivered,
+            'failed' => $failed,
+        ];
+    }
+
+    /**
      * Send one or all catalog templates through the real engine (in-app + push by default).
      *
      * @param  array<int, string>  $channels

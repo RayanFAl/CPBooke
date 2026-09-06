@@ -15,6 +15,7 @@ use App\Modules\Admin\ProviderWallets\Services\ProviderWalletService;
 use App\Modules\Api\Orders\Services\OrderService;
 use App\Modules\Audit\Services\AuditRecorder;
 use App\Modules\Notifications\Events\PassengerActionDue;
+use App\Modules\Notifications\Services\NotificationService;
 use App\Modules\Orders\Events\PaymentSucceeded as PaymentSucceededEvent;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -26,6 +27,7 @@ class CustomerWalletService
         private readonly AuditRecorder $auditRecorder,
         private readonly OrderService $orderService,
         private readonly ProviderWalletService $providerWalletService,
+        private readonly NotificationService $notificationService,
     ) {}
 
     public function resolveWallet(
@@ -745,47 +747,53 @@ class CustomerWalletService
         ];
 
         $this->dispatchAfterCommit(function () use ($user, $code, $payload, $transaction, $wallet): void {
-            event(new PassengerActionDue(
-                $user,
-                $code,
-                $payload,
-                'wallet_transaction',
-                $transaction->id,
-            ));
+            try {
+                // Dispatch sync (not via queued PassengerActionDue listener) so wallet
+                // inbox + push work without notifications-dispatch / notifications-push workers.
+                $this->notificationService->dispatchForEvent(new PassengerActionDue(
+                    $user,
+                    $code,
+                    $payload,
+                    'wallet_transaction',
+                    $transaction->id,
+                ));
 
-            $isDebit = in_array($transaction->type, [
-                CustomerWalletTransaction::TYPE_BOOKING,
-                CustomerWalletTransaction::TYPE_DEBIT,
-                CustomerWalletTransaction::TYPE_ADMIN_DEBIT,
-            ], true);
+                $isDebit = in_array($transaction->type, [
+                    CustomerWalletTransaction::TYPE_BOOKING,
+                    CustomerWalletTransaction::TYPE_DEBIT,
+                    CustomerWalletTransaction::TYPE_ADMIN_DEBIT,
+                ], true);
 
-            if (! $isDebit || (float) $transaction->balance_after >= 50) {
-                return;
+                if (! $isDebit || (float) $transaction->balance_after >= 50) {
+                    return;
+                }
+
+                $already = UserNotification::query()
+                    ->where('user_id', $user->id)
+                    ->where('template_code', 'WALLET_LOW_BALANCE')
+                    ->where('related_type', 'customer_wallet')
+                    ->where('related_id', $wallet->id)
+                    ->where('created_at', '>=', now()->subDay())
+                    ->exists();
+
+                if ($already) {
+                    return;
+                }
+
+                $this->notificationService->dispatchForEvent(new PassengerActionDue(
+                    $user,
+                    'WALLET_LOW_BALANCE',
+                    [
+                        'amount' => $transaction->balance_after,
+                        'currency' => $transaction->currency,
+                        'deep_link' => '/wallet',
+                    ],
+                    'customer_wallet',
+                    $wallet->id,
+                ));
+            } catch (\Throwable $exception) {
+                report($exception);
             }
-
-            $already = UserNotification::query()
-                ->where('user_id', $user->id)
-                ->where('template_code', 'WALLET_LOW_BALANCE')
-                ->where('related_type', 'customer_wallet')
-                ->where('related_id', $wallet->id)
-                ->where('created_at', '>=', now()->subDay())
-                ->exists();
-
-            if ($already) {
-                return;
-            }
-
-            event(new PassengerActionDue(
-                $user,
-                'WALLET_LOW_BALANCE',
-                [
-                    'amount' => $transaction->balance_after,
-                    'currency' => $transaction->currency,
-                    'deep_link' => '/wallet',
-                ],
-                'customer_wallet',
-                $wallet->id,
-            ));
         });
     }
 }

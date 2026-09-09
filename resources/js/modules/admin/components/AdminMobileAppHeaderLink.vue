@@ -26,7 +26,7 @@ const linkTitle = computed(() => (
         :download="downloadAvailable ? '' : undefined"
         :target="downloadAvailable ? '_self' : '_blank'"
         rel="noopener noreferrer"
-        class="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-semibold text-slate-800 transition hover:bg-slate-100 hover:text-slate-950"
+        class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-800 transition hover:bg-slate-100 hover:text-slate-950 sm:w-auto sm:gap-1.5 sm:px-2.5 sm:text-sm sm:font-semibold"
         :class="downloadAvailable ? '' : 'opacity-60'"
         :title="linkTitle"
         :aria-label="linkTitle"
@@ -41,6 +41,6 @@ const linkTitle = computed(() => (
             <path stroke-linecap="round" stroke-linejoin="round" d="M10 6.5v4" />
             <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9.25 10 11.25l1.75-2" />
         </svg>
-        <span>{{ t('App') }}</span>
+        <span class="hidden sm:inline">{{ t('App') }}</span>
     </a>
 </template>

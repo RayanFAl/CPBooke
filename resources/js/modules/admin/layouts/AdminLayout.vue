@@ -147,8 +147,8 @@ onMounted(() => {
 
             <div class="flex min-w-0 flex-1 flex-col">
                 <header class="border-b border-slate-200 bg-white/90 backdrop-blur">
-                    <div class="flex items-center justify-between gap-4 px-5 py-4 sm:px-8">
-                        <div class="flex min-w-0 items-center gap-3">
+                    <div class="flex items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-8 sm:py-4">
+                        <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                             <button
                                 type="button"
                                 class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-700 transition hover:bg-slate-100 lg:hidden"
@@ -181,22 +181,22 @@ onMounted(() => {
                             </button>
 
                             <div class="min-w-0">
-                                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
+                                <p class="hidden text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700 sm:block">
                                     {{ t('Admin Module') }}
                                 </p>
                                 <div class="flex min-w-0 items-center gap-2">
-                                    <h1 class="truncate text-xl font-semibold text-slate-950">
+                                    <h1 class="truncate text-lg font-semibold text-slate-950 sm:text-xl">
                                         {{ translatedTitle || t('Control Panel') }}
                                     </h1>
                                     <AdminInfoTip v-if="helpText" :text="helpText" />
                                 </div>
-                                <p v-if="props.description" class="mt-1 truncate text-sm text-slate-600">
+                                <p v-if="props.description" class="mt-1 hidden truncate text-sm text-slate-600 md:block">
                                     {{ translatedDescription }}
                                 </p>
                             </div>
                         </div>
 
-                        <div class="flex shrink-0 items-center gap-3 text-sm">
+                        <div class="flex shrink-0 items-center gap-1.5 text-sm sm:gap-3">
                             <AdminMobileAppHeaderLink />
                             <AdminGlobalSearch />
 
@@ -217,7 +217,7 @@ onMounted(() => {
 
                             <Link
                                 :href="route('profile.edit')"
-                                class="flex max-w-[12rem] items-center gap-2 rounded-xl px-2 py-1.5 transition hover:bg-slate-100 sm:max-w-none"
+                                class="flex items-center gap-2 rounded-xl p-1.5 transition hover:bg-slate-100 sm:max-w-none sm:px-2"
                                 :title="displayName"
                             >
                                 <span
@@ -226,7 +226,7 @@ onMounted(() => {
                                 >
                                     {{ userInitials }}
                                 </span>
-                                <span class="truncate font-medium text-slate-900">
+                                <span class="hidden max-w-[10rem] truncate font-medium text-slate-900 sm:inline">
                                     {{ displayName }}
                                 </span>
                             </Link>
@@ -234,7 +234,7 @@ onMounted(() => {
                     </div>
                 </header>
 
-                <main id="main-content" class="flex-1 px-5 py-6 sm:px-8" tabindex="-1">
+                <main id="main-content" class="flex-1 overflow-x-hidden px-4 py-4 sm:px-8 sm:py-6" tabindex="-1">
                     <AdminBreadcrumbs v-if="breadcrumbs.length" :items="breadcrumbs" />
 
                     <slot />

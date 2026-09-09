@@ -85,6 +85,16 @@ final class NotificationTemplateSamples
             'LOGIN_ALERT' => array_merge($samples, [
                 'deep_link' => '/login',
             ]),
+            'APP_UPDATE_AVAILABLE' => array_merge($samples, [
+                'version' => '1.2.0',
+                'version_code' => '120',
+                'notes_ar' => 'تحسينات الأداء وإصلاحات مهمة',
+                'notes_en' => 'Performance improvements and important fixes',
+                'download_url' => 'https://example.com/app/download',
+                'page_url' => 'https://example.com/app',
+                'force_update' => '0',
+                'deep_link' => '/app',
+            ]),
             default => $samples,
         };
     }

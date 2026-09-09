@@ -21,6 +21,7 @@ class RegisterNotificationDeviceRequest extends ApiFormRequest
             'device_token' => ['required', 'string', 'min:20', 'max:191'],
             'platform' => ['required', 'string', 'in:ios,android,web'],
             'app_version' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'app_version_code' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'channel' => ['sometimes', 'string', 'in:'.NotificationChannels::PUSH],
         ];
     }

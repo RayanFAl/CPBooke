@@ -6,6 +6,7 @@ use App\Models\FinancialTransaction;
 use App\Models\Order;
 use App\Models\User;
 use App\Modules\Admin\Finance\Events\CriticalFinanceAnomaliesDetected;
+use App\Modules\Admin\MobileApp\Events\MobileAppReleasePublished;
 use App\Modules\Admin\Support\Events\SupportTicketAssigned;
 use App\Modules\Admin\Support\Events\SupportTicketCreated;
 use App\Modules\Admin\Support\Events\SupportTicketReplied;
@@ -56,8 +57,43 @@ class NotificationDefinitionRegistry
             $event instanceof AbandonedFlightSearchDue => [$this->abandonedFlightSearchDefinition($event)],
             $event instanceof PriceAlertHit => [$this->priceAlertHitDefinition($event)],
             $event instanceof PassengerActionDue => [$this->passengerActionDefinition($event)],
+            $event instanceof MobileAppReleasePublished => [$this->mobileAppReleasePublishedDefinition($event)],
             default => [],
         };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mobileAppReleasePublishedDefinition(MobileAppReleasePublished $event): array
+    {
+        $notesEn = trim($event->notesEn);
+        $notesAr = trim($event->notesAr);
+
+        return [
+            'code' => 'APP_UPDATE_AVAILABLE',
+            'name' => 'App Update Available',
+            'subject' => 'New Booke app update {version}',
+            'body' => 'Version {version} is ready. {notes_en}',
+            'channels' => [NotificationChannels::PUSH, NotificationChannels::IN_APP],
+            'variables' => ['version', 'version_code', 'notes_ar', 'notes_en', 'download_url', 'page_url', 'force_update', 'deep_link'],
+            'notification_type' => 'system',
+            'topic' => null,
+            'related_type' => 'mobile_app_release',
+            'related_id' => $event->versionCode,
+            'users' => $event->users,
+            'payload' => [
+                'version' => $event->version,
+                'version_code' => (string) $event->versionCode,
+                'notes_ar' => $notesAr !== '' ? $notesAr : 'افتح التطبيق للتحميل فوراً.',
+                'notes_en' => $notesEn !== '' ? $notesEn : 'Open the app to download it now.',
+                'download_url' => $event->downloadUrl,
+                'page_url' => $event->pageUrl,
+                'force_update' => $event->forceUpdate ? '1' : '0',
+                'deep_link' => '/app',
+                'idempotency_key' => 'app_update|'.$event->versionCode,
+            ],
+        ];
     }
 
     /**

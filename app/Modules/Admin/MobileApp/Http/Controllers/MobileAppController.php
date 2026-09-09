@@ -40,24 +40,58 @@ class MobileAppController
     public function uploadApk(UploadMobileApkRequest $request): RedirectResponse
     {
         $validated = $request->validated();
+        $notifyUsers = (bool) ($validated['notify_users'] ?? true);
 
-        $filename = $this->adminService->uploadApk(
+        $result = $this->adminService->uploadApk(
             $request->file('apk'),
             $validated['version'],
             (int) $validated['version_code'],
+            $notifyUsers,
         );
+
+        $message = "APK uploaded successfully as {$result['filename']}.";
+        if ($notifyUsers) {
+            $message .= ' '.$this->formatNotifySummary($result['notify']);
+        }
 
         return redirect()
             ->route('admin.mobile-app.index')
-            ->with('success', "APK uploaded successfully as {$filename}.");
+            ->with('success', $message);
     }
 
     public function updateRelease(UpdateMobileReleaseRequest $request): RedirectResponse
     {
-        $this->adminService->updateReleaseSettings($request->validated());
+        $validated = $request->validated();
+        $notifyUsers = (bool) ($validated['notify_users'] ?? false);
+        unset($validated['notify_users']);
+
+        $notifySummary = $this->adminService->updateReleaseSettings($validated, $notifyUsers);
+
+        $message = 'Release settings saved.';
+        if ($notifyUsers) {
+            $message .= ' '.$this->formatNotifySummary($notifySummary);
+        }
 
         return redirect()
             ->route('admin.mobile-app.index')
-            ->with('success', 'Release settings saved.');
+            ->with('success', $message);
+    }
+
+    /**
+     * @param  array{recipients: int, delivered: int, failed: int, skipped_up_to_date: int}|null  $summary
+     */
+    private function formatNotifySummary(?array $summary): string
+    {
+        if ($summary === null) {
+            return 'No update notifications were sent.';
+        }
+
+        return sprintf(
+            'Notifications: %d recipients (delivered: %d, failed: %d, already up to date: %d).',
+            $summary['recipients'],
+            $summary['delivered'],
+            $summary['failed'],
+            $summary['skipped_up_to_date'],
+        );
     }
 }

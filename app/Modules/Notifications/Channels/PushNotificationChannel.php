@@ -38,17 +38,30 @@ class PushNotificationChannel implements NotificationChannel
             ];
         }
 
-        $devices = $user->notificationDevices()
+        $devicesQuery = $user->notificationDevices()
             ->where('channel', NotificationChannels::PUSH)
-            ->where('is_active', true)
-            ->pluck('device_token')
-            ->all();
+            ->where('is_active', true);
+
+        $latestVersionCode = isset($variables['version_code']) && is_numeric($variables['version_code'])
+            ? (int) $variables['version_code']
+            : null;
+
+        if ($template->code === 'APP_UPDATE_AVAILABLE' && $latestVersionCode !== null) {
+            $devicesQuery->where(function ($query) use ($latestVersionCode): void {
+                $query->whereNull('app_version_code')
+                    ->orWhere('app_version_code', '<', $latestVersionCode);
+            });
+        }
+
+        $devices = $devicesQuery->pluck('device_token')->all();
 
         if ($devices === []) {
             return [
                 'provider' => 'fcm',
                 'delivered' => false,
-                'reason' => 'missing_device',
+                'reason' => $template->code === 'APP_UPDATE_AVAILABLE'
+                    ? 'device_already_up_to_date'
+                    : 'missing_device',
             ];
         }
 
@@ -78,6 +91,11 @@ class PushNotificationChannel implements NotificationChannel
                     ? '/my-orders'
                     : null
             ),
+            'download_url' => isset($variables['download_url']) ? (string) $variables['download_url'] : null,
+            'page_url' => isset($variables['page_url']) ? (string) $variables['page_url'] : null,
+            'version' => isset($variables['version']) ? (string) $variables['version'] : null,
+            'version_code' => isset($variables['version_code']) ? (string) $variables['version_code'] : null,
+            'force_update' => isset($variables['force_update']) ? (string) $variables['force_update'] : null,
             'notification_id' => isset($variables['notification_id']) ? (string) $variables['notification_id'] : null,
             'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
         ], static fn (mixed $value): bool => $value !== null && $value !== '');

@@ -12,7 +12,8 @@ class ImportMobileApkCommand extends Command
     protected $signature = 'mobile-app:import-apk
                             {path : Absolute or relative path to the APK file}
                             {--apk-version= : Semantic version like 1.0.0 (cannot use --version; that flag is reserved by Artisan)}
-                            {--version-code= : Integer version code like 1}';
+                            {--version-code= : Integer version code like 1}
+                            {--notify : Send push notifications now to users with active devices}';
 
     protected $description = 'Import a local APK into storage/app/releases (useful when web upload hits PHP size limits)';
 
@@ -57,9 +58,24 @@ class ImportMobileApkCommand extends Command
 
         $existing = $adminService->readManifestForForm();
 
-        $adminService->uploadApkFromPath($targetPath, $version, $versionCode, $existing);
+        $notifyUsers = (bool) $this->option('notify');
+        $notifySummary = $adminService->uploadApkFromPath($targetPath, $version, $versionCode, $existing, $notifyUsers);
 
         $this->info("Imported {$targetFilename} ({$this->formatBytes(filesize($targetPath))}).");
+
+        if ($notifyUsers) {
+            if ($notifySummary === null) {
+                $this->info('No update notifications were sent.');
+            } else {
+                $this->info(sprintf(
+                    'Notifications: %d recipients (delivered: %d, failed: %d, already up to date: %d).',
+                    $notifySummary['recipients'],
+                    $notifySummary['delivered'],
+                    $notifySummary['failed'],
+                    $notifySummary['skipped_up_to_date'],
+                ));
+            }
+        }
 
         return self::SUCCESS;
     }

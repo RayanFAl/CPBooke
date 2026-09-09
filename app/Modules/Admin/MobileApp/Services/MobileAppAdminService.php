@@ -3,6 +3,9 @@
 namespace App\Modules\Admin\MobileApp\Services;
 
 use App\Modules\Content\Services\MobileAppReleaseService;
+use App\Modules\Notifications\Jobs\BroadcastMobileAppReleaseNotificationsJob;
+use App\Modules\Notifications\Services\NotificationService;
+use App\Modules\Notifications\Services\NotificationTemplateSyncService;
 use App\Support\PhpIniSize;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
@@ -132,7 +135,7 @@ class MobileAppAdminService
         return $files;
     }
 
-    public function uploadApk(UploadedFile $file, string $version, int $versionCode): string
+    public function uploadApk(UploadedFile $file, string $version, int $versionCode, bool $notifyUsers = true): array
     {
         File::ensureDirectoryExists($this->releasesDirectory());
 
@@ -146,9 +149,10 @@ class MobileAppAdminService
             $file->move($this->releasesDirectory(), $filename);
         }
 
-        $this->finalizeUpload($version, $versionCode, $filename);
-
-        return $filename;
+        return [
+            'filename' => $filename,
+            'notify' => $this->finalizeUpload($version, $versionCode, $filename, notifyUsers: $notifyUsers),
+        ];
     }
 
     private function extractApkFromZip(UploadedFile $file, string $destination): void
@@ -265,9 +269,9 @@ class MobileAppAdminService
      *     notes_en: string,
      * }|null  $existing
      */
-    public function uploadApkFromPath(string $targetPath, string $version, int $versionCode, ?array $existing = null): void
+    public function uploadApkFromPath(string $targetPath, string $version, int $versionCode, ?array $existing = null, bool $notifyUsers = false): ?array
     {
-        $this->finalizeUpload($version, $versionCode, basename($targetPath), $existing);
+        return $this->finalizeUpload($version, $versionCode, basename($targetPath), $existing, $notifyUsers);
     }
 
     /**
@@ -305,6 +309,35 @@ class MobileAppAdminService
     }
 
     /**
+     * @return array{recipients: int, delivered: int, failed: int, skipped_up_to_date: int}|null
+     */
+    public function notifyUsersOfRelease(): ?array
+    {
+        $release = $this->currentReleaseSummary();
+
+        if ($release === null) {
+            return null;
+        }
+
+        $notes = is_array($release['notes'] ?? null) ? $release['notes'] : [];
+
+        $job = new BroadcastMobileAppReleaseNotificationsJob(
+            version: (string) $release['version'],
+            versionCode: (int) $release['version_code'],
+            notesAr: (string) ($notes['ar'] ?? ''),
+            notesEn: (string) ($notes['en'] ?? ''),
+            downloadUrl: (string) $release['download_url'],
+            pageUrl: (string) $release['page_url'],
+            forceUpdate: (bool) $release['force_update'],
+        );
+
+        return $job->handle(
+            app(NotificationService::class),
+            app(NotificationTemplateSyncService::class),
+        );
+    }
+
+    /**
      * @param  array{
      *     version: string,
      *     version_code: int,
@@ -314,8 +347,9 @@ class MobileAppAdminService
      *     notes_ar: string,
      *     notes_en: string,
      * }|null  $existing
+     * @return array{recipients: int, delivered: int, failed: int, skipped_up_to_date: int}|null
      */
-    private function finalizeUpload(string $version, int $versionCode, string $filename, ?array $existing = null): void
+    private function finalizeUpload(string $version, int $versionCode, string $filename, ?array $existing = null, bool $notifyUsers = true): ?array
     {
         $existing ??= $this->readManifestForForm();
 
@@ -330,6 +364,12 @@ class MobileAppAdminService
         ]);
 
         $this->releaseService->flushCache();
+
+        if (! $notifyUsers) {
+            return null;
+        }
+
+        return $this->notifyUsersOfRelease();
     }
 
     /**
@@ -342,8 +382,9 @@ class MobileAppAdminService
      *     notes_ar?: string|null,
      *     notes_en?: string|null,
      * }  $data
+     * @return array{recipients: int, delivered: int, failed: int, skipped_up_to_date: int}|null
      */
-    public function updateReleaseSettings(array $data): void
+    public function updateReleaseSettings(array $data, bool $notifyUsers = false): ?array
     {
         $apk = basename((string) $data['apk']);
         $apkPath = $this->releasesDirectory().DIRECTORY_SEPARATOR.$apk;
@@ -368,6 +409,12 @@ class MobileAppAdminService
         ]);
 
         $this->releaseService->flushCache();
+
+        if (! $notifyUsers) {
+            return null;
+        }
+
+        return $this->notifyUsersOfRelease();
     }
 
     /**

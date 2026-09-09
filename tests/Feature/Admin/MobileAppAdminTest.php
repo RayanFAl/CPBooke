@@ -2,12 +2,16 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Models\NotificationLog;
 use App\Models\User;
+use App\Models\UserNotificationDevice;
+use App\Modules\Notifications\Support\NotificationChannels;
 use App\Support\Rbac\RbacRegistry;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class MobileAppAdminTest extends TestCase
@@ -95,6 +99,179 @@ class MobileAppAdminTest extends TestCase
             ->assertJsonPath('data.update_available', true);
     }
 
+    public function test_upload_can_skip_user_notifications(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_active' => true,
+        ]);
+        UserNotificationDevice::query()->create([
+            'user_id' => $customer->id,
+            'channel' => NotificationChannels::PUSH,
+            'platform' => 'android',
+            'app_version' => '1.0.0',
+            'app_version_code' => 100,
+            'device_token' => str_repeat('a', 40),
+            'is_active' => true,
+            'last_seen_at' => now(),
+        ]);
+
+        $actor = $this->superAdmin();
+
+        $this->actingAs($actor)
+            ->post(route('admin.mobile-app.apk.upload'), [
+                'version' => '1.3.0',
+                'version_code' => 130,
+                'notify_users' => false,
+                'apk' => UploadedFile::fake()->create('app-release.apk', 128, 'application/vnd.android.package-archive'),
+            ])
+            ->assertRedirect(route('admin.mobile-app.index'))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('notification_logs', [
+            'template_code' => 'APP_UPDATE_AVAILABLE',
+        ]);
+        $this->assertDatabaseMissing('user_notifications', [
+            'template_code' => 'APP_UPDATE_AVAILABLE',
+        ]);
+    }
+
+    public function test_upload_notifies_outdated_devices_and_skips_up_to_date(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $outdated = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_active' => true,
+        ]);
+        UserNotificationDevice::query()->create([
+            'user_id' => $outdated->id,
+            'channel' => NotificationChannels::PUSH,
+            'platform' => 'android',
+            'app_version' => '1.0.0',
+            'app_version_code' => 100,
+            'device_token' => str_repeat('b', 40),
+            'is_active' => true,
+            'last_seen_at' => now(),
+        ]);
+
+        $current = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_active' => true,
+        ]);
+        UserNotificationDevice::query()->create([
+            'user_id' => $current->id,
+            'channel' => NotificationChannels::PUSH,
+            'platform' => 'android',
+            'app_version' => '1.2.0',
+            'app_version_code' => 120,
+            'device_token' => str_repeat('c', 40),
+            'is_active' => true,
+            'last_seen_at' => now(),
+        ]);
+
+        $actor = $this->superAdmin();
+
+        $this->actingAs($actor)
+            ->post(route('admin.mobile-app.apk.upload'), [
+                'version' => '1.2.0',
+                'version_code' => 120,
+                'notify_users' => true,
+                'apk' => UploadedFile::fake()->create('app-release.apk', 128, 'application/vnd.android.package-archive'),
+            ])
+            ->assertRedirect(route('admin.mobile-app.index'))
+            ->assertSessionHas('success', function (string $message): bool {
+                return str_contains($message, 'Notifications:')
+                    && str_contains($message, '1 recipients')
+                    && str_contains($message, 'already up to date: 1');
+            });
+
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $outdated->id,
+            'template_code' => 'APP_UPDATE_AVAILABLE',
+        ]);
+        $this->assertDatabaseMissing('user_notifications', [
+            'user_id' => $current->id,
+            'template_code' => 'APP_UPDATE_AVAILABLE',
+        ]);
+        $this->assertSame(1, NotificationLog::query()
+            ->where('template_code', 'APP_UPDATE_AVAILABLE')
+            ->where('channel', NotificationChannels::PUSH)
+            ->count());
+    }
+
+    public function test_device_registration_stores_app_version_code(): void
+    {
+        $user = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/notifications/devices', [
+            'device_token' => str_repeat('d', 40),
+            'platform' => 'android',
+            'app_version' => '1.2.0',
+            'app_version_code' => 120,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.app_version', '1.2.0')
+            ->assertJsonPath('data.app_version_code', 120);
+
+        $this->assertDatabaseHas('user_notification_devices', [
+            'user_id' => $user->id,
+            'app_version' => '1.2.0',
+            'app_version_code' => 120,
+        ]);
+    }
+
+    public function test_release_settings_can_send_update_notifications(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_active' => true,
+        ]);
+        UserNotificationDevice::query()->create([
+            'user_id' => $customer->id,
+            'channel' => NotificationChannels::PUSH,
+            'platform' => 'android',
+            'app_version_code' => 100,
+            'device_token' => str_repeat('e', 40),
+            'is_active' => true,
+            'last_seen_at' => now(),
+        ]);
+
+        $actor = $this->superAdmin();
+        $apkName = 'booke-1.2.0+120.apk';
+        File::put($this->releasesDirectory.DIRECTORY_SEPARATOR.$apkName, 'apk-bytes');
+
+        $this->actingAs($actor)
+            ->put(route('admin.mobile-app.release.update'), [
+                'version' => '1.2.0',
+                'version_code' => 120,
+                'apk' => $apkName,
+                'force_update' => true,
+                'notify_users' => true,
+                'min_version_code' => 110,
+                'notes_ar' => 'تحديث إجباري',
+                'notes_en' => 'Mandatory update',
+            ])
+            ->assertRedirect(route('admin.mobile-app.index'))
+            ->assertSessionHas('success', function (string $message): bool {
+                return str_contains($message, 'Notifications:')
+                    && str_contains($message, '1 recipients');
+            });
+
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $customer->id,
+            'template_code' => 'APP_UPDATE_AVAILABLE',
+        ]);
+    }
+
     public function test_super_admin_can_upload_zip_containing_apk(): void
     {
         $this->seed(RolesAndPermissionsSeeder::class);
@@ -114,6 +291,7 @@ class MobileAppAdminTest extends TestCase
             ->post(route('admin.mobile-app.apk.upload'), [
                 'version' => '2.0.0',
                 'version_code' => 200,
+                'notify_users' => false,
                 'apk' => new UploadedFile($zipPath, 'release-bundle.zip', 'application/zip', null, true),
             ])
             ->assertRedirect(route('admin.mobile-app.index'))
@@ -170,6 +348,43 @@ class MobileAppAdminTest extends TestCase
         $this->assertSame('1.0.0', $manifest['version']);
         $this->assertSame(1, $manifest['version_code']);
         $this->assertSame('booke-1.0.0+1.apk', $manifest['apk']);
+        $this->assertDatabaseMissing('notification_logs', [
+            'template_code' => 'APP_UPDATE_AVAILABLE',
+        ]);
+    }
+
+    public function test_import_apk_command_can_notify_users(): void
+    {
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_active' => true,
+        ]);
+        UserNotificationDevice::query()->create([
+            'user_id' => $customer->id,
+            'channel' => NotificationChannels::PUSH,
+            'platform' => 'android',
+            'app_version_code' => 1,
+            'device_token' => str_repeat('f', 40),
+            'is_active' => true,
+            'last_seen_at' => now(),
+        ]);
+
+        $source = $this->releasesDirectory.DIRECTORY_SEPARATOR.'source.apk';
+        File::put($source, 'apk-bytes');
+
+        $this->artisan('mobile-app:import-apk', [
+            'path' => $source,
+            '--apk-version' => '1.1.0',
+            '--version-code' => 11,
+            '--notify' => true,
+        ])
+            ->assertSuccessful()
+            ->expectsOutputToContain('Notifications: 1 recipients');
+
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $customer->id,
+            'template_code' => 'APP_UPDATE_AVAILABLE',
+        ]);
     }
 
     public function test_super_admin_can_update_release_settings_and_force_update(): void

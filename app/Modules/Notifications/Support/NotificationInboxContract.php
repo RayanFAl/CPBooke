@@ -72,7 +72,7 @@ final class NotificationInboxContract
             in_array($code, [
                 'HOTEL_BOOKING_MODIFIED', 'HOTEL_CHECKIN_CHANGED', 'HOTEL_CHECKOUT_CHANGED',
                 'HOTEL_BOOKING_CANCELLED', 'BOOKING_CANCELLED', 'DOCUMENT_REQUIRED',
-                'DOCUMENT_VERIFICATION_REQUIRED', 'VISA_DOCUMENT_MISSING',
+                'DOCUMENT_VERIFICATION_REQUIRED', 'VISA_DOCUMENT_MISSING', 'APP_UPDATE_AVAILABLE',
             ], true) => self::FAMILY_OPERATIONAL,
             default => self::FAMILY_TRANSACTIONAL,
         };
@@ -113,6 +113,7 @@ final class NotificationInboxContract
             str_starts_with($code, 'ESIM_'),
             $code === 'OFFER_ESIM' || $code === 'OFFER_ESIM_FOR_TRIP' => self::CATEGORY_ESIM,
             in_array($code, ['LOGIN_ALERT', 'NEW_DEVICE_LOGIN', 'PASSWORD_CHANGED', 'EMAIL_CHANGED', 'PHONE_CHANGED', 'ACCOUNT_SECURITY_ALERT'], true) => self::CATEGORY_SECURITY,
+            $code === 'APP_UPDATE_AVAILABLE' => self::CATEGORY_OFFERS,
             str_starts_with($code, 'OFFER_'),
             str_starts_with($code, 'POINTS_'),
             in_array($code, ['POST_TRIP_NEXT', 'LOYALTY_NEAR_REWARD', 'POST_TRIP_THANKS', 'LOYALTY_TIER_CHANGED', 'REWARD_AVAILABLE', 'TIER_UPGRADED'], true) => self::CATEGORY_OFFERS,
@@ -258,6 +259,19 @@ final class NotificationInboxContract
             ],
             'HOTEL_CHECKOUT_REMINDER' => [
                 self::action('view_hotel', 'View hotel booking', 'عرض حجز الفندق', $orderLink),
+            ],
+            'APP_UPDATE_AVAILABLE' => [
+                self::action(
+                    'download_update',
+                    'Download update',
+                    'تحميل التحديث',
+                    is_string($payload['download_url'] ?? null) && $payload['download_url'] !== ''
+                        ? (string) $payload['download_url']
+                        : (is_string($payload['page_url'] ?? null) && $payload['page_url'] !== ''
+                            ? (string) $payload['page_url']
+                            : '/app'),
+                ),
+                self::action('open_download_page', 'Open download page', 'فتح صفحة التحميل', '/app'),
             ],
             default => [
                 self::action('open', 'Open', 'فتح', $orderLink),

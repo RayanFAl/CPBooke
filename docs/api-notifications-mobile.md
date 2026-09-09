@@ -24,8 +24,15 @@ Base path: `/api/v1/notifications` (Sanctum). Response envelope: `{ success, mes
 ### Device register
 ```json
 POST /notifications/devices
-{ "device_token": "FCM_TOKEN", "platform": "android|ios", "app_version": "1.0.0" }
+{
+  "device_token": "FCM_TOKEN",
+  "platform": "android|ios",
+  "app_version": "1.2.0",
+  "app_version_code": 120
+}
 ```
+
+`app_version_code` is used to skip push notifications for users already on the latest Android release.
 
 ### Preferences (defaults)
 `push=true`, `email=true`, `sms=false`,  

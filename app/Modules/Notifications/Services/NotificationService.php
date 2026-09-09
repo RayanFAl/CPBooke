@@ -167,6 +167,7 @@ class NotificationService
         string $platform,
         string $channel = NotificationChannels::PUSH,
         ?string $appVersion = null,
+        ?int $appVersionCode = null,
     ): UserNotificationDevice {
         $device = UserNotificationDevice::query()->updateOrCreate(
             ['device_token' => $deviceToken],
@@ -175,6 +176,7 @@ class NotificationService
                 'channel' => $channel,
                 'platform' => $platform,
                 'app_version' => $appVersion,
+                'app_version_code' => $appVersionCode,
                 'is_active' => true,
                 'last_seen_at' => now(),
             ],
@@ -187,6 +189,7 @@ class NotificationService
                 'channel' => $channel,
                 'platform' => $platform,
                 'app_version' => $appVersion,
+                'app_version_code' => $appVersionCode,
                 'is_active' => true,
                 'last_seen_at' => now(),
             ])->save();

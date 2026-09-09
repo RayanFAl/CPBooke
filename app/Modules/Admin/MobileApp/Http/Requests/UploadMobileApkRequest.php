@@ -24,7 +24,17 @@ class UploadMobileApkRequest extends FormRequest
             'apk' => ['required', 'file', 'extensions:apk,zip', 'max:'.$maxKb],
             'version' => ['required', 'string', 'regex:/^\d+\.\d+\.\d+$/'],
             'version_code' => ['required', 'integer', 'min:1'],
+            'notify_users' => ['sometimes', 'boolean'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('notify_users')) {
+            $this->merge([
+                'notify_users' => filter_var($this->input('notify_users'), FILTER_VALIDATE_BOOLEAN),
+            ]);
+        }
     }
 
     public function withValidator(Validator $validator): void

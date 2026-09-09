@@ -561,3 +561,68 @@ flutter run --dart-define=PASSENGER_API_ORIGIN=http://10.0.2.2:8000
   }
 }
 ```
+
+---
+
+## 13. Push notification on new APK (`APP_UPDATE_AVAILABLE`)
+
+When ops upload an APK with **Notify users**, Laravel sends an FCM + in-app notification to customers whose registered device `app_version_code` is missing or lower than the new release.
+
+### Device registration (required)
+
+When registering FCM, also send the build number:
+
+```json
+POST /api/v1/notifications/devices
+{
+  "device_token": "...",
+  "platform": "android",
+  "app_version": "1.2.0",
+  "app_version_code": 120
+}
+```
+
+Use `PackageInfo.fromPlatform()` → `version` + `buildNumber` as `app_version_code`.
+
+### Push data payload
+
+```json
+{
+  "template_code": "APP_UPDATE_AVAILABLE",
+  "type": "system",
+  "deep_link": "/app",
+  "download_url": "https://booke.ly/app/download",
+  "page_url": "https://booke.ly/app",
+  "version": "1.2.0",
+  "version_code": "120",
+  "force_update": "0",
+  "click_action": "FLUTTER_NOTIFICATION_CLICK"
+}
+```
+
+### Flutter handling
+
+On notification tap / foreground message for `APP_UPDATE_AVAILABLE`:
+
+1. Prefer `download_url` from data (open with `url_launcher` / download APK).
+2. Or open `page_url` / `/app`.
+3. Or call `AppUpdateChecker` again and show the existing update dialog.
+
+Example sketch:
+
+```dart
+void handleAppUpdatePush(RemoteMessage message) {
+  final data = message.data;
+  if (data['template_code'] != 'APP_UPDATE_AVAILABLE') return;
+
+  final downloadUrl = data['download_url'];
+  if (downloadUrl != null && downloadUrl.isNotEmpty) {
+    launchUrl(Uri.parse(downloadUrl), mode: LaunchMode.externalApplication);
+    return;
+  }
+
+  getIt<AppUpdateChecker>().check(force: true);
+}
+```
+
+Users without login / without a device token still rely on launch-time `GET /api/v1/app/update`.

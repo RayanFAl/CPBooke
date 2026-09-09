@@ -637,6 +637,18 @@ final class NotificationTemplateCatalog
                 channels: [NotificationChannels::EMAIL, NotificationChannels::PUSH, NotificationChannels::IN_APP],
                 variables: ['user_name', 'from_tier', 'tier_name', 'deep_link'],
             ),
+            self::entry(
+                code: 'APP_UPDATE_AVAILABLE',
+                name: 'App Update Available',
+                category: NotificationTemplateCategories::GENERAL,
+                description: 'Sent when a new Android APK release is published so users can download it immediately.',
+                subject: 'New Booke app update {version}',
+                body: 'Version {version} is ready. {notes_en}',
+                arSubject: 'تحديث جديد لتطبيق Booke {version}',
+                arBody: 'الإصدار {version} جاهز للتحميل. {notes_ar}',
+                channels: [NotificationChannels::PUSH, NotificationChannels::IN_APP],
+                variables: ['version', 'version_code', 'notes_ar', 'notes_en', 'download_url', 'page_url', 'force_update', 'deep_link'],
+            ),
         ];
 
         return array_merge($existing, array_map(

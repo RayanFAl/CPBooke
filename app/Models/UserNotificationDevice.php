@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'channel',
     'platform',
     'app_version',
+    'app_version_code',
     'device_token',
     'is_active',
     'last_seen_at',
@@ -26,6 +27,7 @@ class UserNotificationDevice extends Model
     {
         return [
             'is_active' => 'boolean',
+            'app_version_code' => 'integer',
             'last_seen_at' => 'datetime',
         ];
     }

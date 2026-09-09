@@ -29,6 +29,7 @@ const uploadForm = useForm({
     apk: null,
     version: props.manifest.version ?? '1.0.0',
     version_code: props.manifest.version_code ?? 1,
+    notify_users: true,
 });
 
 const releaseForm = useForm({
@@ -36,6 +37,7 @@ const releaseForm = useForm({
     version_code: props.manifest.version_code ?? 1,
     apk: props.manifest.apk ?? '',
     force_update: Boolean(props.manifest.force_update),
+    notify_users: false,
     min_version_code: props.manifest.min_version_code ?? '',
     notes_ar: props.manifest.notes_ar ?? '',
     notes_en: props.manifest.notes_en ?? '',
@@ -81,16 +83,22 @@ const submitUpload = () => {
         return;
     }
 
-    uploadForm.post(props.upload_url, {
-        forceFormData: true,
-        preserveScroll: true,
-        onSuccess: () => {
-            uploadForm.reset('apk');
-            if (apkInput.value) {
-                apkInput.value.value = '';
-            }
-        },
-    });
+    uploadForm
+        .transform((data) => ({
+            ...data,
+            notify_users: Boolean(data.notify_users),
+        }))
+        .post(props.upload_url, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                uploadForm.reset('apk');
+                uploadForm.notify_users = true;
+                if (apkInput.value) {
+                    apkInput.value.value = '';
+                }
+            },
+        });
 };
 
 const useApkInSettings = (file) => {
@@ -111,9 +119,13 @@ const submitReleaseSettings = () => {
                 ? null
                 : Number(data.min_version_code),
             force_update: Boolean(data.force_update),
+            notify_users: Boolean(data.notify_users),
         }))
         .put(props.release_update_url, {
             preserveScroll: true,
+            onSuccess: () => {
+                releaseForm.notify_users = false;
+            },
         });
 };
 </script>
@@ -190,7 +202,7 @@ const submitReleaseSettings = () => {
                         <span v-if="upload_limits.php_upload_max_label"> · PHP {{ upload_limits.php_upload_max_label }}</span>
                     </p>
                     <p v-if="phpUploadTooLow" class="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                        {{ t('PHP upload limit is too low for large APK files. Raise upload_max_filesize and post_max_size in php.ini (see config/php/local-dev.ini), restart php artisan serve, then refresh this page.') }}
+                        {{ t('PHP upload limit is below 128 MB, so larger APKs may fail. Raise upload_max_filesize and post_max_size in php.ini (or config/php/local-dev.ini for local), restart PHP / php artisan serve, then refresh. Files within the limit above can still be uploaded.') }}
                     </p>
 
                     <form class="mt-5 space-y-4" @submit.prevent="submitUpload">
@@ -226,7 +238,21 @@ const submitReleaseSettings = () => {
                             </p>
                         </label>
 
-                        <AdminButton type="submit" :disabled="uploadForm.processing || selectedApkTooLarge || phpUploadTooLow">
+                        <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+                            <input
+                                v-model="uploadForm.notify_users"
+                                type="checkbox"
+                                class="mt-0.5 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                            >
+                            <span>
+                                <span class="font-medium">{{ t('Notify users') }}</span>
+                                <span class="mt-1 block text-xs text-slate-500">
+                                    {{ t('Send a push notification so users can download the new APK immediately.') }}
+                                </span>
+                            </span>
+                        </label>
+
+                        <AdminButton type="submit" :disabled="uploadForm.processing || selectedApkTooLarge">
                             {{ uploadForm.processing ? t('Uploading…') : t('Upload APK') }}
                         </AdminButton>
                     </form>
@@ -281,6 +307,19 @@ const submitReleaseSettings = () => {
                             <span class="font-medium">{{ t('Force update') }}</span>
                             <span class="mt-1 block text-xs text-slate-500">
                                 {{ t('When enabled, the mobile app must update before the user can continue.') }}
+                            </span>
+                        </span>
+                    </label>
+                    <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+                        <input
+                            v-model="releaseForm.notify_users"
+                            type="checkbox"
+                            class="mt-0.5 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                        >
+                        <span>
+                            <span class="font-medium">{{ t('Notify users') }}</span>
+                            <span class="mt-1 block text-xs text-slate-500">
+                                {{ t('Also send a push notification about this release after saving.') }}
                             </span>
                         </span>
                     </label>

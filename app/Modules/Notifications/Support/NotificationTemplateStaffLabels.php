@@ -146,6 +146,7 @@ final class NotificationTemplateStaffLabels
             'EMAIL_CHANGED' => ['en' => 'Email address changed', 'ar' => 'تم تغيير البريد الإلكتروني'],
             'PHONE_CHANGED' => ['en' => 'Phone number changed', 'ar' => 'تم تغيير رقم الهاتف'],
             'ACCOUNT_SECURITY_ALERT' => ['en' => 'Account security alert', 'ar' => 'تنبيه أمني على الحساب'],
+            'APP_UPDATE_AVAILABLE' => ['en' => 'Mobile app update available', 'ar' => 'تحديث تطبيق الجوال متاح'],
         ];
     }
 

@@ -152,6 +152,9 @@ class NotificationApiController extends Controller
             $request->validated('platform'),
             $request->validated('channel', NotificationChannels::PUSH),
             $request->validated('app_version'),
+            isset($request->validated()['app_version_code']) && is_numeric($request->validated('app_version_code'))
+                ? (int) $request->validated('app_version_code')
+                : null,
         );
 
         return ApiResponse::success(
@@ -159,6 +162,7 @@ class NotificationApiController extends Controller
                 'id' => $device->id,
                 'platform' => $device->platform,
                 'app_version' => $device->app_version,
+                'app_version_code' => $device->app_version_code,
                 'channel' => $device->channel,
                 'is_active' => $device->is_active,
                 'last_seen_at' => $device->last_seen_at?->toIso8601String(),

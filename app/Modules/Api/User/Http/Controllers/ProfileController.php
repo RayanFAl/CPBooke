@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Api\Resources\UserResource;
 use App\Modules\Api\Support\Http\Responses\ApiResponse;
 use App\Modules\Api\User\Http\Requests\ConfirmOtpRequest;
+use App\Modules\Api\User\Http\Requests\DeleteAccountRequest;
 use App\Modules\Api\User\Http\Requests\EmailChangeRequest;
 use App\Modules\Api\User\Http\Requests\EmailChangeVerifyRequest;
 use App\Modules\Api\User\Http\Requests\UpdateProfileRequest;
@@ -59,6 +60,16 @@ class ProfileController extends Controller
         return ApiResponse::success(
             ['user' => UserResource::make($user)->resolve($request)],
             'Avatar deleted successfully.',
+        );
+    }
+
+    public function destroy(DeleteAccountRequest $request): JsonResponse
+    {
+        $this->userService->deleteAccount($request->user());
+
+        return ApiResponse::success(
+            [],
+            'Account deleted successfully.',
         );
     }
 

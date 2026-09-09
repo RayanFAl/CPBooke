@@ -18,6 +18,10 @@ Route::middleware('auth:sanctum')
             ->middleware('throttle:10,1')
             ->name('profile.avatar.destroy');
 
+        Route::delete('/account', 'destroy')
+            ->middleware('throttle:5,1')
+            ->name('account.destroy');
+
         Route::post('/email/change-request', 'requestEmailChange')
             ->middleware('throttle:5,1')
             ->name('email.change-request');

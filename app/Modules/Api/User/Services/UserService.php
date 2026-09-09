@@ -8,6 +8,7 @@ use App\Modules\Loyalty\Services\LoyaltyService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class UserService
 {
@@ -169,6 +170,25 @@ class UserService
         $user->forceFill(['phone_verified_at' => now()])->save();
 
         return $this->profile($user->refresh());
+    }
+
+    /**
+     * Permanently delete the authenticated customer account.
+     */
+    public function deleteAccount(User $user): void
+    {
+        if (! $user->isCustomerAccount()) {
+            throw ValidationException::withMessages([
+                'account' => ['Only customer accounts can be deleted from the mobile app.'],
+            ]);
+        }
+
+        if ($user->avatar_path) {
+            Storage::disk('public')->delete($user->avatar_path);
+        }
+
+        $user->tokens()->delete();
+        $user->delete();
     }
 
     private function forgetTransientAttributes(User $user): void

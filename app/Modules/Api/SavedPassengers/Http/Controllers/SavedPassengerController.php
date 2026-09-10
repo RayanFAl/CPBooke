@@ -7,6 +7,7 @@ use App\Models\SavedPassenger;
 use App\Modules\Api\Resources\SavedPassengerResource;
 use App\Modules\Api\SavedPassengers\Http\Requests\StoreSavedPassengerRequest;
 use App\Modules\Api\SavedPassengers\Http\Requests\UpdateSavedPassengerRequest;
+use App\Modules\Api\SavedPassengers\Http\Requests\UploadPassportImageRequest;
 use App\Modules\Api\SavedPassengers\Services\SavedPassengerService;
 use App\Modules\Api\Support\Http\Responses\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -105,6 +106,41 @@ class SavedPassengerController extends Controller
         return ApiResponse::success(
             [],
             'Passenger deleted successfully.',
+        );
+    }
+
+    /**
+     * Upload / replace the private passport scan image for a saved passenger.
+     */
+    public function uploadPassportImage(
+        UploadPassportImageRequest $request,
+        SavedPassenger $savedPassenger,
+    ): JsonResponse {
+        $this->authorize('update', $savedPassenger);
+
+        $passenger = $this->savedPassengerService->uploadPassportImage(
+            $savedPassenger,
+            $request->file('file'),
+        );
+
+        return ApiResponse::success(
+            SavedPassengerResource::make($passenger)->resolve($request),
+            'Passport image uploaded successfully.',
+        );
+    }
+
+    /**
+     * Remove the private passport scan image for a saved passenger.
+     */
+    public function destroyPassportImage(Request $request, SavedPassenger $savedPassenger): JsonResponse
+    {
+        $this->authorize('update', $savedPassenger);
+
+        $passenger = $this->savedPassengerService->deletePassportImage($savedPassenger);
+
+        return ApiResponse::success(
+            SavedPassengerResource::make($passenger)->resolve($request),
+            'Passport image deleted successfully.',
         );
     }
 }

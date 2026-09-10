@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\SavedPassenger;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -333,5 +335,107 @@ class ApiSavedPassengersTest extends TestCase
                     'passport_expiry',
                 ],
             ]);
+    }
+
+    public function test_customer_can_upload_and_delete_passport_image_privately(): void
+    {
+        Storage::fake('local');
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $passenger = SavedPassenger::factory()->create([
+            'user_id' => $customer->id,
+        ]);
+
+        $this->post('/api/v1/saved-passengers/'.$passenger->id.'/passport-image', [
+            'file' => UploadedFile::fake()->image('passport.jpg', 800, 600),
+        ], [
+            'Accept' => 'application/json',
+        ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.has_passport_image', true)
+            ->assertJsonMissingPath('data.passport_image_path')
+            ->assertJsonMissingPath('data.passport_image_url');
+
+        $passenger->refresh();
+        $this->assertTrue($passenger->hasPassportImage());
+        $this->assertNotNull($passenger->passport_image_uploaded_at);
+        Storage::disk('local')->assertExists($passenger->passport_image_path);
+
+        $this->getJson('/api/v1/saved-passengers/'.$passenger->id)
+            ->assertOk()
+            ->assertJsonPath('data.has_passport_image', true)
+            ->assertJsonMissingPath('data.passport_image_url');
+
+        $this->deleteJson('/api/v1/saved-passengers/'.$passenger->id.'/passport-image')
+            ->assertOk()
+            ->assertJsonPath('data.has_passport_image', false)
+            ->assertJsonPath('data.passport_image_uploaded_at', null);
+
+        $passenger->refresh();
+        $this->assertFalse($passenger->hasPassportImage());
+    }
+
+    public function test_customer_cannot_upload_passport_image_for_another_user(): void
+    {
+        Storage::fake('local');
+
+        $owner = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+        $other = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $passenger = SavedPassenger::factory()->create([
+            'user_id' => $owner->id,
+        ]);
+
+        Sanctum::actingAs($other);
+
+        $this->post('/api/v1/saved-passengers/'.$passenger->id.'/passport-image', [
+            'file' => UploadedFile::fake()->image('passport.png', 400, 400),
+        ], [
+            'Accept' => 'application/json',
+        ])->assertForbidden();
+    }
+
+    public function test_deleting_passenger_removes_passport_image_file(): void
+    {
+        Storage::fake('local');
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $passenger = SavedPassenger::factory()->create([
+            'user_id' => $customer->id,
+        ]);
+
+        $this->post('/api/v1/saved-passengers/'.$passenger->id.'/passport-image', [
+            'file' => UploadedFile::fake()->image('passport.jpg', 500, 500),
+        ], [
+            'Accept' => 'application/json',
+        ])->assertOk();
+
+        $path = $passenger->fresh()->passport_image_path;
+        $this->assertNotNull($path);
+        Storage::disk('local')->assertExists($path);
+
+        $this->deleteJson('/api/v1/saved-passengers/'.$passenger->id)->assertOk();
+
+        Storage::disk('local')->assertMissing($path);
+        $this->assertSoftDeleted('saved_passengers', ['id' => $passenger->id]);
     }
 }

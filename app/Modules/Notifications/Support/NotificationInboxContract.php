@@ -57,7 +57,7 @@ final class NotificationInboxContract
     {
         return match (true) {
             str_starts_with($code, 'OFFER_'),
-            in_array($code, ['ABANDONED_FLIGHT_SEARCH', 'PRICE_ALERT_HIT', 'POST_TRIP_NEXT', 'LOYALTY_NEAR_REWARD', 'POST_TRIP_THANKS', 'SEAT_UPGRADE_AVAILABLE', 'HOTEL_ROOM_UPGRADE_AVAILABLE'], true) => self::FAMILY_MARKETING,
+            in_array($code, ['ABANDONED_FLIGHT_SEARCH', 'PRICE_ALERT_HIT', 'SEAT_ALERT_AVAILABLE', 'POST_TRIP_NEXT', 'LOYALTY_NEAR_REWARD', 'POST_TRIP_THANKS', 'SEAT_UPGRADE_AVAILABLE', 'HOTEL_ROOM_UPGRADE_AVAILABLE'], true) => self::FAMILY_MARKETING,
             in_array($code, [
                 'FLIGHT_REMINDER_24H', 'FLIGHT_REMINDER_3H', 'FLIGHT_REMINDER_1H',
                 'DESTINATION_ARRIVAL', 'HOTEL_CHECKIN_REMINDER_24H', 'HOTEL_CANCELLATION_DEADLINE_REMINDER',
@@ -67,7 +67,7 @@ final class NotificationInboxContract
             str_starts_with($code, 'FLIGHT_') && $code !== 'FLIGHT_TICKET_ISSUED',
             str_starts_with($code, 'GATE_'),
             str_starts_with($code, 'BOARDING_'),
-            str_starts_with($code, 'SEAT_') && ! str_contains($code, 'UPGRADE'),
+            str_starts_with($code, 'SEAT_') && ! str_contains($code, 'UPGRADE') && $code !== 'SEAT_ALERT_AVAILABLE',
             str_starts_with($code, 'BAGGAGE_') && $code !== 'BAGGAGE_REMINDER',
             in_array($code, [
                 'HOTEL_BOOKING_MODIFIED', 'HOTEL_CHECKIN_CHANGED', 'HOTEL_CHECKOUT_CHANGED',
@@ -99,7 +99,7 @@ final class NotificationInboxContract
             str_starts_with($code, 'SEAT_'),
             str_starts_with($code, 'BAGGAGE_'),
             str_starts_with($code, 'CHECKIN_'),
-            in_array($code, ['DESTINATION_ARRIVAL', 'ABANDONED_FLIGHT_SEARCH', 'PRICE_ALERT_HIT', 'ONLINE_CHECKIN_OPEN'], true) => self::CATEGORY_FLIGHTS,
+            in_array($code, ['DESTINATION_ARRIVAL', 'ABANDONED_FLIGHT_SEARCH', 'PRICE_ALERT_HIT', 'SEAT_ALERT_AVAILABLE', 'ONLINE_CHECKIN_OPEN'], true) => self::CATEGORY_FLIGHTS,
             str_starts_with($code, 'HOTEL_') => self::CATEGORY_HOTELS,
             str_starts_with($code, 'WALLET_') => self::CATEGORY_WALLET,
             str_starts_with($code, 'PASSPORT_'),

@@ -34,6 +34,10 @@ Route::middleware('auth:sanctum')
             Route::get('/price-alerts', 'priceAlerts')->name('price-alerts.index');
             Route::post('/price-alerts', 'storePriceAlert')->name('price-alerts.store');
             Route::delete('/price-alerts/{priceAlert}', 'destroyPriceAlert')->name('price-alerts.destroy');
+
+            Route::get('/seat-alerts', 'seatAlerts')->name('seat-alerts.index');
+            Route::post('/seat-alerts', 'storeSeatAlert')->name('seat-alerts.store');
+            Route::delete('/seat-alerts/{seatAlert}', 'destroySeatAlert')->name('seat-alerts.destroy');
         });
 
         Route::controller(NotificationApiController::class)->group(function (): void {

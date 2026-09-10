@@ -66,7 +66,7 @@ final class NotificationTemplateSamples
                 'to_value' => '17:00',
                 'route' => 'Tripoli → Tunis',
             ]),
-            'OFFER_ESIM', 'OFFER_INSURANCE', 'OFFER_ESIM_FOR_TRIP', 'OFFER_INSURANCE_FOR_TRIP', 'OFFER_HOTELS_AT_DESTINATION', 'OFFER_CARS_AT_DESTINATION', 'OFFER_RETURN_FLIGHT', 'POST_TRIP_THANKS', 'POST_TRIP_NEXT', 'LOYALTY_NEAR_REWARD', 'DESTINATION_ARRIVAL', 'ABANDONED_FLIGHT_SEARCH', 'PRICE_ALERT_HIT' => array_merge($samples, [
+            'OFFER_ESIM', 'OFFER_INSURANCE', 'OFFER_ESIM_FOR_TRIP', 'OFFER_INSURANCE_FOR_TRIP', 'OFFER_HOTELS_AT_DESTINATION', 'OFFER_CARS_AT_DESTINATION', 'OFFER_RETURN_FLIGHT', 'POST_TRIP_THANKS', 'POST_TRIP_NEXT', 'LOYALTY_NEAR_REWARD', 'DESTINATION_ARRIVAL', 'ABANDONED_FLIGHT_SEARCH', 'PRICE_ALERT_HIT', 'SEAT_ALERT_AVAILABLE' => array_merge($samples, [
                 'destination' => 'Tunis',
                 'origin' => 'Tripoli',
                 'route' => 'Tripoli → Tunis',
@@ -75,6 +75,11 @@ final class NotificationTemplateSamples
                 'destination_country' => 'TN',
                 'price' => '1,250',
                 'target_price' => '800',
+                'seats' => '3',
+                'min_seats' => '2',
+                'flight_number' => '8U401',
+                'offer_id' => 'off_123',
+                'cabin' => 'economy',
                 'checklist_hint' => 'Almost ready — still missing: eSIM, Hotel',
                 'checklist_hint_ar' => 'كل شيء جاهز تقريباً! بقي فقط: eSIM، الفندق',
                 'deep_link' => '/flights?origin=TIP&destination=TUN',
@@ -108,7 +113,7 @@ final class NotificationTemplateSamples
             'FLIGHT_SEAT_CHANGED', 'FLIGHT_CLASS_CHANGED', 'FLIGHT_DELAYED', 'FLIGHT_CANCELLED' => 'flight',
             'ORDER_CREATED' => 'order',
             'PAYMENT_REMINDER' => 'payment',
-            'OFFER_ESIM', 'OFFER_INSURANCE', 'OFFER_ESIM_FOR_TRIP', 'OFFER_INSURANCE_FOR_TRIP', 'OFFER_HOTELS_AT_DESTINATION', 'OFFER_CARS_AT_DESTINATION', 'OFFER_RETURN_FLIGHT', 'POST_TRIP_NEXT', 'ABANDONED_FLIGHT_SEARCH', 'PRICE_ALERT_HIT' => 'tag',
+            'OFFER_ESIM', 'OFFER_INSURANCE', 'OFFER_ESIM_FOR_TRIP', 'OFFER_INSURANCE_FOR_TRIP', 'OFFER_HOTELS_AT_DESTINATION', 'OFFER_CARS_AT_DESTINATION', 'OFFER_RETURN_FLIGHT', 'POST_TRIP_NEXT', 'ABANDONED_FLIGHT_SEARCH', 'PRICE_ALERT_HIT', 'SEAT_ALERT_AVAILABLE' => 'tag',
             'DESTINATION_ARRIVAL', 'POST_TRIP_THANKS', 'ORDER_CONFIRMED', 'HOTEL_BOOKING_CONFIRMED', 'HOTEL_CHECKIN_REMINDER_24H', 'INSURANCE_POLICY_ISSUED', 'ESIM_ORDER_CONFIRMED', 'LOYALTY_TIER_CHANGED', 'LOYALTY_NEAR_REWARD' => 'success',
             'BOOKING_CANCELLED', 'BOOKING_FAILED', 'HOTEL_BOOKING_CANCELLED', 'HOTEL_BOOKING_MODIFIED', 'HOTEL_CHECKIN_CHANGED', 'HOTEL_CHECKOUT_CHANGED' => 'order',
             default => match ($category) {

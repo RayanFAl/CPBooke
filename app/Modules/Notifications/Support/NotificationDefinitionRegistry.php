@@ -15,6 +15,7 @@ use App\Modules\Loyalty\Events\LoyaltyTierChanged;
 use App\Modules\Notifications\Events\AbandonedFlightSearchDue;
 use App\Modules\Notifications\Events\PassengerActionDue;
 use App\Modules\Notifications\Events\PriceAlertHit;
+use App\Modules\Notifications\Events\SeatAlertAvailable;
 use App\Modules\Notifications\Services\JourneyOfferResolver;
 use App\Modules\Orders\Events\BookingReminderDue;
 use App\Modules\Orders\Events\FlightStatusUpdated;
@@ -56,6 +57,7 @@ class NotificationDefinitionRegistry
             $event instanceof CriticalFinanceAnomaliesDetected => $this->criticalFinanceAnomalyDefinitions($event),
             $event instanceof AbandonedFlightSearchDue => [$this->abandonedFlightSearchDefinition($event)],
             $event instanceof PriceAlertHit => [$this->priceAlertHitDefinition($event)],
+            $event instanceof SeatAlertAvailable => [$this->seatAlertAvailableDefinition($event)],
             $event instanceof PassengerActionDue => [$this->passengerActionDefinition($event)],
             $event instanceof MobileAppReleasePublished => [$this->mobileAppReleasePublishedDefinition($event)],
             default => [],
@@ -1183,6 +1185,30 @@ class NotificationDefinitionRegistry
             'notification_type' => 'tag',
             'topic' => null,
             'related_type' => 'price_alert',
+            'related_id' => $alert->id,
+            'users' => array_filter([$alert->user]),
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function seatAlertAvailableDefinition(SeatAlertAvailable $event): array
+    {
+        $alert = $event->alert->loadMissing('user');
+        $payload = $alert->notificationPayload($event->availableSeats);
+
+        return [
+            'code' => 'SEAT_ALERT_AVAILABLE',
+            'name' => 'Seat alert available',
+            'subject' => '{seats} seats now available to {destination}',
+            'body' => 'Your watched trip now has at least {min_seats} seats available.',
+            'channels' => [NotificationChannels::PUSH, NotificationChannels::IN_APP],
+            'variables' => ['user_name', 'origin', 'destination', 'route', 'departure_date', 'flight_number', 'offer_id', 'cabin', 'seats', 'min_seats', 'deep_link'],
+            'notification_type' => 'tag',
+            'topic' => null,
+            'related_type' => 'seat_alert',
             'related_id' => $alert->id,
             'users' => array_filter([$alert->user]),
             'payload' => $payload,

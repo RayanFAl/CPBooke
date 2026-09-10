@@ -6,11 +6,18 @@ use App\Models\SavedPassenger;
 use App\Models\User;
 use App\Modules\Api\DTO\CreateSavedPassengerDTO;
 use App\Modules\Api\DTO\UpdateSavedPassengerDTO;
+use App\Modules\Api\SavedPassengers\Storage\PassportImageStorage;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
 class SavedPassengerService
 {
+    public function __construct(
+        private readonly PassportImageStorage $passportImageStorage,
+    ) {
+    }
+
     /**
      * Paginate saved passengers for the authenticated user.
      */
@@ -58,11 +65,61 @@ class SavedPassengerService
     }
 
     /**
-     * Soft delete the supplied saved passenger.
+     * Soft delete the supplied saved passenger (also removes passport image file).
      */
     public function delete(SavedPassenger $passenger): void
     {
         $passenger->delete();
+    }
+
+    public function uploadPassportImage(SavedPassenger $passenger, UploadedFile $file): SavedPassenger
+    {
+        return $this->passportImageStorage->store($passenger, $file);
+    }
+
+    public function deletePassportImage(SavedPassenger $passenger): SavedPassenger
+    {
+        return $this->passportImageStorage->clear($passenger);
+    }
+
+    /**
+     * Remove all passport image files for a user (account deletion).
+     */
+    public function purgePassportImagesForUser(User $user): void
+    {
+        SavedPassenger::withTrashed()
+            ->where('user_id', $user->id)
+            ->whereNotNull('passport_image_path')
+            ->orderBy('id')
+            ->each(function (SavedPassenger $passenger): void {
+                $this->passportImageStorage->deleteStoredFile($passenger);
+            });
+    }
+
+    /**
+     * Purge retained passport images older than the configured retention window.
+     */
+    public function purgeExpiredPassportImages(?int $retentionDays = null): int
+    {
+        $days = $retentionDays ?? (int) config('saved-passengers.passport_image_retention_days', 365);
+        if ($days <= 0) {
+            return 0;
+        }
+
+        $purged = 0;
+
+        SavedPassenger::withTrashed()
+            ->whereNotNull('passport_image_path')
+            ->where('passport_image_uploaded_at', '<', now()->subDays($days))
+            ->orderBy('id')
+            ->chunkById(100, function ($passengers) use (&$purged): void {
+                foreach ($passengers as $passenger) {
+                    $this->passportImageStorage->clear($passenger);
+                    $purged++;
+                }
+            });
+
+        return $purged;
     }
 
     /**

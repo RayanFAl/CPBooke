@@ -34,6 +34,8 @@ class SavedPassengerResource extends JsonResource
             'seat_preference' => $this->resource->seat_preference,
             'meal_preference' => $this->resource->meal_preference,
             'is_default' => $this->resource->is_default,
+            'has_passport_image' => $this->resource->hasPassportImage(),
+            'passport_image_uploaded_at' => $this->resource->passport_image_uploaded_at?->toIso8601String(),
             'created_at' => $this->resource->created_at?->toIso8601String(),
             'updated_at' => $this->resource->updated_at?->toIso8601String(),
         ];

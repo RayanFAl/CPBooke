@@ -137,6 +137,15 @@ POST   /api/v1/notifications/price-alerts
 DELETE /api/v1/notifications/price-alerts/{id}
 ```
 
+Seat watch (user opt-in):
+
+```http
+GET    /api/v1/notifications/seat-alerts
+POST   /api/v1/notifications/seat-alerts
+{ "origin": "TIP", "destination": "TUN", "departure_date": "2026-10-01", "min_seats": 2, "flight_number": "8U401", "offer_id": "off_123", "cabin": "economy" }
+DELETE /api/v1/notifications/seat-alerts/{id}
+```
+
 ### 6. Device register — send app version
 
 ```http
@@ -163,6 +172,8 @@ Handle by `meta.template_code` + `deep_link` / `actions`. Do not hard-code copy.
 | `ESIM_ACTIVATION_REMINDER` | Activate eSIM | Open eSIM |
 | `WALLET_TOPUP_SUCCESS` / `WALLET_DEBIT` / `WALLET_REFUND` / `WALLET_LOW_BALANCE` | Wallet | Open wallet |
 | `FLIGHT_CANCELLED` | Airline cancelled | Alternatives + refund + support |
+| `PRICE_ALERT_HIT` | Watched fare hit target | Open search |
+| `SEAT_ALERT_AVAILABLE` | Watched seats available | Open search / offer |
 
 24h / 3h flight reminders now include a **Check-in** action on the same card.
 

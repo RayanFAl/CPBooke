@@ -590,6 +590,18 @@ final class NotificationTemplateCatalog
                 variables: ['user_name', 'origin', 'destination', 'route', 'departure_date', 'price', 'target_price', 'currency', 'deep_link'],
             ),
             self::entry(
+                code: 'SEAT_ALERT_AVAILABLE',
+                name: 'Seat alert available',
+                category: NotificationTemplateCategories::OFFERS,
+                description: 'Sent when a watched route/offer has at least the traveler\'s requested seat count.',
+                subject: '{seats} seats now available to {destination}',
+                body: 'Your watched trip now has at least {min_seats} seats available.',
+                arSubject: '{seats} مقاعد متاحة الآن إلى {destination}',
+                arBody: 'رحلتك التي تراقبها أصبحت متاحة بما لا يقل عن {min_seats} مقاعد.',
+                channels: [NotificationChannels::PUSH, NotificationChannels::IN_APP],
+                variables: ['user_name', 'origin', 'destination', 'route', 'departure_date', 'flight_number', 'offer_id', 'cabin', 'seats', 'min_seats', 'deep_link'],
+            ),
+            self::entry(
                 code: 'LOGIN_ALERT',
                 name: 'Login Alert',
                 category: NotificationTemplateCategories::SECURITY,

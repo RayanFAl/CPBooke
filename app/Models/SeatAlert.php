@@ -11,23 +11,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'origin',
     'destination',
     'route_key',
+    'watch_key',
     'departure_date',
-    'return_date',
     'flight_number',
     'offer_id',
     'cabin',
-    'last_seen_price',
-    'last_seen_seats',
-    'previous_seen_price',
-    'currency',
-    'last_searched_at',
-    'abandoned_notified_at',
-    'price_drop_notified_at',
-    'converted_at',
-    'search_count',
-    'results_viewed_at',
+    'min_seats',
+    'last_triggered_seats',
+    'is_active',
+    'last_triggered_at',
 ])]
-class TravelSearchIntent extends Model
+class SeatAlert extends Model
 {
     /**
      * @return array<string, string>
@@ -36,16 +30,10 @@ class TravelSearchIntent extends Model
     {
         return [
             'departure_date' => 'date',
-            'return_date' => 'date',
-            'last_seen_price' => 'decimal:2',
-            'last_seen_seats' => 'integer',
-            'previous_seen_price' => 'decimal:2',
-            'last_searched_at' => 'datetime',
-            'abandoned_notified_at' => 'datetime',
-            'price_drop_notified_at' => 'datetime',
-            'converted_at' => 'datetime',
-            'search_count' => 'integer',
-            'results_viewed_at' => 'datetime',
+            'min_seats' => 'integer',
+            'last_triggered_seats' => 'integer',
+            'is_active' => 'boolean',
+            'last_triggered_at' => 'datetime',
         ];
     }
 
@@ -54,14 +42,26 @@ class TravelSearchIntent extends Model
         return $this->belongsTo(User::class);
     }
 
+    public static function watchKeyFor(
+        string $routeKey,
+        ?string $flightNumber = null,
+        ?string $offerId = null,
+        ?string $cabin = null,
+    ): string {
+        return implode('|', [
+            $routeKey,
+            $flightNumber !== null && $flightNumber !== '' ? strtoupper($flightNumber) : '*',
+            $offerId !== null && $offerId !== '' ? $offerId : '*',
+            $cabin !== null && $cabin !== '' ? strtolower($cabin) : '*',
+        ]);
+    }
+
     /**
      * @return array<string, mixed>
      */
-    public function notificationPayload(): array
+    public function notificationPayload(?int $availableSeats = null): array
     {
-        $price = $this->last_seen_price !== null
-            ? number_format((float) $this->last_seen_price, 0, '.', ',')
-            : '—';
+        $seats = $availableSeats ?? $this->last_triggered_seats;
 
         return [
             'user_name' => $this->user?->full_name ?: $this->user?->name ?: 'Customer',
@@ -69,8 +69,11 @@ class TravelSearchIntent extends Model
             'destination' => $this->destination,
             'route' => $this->origin.' → '.$this->destination,
             'departure_date' => $this->departure_date?->toFormattedDateString() ?: '',
-            'price' => $price,
-            'currency' => $this->currency ?: 'LYD',
+            'flight_number' => $this->flight_number ?: '',
+            'offer_id' => $this->offer_id ?: '',
+            'cabin' => $this->cabin ?: '',
+            'seats' => $seats !== null ? (string) $seats : '—',
+            'min_seats' => (string) $this->min_seats,
             'deep_link' => $this->deepLink(),
             'notification_type' => 'tag',
         ];
@@ -93,7 +96,6 @@ class TravelSearchIntent extends Model
             'origin' => $this->origin,
             'destination' => $this->destination,
             'date' => $this->departure_date?->toDateString(),
-            'return_date' => $this->return_date?->toDateString(),
             'flight_number' => $this->flight_number,
             'cabin' => $this->cabin,
         ], static fn (mixed $value): bool => $value !== null && $value !== ''));
@@ -101,8 +103,22 @@ class TravelSearchIntent extends Model
         return '/flights?'.$query;
     }
 
-    public static function routeKeyFor(string $origin, string $destination, ?string $departureDate): string
+    /**
+     * @return array<string, mixed>
+     */
+    public function toPassengerArray(): array
     {
-        return strtolower(trim($origin)).'|'.strtolower(trim($destination)).'|'.($departureDate ?: '*');
+        return [
+            'id' => (string) $this->id,
+            'origin' => $this->origin,
+            'destination' => $this->destination,
+            'departure_date' => $this->departure_date?->toDateString(),
+            'flight_number' => $this->flight_number,
+            'offer_id' => $this->offer_id,
+            'cabin' => $this->cabin,
+            'min_seats' => (int) $this->min_seats,
+            'is_active' => $this->is_active,
+            'deep_link' => $this->deepLink(),
+        ];
     }
 }

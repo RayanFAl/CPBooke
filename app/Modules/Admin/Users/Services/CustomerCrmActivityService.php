@@ -620,6 +620,14 @@ class CustomerCrmActivityService
                 'nationality' => $passenger->nationality,
                 'document_type' => $passenger->document_type,
                 'is_default' => (bool) $passenger->is_default,
+                'has_passport_image' => $passenger->hasPassportImage(),
+                'passport_image_uploaded_at' => $passenger->passport_image_uploaded_at?->toIso8601String(),
+                'passport_image_download_url' => $passenger->hasPassportImage()
+                    ? route('admin.customers.saved-passengers.passport-image', [
+                        'user' => $user->id,
+                        'savedPassenger' => $passenger->id,
+                    ])
+                    : null,
                 'created_at' => $passenger->created_at?->toIso8601String(),
             ])
             ->values()

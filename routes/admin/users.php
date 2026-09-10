@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Admin\Users\Http\Controllers\CustomerPassportImageController;
 use App\Modules\Admin\Users\Http\Controllers\UsersController;
 use Illuminate\Support\Facades\Route;
 
@@ -23,3 +24,10 @@ Route::controller(UsersController::class)->group(function (): void {
 	Route::delete('/users/{user}', 'destroy')->middleware('permission:users.update')->name('users.destroy');
 	Route::get('/users/{user}', 'show')->middleware('permission:users.view')->name('users.show');
 });
+
+Route::get(
+	'/customers/{user}/saved-passengers/{savedPassenger}/passport-image',
+	[CustomerPassportImageController::class, 'show'],
+)
+	->middleware('permission:users.view')
+	->name('customers.saved-passengers.passport-image');

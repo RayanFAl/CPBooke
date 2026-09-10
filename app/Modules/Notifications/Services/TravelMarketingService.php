@@ -4,10 +4,12 @@ namespace App\Modules\Notifications\Services;
 
 use App\Models\Order;
 use App\Models\PriceAlert;
+use App\Models\SeatAlert;
 use App\Models\TravelSearchIntent;
 use App\Models\User;
 use App\Modules\Notifications\Events\AbandonedFlightSearchDue;
 use App\Modules\Notifications\Events\PriceAlertHit;
+use App\Modules\Notifications\Events\SeatAlertAvailable;
 use App\Modules\Notifications\Support\OrderNotificationContext;
 use App\Support\Airports\AirportPopularityService;
 use Illuminate\Support\Carbon;
@@ -21,9 +23,9 @@ class TravelMarketingService
     }
 
     /**
-     * Upsert the traveler's latest flight search so Abandoned Search / Price Alerts can fire.
+     * Upsert the traveler's latest flight search so Abandoned Search / Price Alerts / Seat Alerts can fire.
      *
-     * @param  array{origin: string, destination: string, departure_date?: string|null, return_date?: string|null, lowest_price?: float|int|string|null, currency?: string|null}  $input
+     * @param  array{origin: string, destination: string, departure_date?: string|null, return_date?: string|null, flight_number?: string|null, offer_id?: string|null, cabin?: string|null, lowest_price?: float|int|string|null, available_seats?: int|string|null, currency?: string|null}  $input
      */
     public function recordSearch(User $user, array $input): TravelSearchIntent
     {
@@ -33,7 +35,11 @@ class TravelMarketingService
         $returnDate = $this->normalizeDate($input['return_date'] ?? null);
         $routeKey = TravelSearchIntent::routeKeyFor($origin, $destination, $departureDate);
         $price = $this->normalizePrice($input['lowest_price'] ?? null);
+        $seats = $this->normalizeSeats($input['available_seats'] ?? null);
         $currency = strtoupper((string) ($input['currency'] ?? 'LYD')) ?: 'LYD';
+        $flightNumber = $this->normalizeFlightNumber($input['flight_number'] ?? null);
+        $offerId = $this->normalizeOptionalString($input['offer_id'] ?? null, 120);
+        $cabin = $this->normalizeCabin($input['cabin'] ?? null);
 
         $intent = TravelSearchIntent::query()->firstOrNew([
             'user_id' => $user->id,
@@ -51,6 +57,18 @@ class TravelMarketingService
             'last_searched_at' => now(),
         ]);
 
+        if ($flightNumber !== null) {
+            $intent->flight_number = $flightNumber;
+        }
+
+        if ($offerId !== null) {
+            $intent->offer_id = $offerId;
+        }
+
+        if ($cabin !== null) {
+            $intent->cabin = $cabin;
+        }
+
         if (Schema::hasColumn('travel_search_intents', 'search_count')) {
             $intent->search_count = (int) ($intent->search_count ?: 0) + 1;
         }
@@ -58,6 +76,13 @@ class TravelMarketingService
         if ($price !== null) {
             $intent->previous_seen_price = $previousPrice;
             $intent->last_seen_price = $price;
+            if (Schema::hasColumn('travel_search_intents', 'results_viewed_at')) {
+                $intent->results_viewed_at = $intent->results_viewed_at ?: now();
+            }
+        }
+
+        if ($seats !== null) {
+            $intent->last_seen_seats = $seats;
             if (Schema::hasColumn('travel_search_intents', 'results_viewed_at')) {
                 $intent->results_viewed_at = $intent->results_viewed_at ?: now();
             }
@@ -104,11 +129,48 @@ class TravelMarketingService
         return $alert->fresh() ?? $alert;
     }
 
+    /**
+     * @param  array{origin: string, destination: string, departure_date?: string|null, flight_number?: string|null, offer_id?: string|null, cabin?: string|null, min_seats: int|string}  $input
+     */
+    public function upsertSeatAlert(User $user, array $input): SeatAlert
+    {
+        $origin = $this->normalizePlace((string) $input['origin']);
+        $destination = $this->normalizePlace((string) $input['destination']);
+        $departureDate = $this->normalizeDate($input['departure_date'] ?? null);
+        $routeKey = TravelSearchIntent::routeKeyFor($origin, $destination, $departureDate);
+        $flightNumber = $this->normalizeFlightNumber($input['flight_number'] ?? null);
+        $offerId = $this->normalizeOptionalString($input['offer_id'] ?? null, 120);
+        $cabin = $this->normalizeCabin($input['cabin'] ?? null);
+        $minSeats = max(1, (int) ($input['min_seats'] ?? 1));
+        $watchKey = SeatAlert::watchKeyFor($routeKey, $flightNumber, $offerId, $cabin);
+
+        $alert = SeatAlert::query()->firstOrNew([
+            'user_id' => $user->id,
+            'watch_key' => $watchKey,
+            'min_seats' => $minSeats,
+        ]);
+
+        $alert->fill([
+            'origin' => $origin,
+            'destination' => $destination,
+            'route_key' => $routeKey,
+            'departure_date' => $departureDate,
+            'flight_number' => $flightNumber,
+            'offer_id' => $offerId,
+            'cabin' => $cabin,
+            'is_active' => true,
+        ]);
+        $alert->save();
+
+        return $alert->fresh() ?? $alert;
+    }
+
     public function dispatchDue(Carbon $now): void
     {
         $this->markConvertedIntents();
         $this->dispatchAbandonedSearches($now);
         $this->dispatchPriceAlerts();
+        $this->dispatchSeatAlerts();
     }
 
     private function dispatchAbandonedSearches(Carbon $now): void
@@ -180,6 +242,79 @@ class TravelMarketingService
                     ])->save();
                 }
             });
+    }
+
+    private function dispatchSeatAlerts(): void
+    {
+        SeatAlert::query()
+            ->with('user')
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->chunkById(100, function ($alerts): void {
+                foreach ($alerts as $alert) {
+                    if ($alert->user === null) {
+                        continue;
+                    }
+
+                    $intent = TravelSearchIntent::query()
+                        ->where('user_id', $alert->user_id)
+                        ->where('route_key', $alert->route_key)
+                        ->first();
+
+                    if ($intent === null || $intent->last_seen_seats === null) {
+                        continue;
+                    }
+
+                    if (! $this->seatAlertMatchesIntent($alert, $intent)) {
+                        continue;
+                    }
+
+                    $current = (int) $intent->last_seen_seats;
+                    $minSeats = (int) $alert->min_seats;
+
+                    if ($current < $minSeats) {
+                        continue;
+                    }
+
+                    $lastTriggered = $alert->last_triggered_seats !== null
+                        ? (int) $alert->last_triggered_seats
+                        : null;
+
+                    // Re-fire only when more seats became available than last notification.
+                    if ($lastTriggered !== null && $current <= $lastTriggered) {
+                        continue;
+                    }
+
+                    event(new SeatAlertAvailable($alert, $current));
+                    $alert->forceFill([
+                        'last_triggered_at' => now(),
+                        'last_triggered_seats' => $current,
+                    ])->save();
+                }
+            });
+    }
+
+    private function seatAlertMatchesIntent(SeatAlert $alert, TravelSearchIntent $intent): bool
+    {
+        if ($alert->flight_number !== null && $alert->flight_number !== '') {
+            if (strcasecmp((string) $intent->flight_number, $alert->flight_number) !== 0) {
+                return false;
+            }
+        }
+
+        if ($alert->offer_id !== null && $alert->offer_id !== '') {
+            if ((string) $intent->offer_id !== $alert->offer_id) {
+                return false;
+            }
+        }
+
+        if ($alert->cabin !== null && $alert->cabin !== '') {
+            if (strcasecmp((string) $intent->cabin, $alert->cabin) !== 0) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function markConvertedForCustomer(User $user): void
@@ -301,5 +436,46 @@ class TravelMarketingService
         }
 
         return round((float) $value, 2);
+    }
+
+    private function normalizeSeats(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        return max(0, (int) $value);
+    }
+
+    private function normalizeFlightNumber(mixed $value): ?string
+    {
+        $normalized = $this->normalizeOptionalString($value, 32);
+
+        return $normalized !== null ? strtoupper($normalized) : null;
+    }
+
+    private function normalizeCabin(mixed $value): ?string
+    {
+        $normalized = $this->normalizeOptionalString($value, 32);
+
+        return $normalized !== null ? strtolower($normalized) : null;
+    }
+
+    private function normalizeOptionalString(mixed $value, int $maxLength): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        return mb_substr($trimmed, 0, $maxLength);
     }
 }

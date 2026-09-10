@@ -87,7 +87,7 @@ class PassengerNotificationResource extends JsonResource
         return match ($notification->related_type) {
             'order' => '/my-orders/'.$notification->related_id,
             'support_ticket', 'support' => '/support/'.$notification->related_id,
-            'price_alert', 'travel_search_intent' => $variables['deep_link'] ?? '/flights',
+            'price_alert', 'seat_alert', 'travel_search_intent' => $variables['deep_link'] ?? '/flights',
             default => null,
         };
     }

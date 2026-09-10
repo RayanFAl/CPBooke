@@ -33,8 +33,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'seat_preference',
     'meal_preference',
     'is_default',
+    'passport_image_disk',
+    'passport_image_path',
+    'passport_image_mime',
+    'passport_image_size',
+    'passport_image_uploaded_at',
 ])]
-#[Hidden(['passport_number_hash', 'phone_hash'])]
+#[Hidden(['passport_number_hash', 'phone_hash', 'passport_image_disk', 'passport_image_path', 'passport_image_mime', 'passport_image_size'])]
 class SavedPassenger extends Model
 {
     /** @use HasFactory<SavedPassengerFactory> */
@@ -73,6 +78,8 @@ class SavedPassenger extends Model
             'email' => 'encrypted',
             'phone' => 'encrypted',
             'is_default' => 'boolean',
+            'passport_image_size' => 'integer',
+            'passport_image_uploaded_at' => 'datetime',
         ];
     }
 
@@ -92,6 +99,24 @@ class SavedPassenger extends Model
                 $passenger->phone_hash = self::hashPhone($passenger->phone);
             }
         });
+
+        static::deleting(function (SavedPassenger $passenger): void {
+            app(\App\Modules\Api\SavedPassengers\Storage\PassportImageStorage::class)
+                ->deleteStoredFile($passenger);
+
+            $passenger->passport_image_disk = null;
+            $passenger->passport_image_path = null;
+            $passenger->passport_image_mime = null;
+            $passenger->passport_image_size = null;
+            $passenger->passport_image_uploaded_at = null;
+        });
+    }
+
+    public function hasPassportImage(): bool
+    {
+        return is_string($this->passport_image_path)
+            && $this->passport_image_path !== ''
+            && $this->passport_image_uploaded_at !== null;
     }
 
     /**

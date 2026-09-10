@@ -4,6 +4,7 @@ namespace App\Modules\Api\User\Services;
 
 use App\Models\User;
 use App\Modules\Api\DTO\UpdateProfileDTO;
+use App\Modules\Api\SavedPassengers\Services\SavedPassengerService;
 use App\Modules\Loyalty\Services\LoyaltyService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -15,6 +16,7 @@ class UserService
     public function __construct(
         private readonly LoyaltyService $loyaltyService,
         private readonly ProfileOtpService $profileOtpService,
+        private readonly SavedPassengerService $savedPassengerService,
     ) {
     }
 
@@ -186,6 +188,8 @@ class UserService
         if ($user->avatar_path) {
             Storage::disk('public')->delete($user->avatar_path);
         }
+
+        $this->savedPassengerService->purgePassportImagesForUser($user);
 
         $user->tokens()->delete();
         $user->delete();

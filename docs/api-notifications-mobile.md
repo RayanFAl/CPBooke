@@ -20,6 +20,9 @@ Base path: `/api/v1/notifications` (Sanctum). Response envelope: `{ success, mes
 | GET | `/notifications/price-alerts` | List active price watches |
 | POST | `/notifications/price-alerts` | Create/update a target-price watch |
 | DELETE | `/notifications/price-alerts/{id}` | Disable a watch |
+| GET | `/notifications/seat-alerts` | List active seat watches |
+| POST | `/notifications/seat-alerts` | Create/update a min-seats watch |
+| DELETE | `/notifications/seat-alerts/{id}` | Disable a seat watch |
 
 ### Device register
 ```json
@@ -118,6 +121,7 @@ POST /notifications/devices
 | J6 | ~3 days after `arrival_time` | `POST_TRIP_THANKS` | success | `booking_reminders` | `/loyalty` or next-trip |
 | M1 | Search with no booking after 2h | `ABANDONED_FLIGHT_SEARCH` | tag | — | `/flights?origin=&destination=&date=` |
 | M2 | Watched fare ≤ target | `PRICE_ALERT_HIT` | tag | creating the alert is opt-in | `/flights?...` |
+| M3 | Watched seats ≥ min_seats | `SEAT_ALERT_AVAILABLE` | tag | creating the alert is opt-in | `/flights?...` |
 | D1 | Passport expires in 14–30 days | `PASSPORT_EXPIRY_REMINDER` | order | `booking_reminders` | `/profile/passengers` |
 | K1 | Scheduler ~48h before departure | `ONLINE_CHECKIN_OPEN` | flight | `booking_reminders` | `/my-orders/{id}/check-in` |
 | G1 | Provider first fills gate | `GATE_ASSIGNED` | flight | **none** (critical) | `/my-orders/{id}` |
@@ -172,6 +176,39 @@ POST /notifications/price-alerts
   "destination": "TUN",
   "departure_date": "2026-10-01",
   "target_price": 800,
+  "currency": "LYD"
+}
+```
+
+Seat watch:
+
+```json
+POST /notifications/seat-alerts
+{
+  "origin": "TIP",
+  "destination": "TUN",
+  "departure_date": "2026-10-01",
+  "flight_number": "8U401",
+  "offer_id": "off_123",
+  "cabin": "economy",
+  "min_seats": 2
+}
+```
+
+`flight_number` / `offer_id` / `cabin` are optional. When seats become available, Push + Inbox fire with `SEAT_ALERT_AVAILABLE` and `deep_link` to `/flights?...` (offer_id included when set).
+
+Search intents may also report seat availability for the scheduler:
+
+```json
+POST /notifications/search-intents
+{
+  "origin": "TIP",
+  "destination": "TUN",
+  "departure_date": "2026-10-01",
+  "available_seats": 3,
+  "flight_number": "8U401",
+  "cabin": "economy",
+  "lowest_price": 1250,
   "currency": "LYD"
 }
 ```

@@ -4,7 +4,7 @@ namespace App\Modules\Api\Notifications\Http\Requests;
 
 use App\Modules\Api\Support\Http\Requests\ApiFormRequest;
 
-class UpsertTravelSearchIntentRequest extends ApiFormRequest
+class StoreSeatAlertRequest extends ApiFormRequest
 {
     public function authorize(): bool
     {
@@ -20,13 +20,10 @@ class UpsertTravelSearchIntentRequest extends ApiFormRequest
             'origin' => ['required', 'string', 'max:64'],
             'destination' => ['required', 'string', 'max:64'],
             'departure_date' => ['sometimes', 'nullable', 'date'],
-            'return_date' => ['sometimes', 'nullable', 'date', 'after_or_equal:departure_date'],
             'flight_number' => ['sometimes', 'nullable', 'string', 'max:32'],
             'offer_id' => ['sometimes', 'nullable', 'string', 'max:120'],
             'cabin' => ['sometimes', 'nullable', 'string', 'max:32'],
-            'lowest_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-            'available_seats' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:999'],
-            'currency' => ['sometimes', 'nullable', 'string', 'size:3'],
+            'min_seats' => ['required', 'integer', 'min:1', 'max:9'],
         ];
     }
 }

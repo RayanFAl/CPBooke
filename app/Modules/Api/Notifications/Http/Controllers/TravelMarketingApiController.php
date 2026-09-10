@@ -4,7 +4,9 @@ namespace App\Modules\Api\Notifications\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\PriceAlert;
+use App\Models\SeatAlert;
 use App\Modules\Api\Notifications\Http\Requests\StorePriceAlertRequest;
+use App\Modules\Api\Notifications\Http\Requests\StoreSeatAlertRequest;
 use App\Modules\Api\Notifications\Http\Requests\UpsertTravelSearchIntentRequest;
 use App\Modules\Api\Support\Http\Responses\ApiResponse;
 use App\Modules\Notifications\Services\TravelMarketingService;
@@ -31,7 +33,11 @@ class TravelMarketingApiController extends Controller
                 'destination' => $intent->destination,
                 'departure_date' => $intent->departure_date?->toDateString(),
                 'return_date' => $intent->return_date?->toDateString(),
+                'flight_number' => $intent->flight_number,
+                'offer_id' => $intent->offer_id,
+                'cabin' => $intent->cabin,
                 'last_seen_price' => $intent->last_seen_price !== null ? (float) $intent->last_seen_price : null,
+                'last_seen_seats' => $intent->last_seen_seats !== null ? (int) $intent->last_seen_seats : null,
                 'currency' => $intent->currency,
                 'converted' => $intent->converted_at !== null,
                 'deep_link' => $intent->deepLink(),
@@ -73,6 +79,42 @@ class TravelMarketingApiController extends Controller
         return ApiResponse::success(
             ['id' => (string) $priceAlert->id, 'is_active' => false],
             'Price alert disabled.',
+        );
+    }
+
+    public function seatAlerts(Request $request): JsonResponse
+    {
+        $alerts = SeatAlert::query()
+            ->where('user_id', $request->user()->id)
+            ->where('is_active', true)
+            ->latest('id')
+            ->get()
+            ->map(fn (SeatAlert $alert): array => $alert->toPassengerArray())
+            ->values()
+            ->all();
+
+        return ApiResponse::success($alerts, 'Seat alerts fetched successfully.');
+    }
+
+    public function storeSeatAlert(StoreSeatAlertRequest $request): JsonResponse
+    {
+        $alert = $this->travelMarketingService->upsertSeatAlert(
+            $request->user(),
+            $request->validated(),
+        );
+
+        return ApiResponse::success($alert->toPassengerArray(), 'Seat alert saved.');
+    }
+
+    public function destroySeatAlert(Request $request, SeatAlert $seatAlert): JsonResponse
+    {
+        abort_unless((int) $seatAlert->user_id === (int) $request->user()->id, 404);
+
+        $seatAlert->forceFill(['is_active' => false])->save();
+
+        return ApiResponse::success(
+            ['id' => (string) $seatAlert->id, 'is_active' => false],
+            'Seat alert disabled.',
         );
     }
 }

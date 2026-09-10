@@ -92,6 +92,7 @@ final class NotificationTemplateStaffLabels
             'LOYALTY_TIER_CHANGED' => ['en' => 'Loyalty tier changed', 'ar' => 'تغيّر مستوى الولاء'],
             'ABANDONED_FLIGHT_SEARCH' => ['en' => 'Customer searched and did not book', 'ar' => 'العميل بحث ولم يكمل الحجز'],
             'PRICE_ALERT_HIT' => ['en' => 'Watched flight price dropped', 'ar' => 'انخفض سعر الرحلة التي يراقبها'],
+            'SEAT_ALERT_AVAILABLE' => ['en' => 'Watched seats became available', 'ar' => 'أصبحت المقاعد التي يراقبها متاحة'],
             'LOGIN_ALERT' => ['en' => 'New login to the account', 'ar' => 'تسجيل دخول جديد للحساب'],
             'SUPPORT_TICKET_CREATED_CUSTOMER' => ['en' => 'Support ticket opened', 'ar' => 'فُتحت تذكرة دعم'],
             'SUPPORT_TICKET_REPLIED_CUSTOMER' => ['en' => 'Support replied to the customer', 'ar' => 'الدعم رد على العميل'],

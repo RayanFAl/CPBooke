@@ -451,7 +451,7 @@ Valid for 10 minutes. Do not share it.
 | المهمة | التكرار | الأحداث |
 |--------|---------|---------|
 | تذكيرات الرحلات والفنادق | كل **15 دقيقة** | `FLIGHT_REMINDER_24H`, `FLIGHT_REMINDER_3H`, `FLIGHT_REMINDER_1H`, `ONLINE_CHECKIN_OPEN` (~48h), `DESTINATION_ARRIVAL`, `POST_TRIP_THANKS`, `HOTEL_CHECKIN_REMINDER_24H`, `HOTEL_CHECKOUT_REMINDER`, `HOTEL_CANCELLATION_DEADLINE_REMINDER`, `ESIM_ACTIVATION_REMINDER`, `PASSPORT_EXPIRY_REMINDER`, `PAYMENT_EXPIRED` |
-| Abandoned Search / Price Alert | نفس المهمة كل **15 دقيقة** | `ABANDONED_FLIGHT_SEARCH` (بعد 2–48 ساعة من بحث بدون حجز)، `PRICE_ALERT_HIT` |
+| Abandoned Search / Price Alert / Seat Alert | نفس المهمة كل **15 دقيقة** | `ABANDONED_FLIGHT_SEARCH` (بعد 2–48 ساعة من بحث بدون حجز)، `PRICE_ALERT_HIT`، `SEAT_ALERT_AVAILABLE` |
 | تذكير انتهاء طلب الدفع | كل **15 دقيقة** | `PAYMENT_REQUEST_EXPIRY_REMINDER` |
 | انتهاء صلاحية طلبات الدفع | كل **15 دقيقة** | تحديث status → `expired` + `PAYMENT_REQUEST_EXPIRED` |
 
@@ -572,6 +572,10 @@ CREATE TABLE notification_delivery_log (
 ### `price_alerts`
 
 المستخدم يحدد سعراً مستهدفاً (`POST /notifications/price-alerts`). عندما يصل `last_seen_price` في بحث لاحق إلى الهدف أو دونه، يُرسل `PRICE_ALERT_HIT` مع deep link لنتائج الرحلات.
+
+### `seat_alerts`
+
+المستخدم يحدد حدّاً أدنى للمقاعد (`POST /notifications/seat-alerts`) مع `origin` / `destination` / `departure_date` واختياريًا `flight_number` / `offer_id` / `cabin` و`min_seats`. عندما يصل `last_seen_seats` في `search-intents` إلى الحد أو فوقه، يُرسل `SEAT_ALERT_AVAILABLE` (Push + Inbox) مع deep link لنتائج البحث أو العرض.
 
 ### `otp_challenges`
 

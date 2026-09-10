@@ -23,3 +23,4 @@ Schedule::job(new RetryFailedNotificationsJob)->everyThirtyMinutes();
 Schedule::job(new SendBookingReminderNotificationsJob)->everyFifteenMinutes();
 Schedule::job(new CleanupMonitoringDataJob)->dailyAt('02:30');
 Schedule::command('backup:database --keep=14')->dailyAt('01:15');
+Schedule::command('saved-passengers:purge-passport-images')->dailyAt('03:10');

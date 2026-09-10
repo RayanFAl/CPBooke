@@ -14,6 +14,7 @@ use App\Modules\Loyalty\Listeners\RecalculateUserLoyaltyListener;
 use App\Modules\Notifications\Events\AbandonedFlightSearchDue;
 use App\Modules\Notifications\Events\PassengerActionDue;
 use App\Modules\Notifications\Events\PriceAlertHit;
+use App\Modules\Notifications\Events\SeatAlertAvailable;
 use App\Modules\Notifications\Listeners\DispatchSystemNotificationListener;
 use App\Modules\Orders\Events\BookingReminderDue;
 use App\Modules\Orders\Events\FlightStatusUpdated;
@@ -98,6 +99,9 @@ class EventServiceProvider extends ServiceProvider
             DispatchSystemNotificationListener::class,
         ],
         PriceAlertHit::class => [
+            DispatchSystemNotificationListener::class,
+        ],
+        SeatAlertAvailable::class => [
             DispatchSystemNotificationListener::class,
         ],
         PassengerActionDue::class => [

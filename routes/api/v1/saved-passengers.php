@@ -12,5 +12,11 @@ Route::middleware('auth:sanctum')
         Route::post('/', 'store')->middleware('throttle:20,1')->name('store');
         Route::get('/{savedPassenger}', 'show')->name('show');
         Route::put('/{savedPassenger}', 'update')->name('update');
+        Route::post('/{savedPassenger}/passport-image', 'uploadPassportImage')
+            ->middleware('throttle:10,1')
+            ->name('passport-image.store');
+        Route::delete('/{savedPassenger}/passport-image', 'destroyPassportImage')
+            ->middleware('throttle:10,1')
+            ->name('passport-image.destroy');
         Route::delete('/{savedPassenger}', 'destroy')->middleware('throttle:20,1')->name('destroy');
     });

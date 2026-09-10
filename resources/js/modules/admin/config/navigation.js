@@ -170,13 +170,6 @@ export const navigationItems = [
         icon: 'settings',
         children: [
             {
-                label: 'Global Search',
-                route: 'admin.search.index',
-                startsWith: '/admin/search',
-                permission: 'search.view',
-                icon: 'search',
-            },
-            {
                 label: 'Monitoring',
                 route: 'admin.monitoring.index',
                 startsWith: '/admin/monitoring',

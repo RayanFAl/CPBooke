@@ -184,8 +184,9 @@ class MobileAppAdminTest extends TestCase
             ->assertRedirect(route('admin.mobile-app.index'))
             ->assertSessionHas('success', function (string $message): bool {
                 return str_contains($message, 'Notifications:')
-                    && str_contains($message, '1 recipients')
-                    && str_contains($message, 'already up to date: 1');
+                    && str_contains($message, 'notified 1')
+                    && str_contains($message, 'already up to date: 1')
+                    && str_contains($message, 'with push device 2');
             });
 
         $this->assertDatabaseHas('user_notifications', [
@@ -263,7 +264,7 @@ class MobileAppAdminTest extends TestCase
             ->assertRedirect(route('admin.mobile-app.index'))
             ->assertSessionHas('success', function (string $message): bool {
                 return str_contains($message, 'Notifications:')
-                    && str_contains($message, '1 recipients');
+                    && str_contains($message, 'notified 1');
             });
 
         $this->assertDatabaseHas('user_notifications', [
@@ -379,7 +380,7 @@ class MobileAppAdminTest extends TestCase
             '--notify' => true,
         ])
             ->assertSuccessful()
-            ->expectsOutputToContain('Notifications: 1 recipients');
+            ->expectsOutputToContain('notified 1');
 
         $this->assertDatabaseHas('user_notifications', [
             'user_id' => $customer->id,

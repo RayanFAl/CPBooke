@@ -25,13 +25,36 @@ class BroadcastMobileAppReleaseNotificationsJob
     ) {}
 
     /**
-     * @return array{recipients: int, delivered: int, failed: int, skipped_up_to_date: int}
+     * @return array{
+     *     total_customers: int,
+     *     with_push_devices: int,
+     *     without_devices: int,
+     *     recipients: int,
+     *     delivered: int,
+     *     failed: int,
+     *     skipped_up_to_date: int
+     * }
      */
     public function handle(
         NotificationService $notificationService,
         NotificationTemplateSyncService $templateSyncService,
     ): array {
         $templateSyncService->syncMissing();
+
+        $activeCustomersQuery = User::query()
+            ->where('account_type', User::ACCOUNT_TYPE_CUSTOMER)
+            ->where('is_active', true);
+
+        $totalCustomers = (int) (clone $activeCustomersQuery)->count();
+
+        $withPushDevices = (int) (clone $activeCustomersQuery)
+            ->whereHas('notificationDevices', function ($query): void {
+                $query->where('is_active', true)
+                    ->where('channel', NotificationChannels::PUSH);
+            })
+            ->count();
+
+        $withoutDevices = max(0, $totalCustomers - $withPushDevices);
 
         $recipients = 0;
         $delivered = 0;
@@ -94,6 +117,9 @@ class BroadcastMobileAppReleaseNotificationsJob
             });
 
         return [
+            'total_customers' => $totalCustomers,
+            'with_push_devices' => $withPushDevices,
+            'without_devices' => $withoutDevices,
             'recipients' => $recipients,
             'delivered' => $delivered,
             'failed' => $failed,

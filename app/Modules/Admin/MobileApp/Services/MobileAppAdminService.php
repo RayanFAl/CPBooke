@@ -309,7 +309,15 @@ class MobileAppAdminService
     }
 
     /**
-     * @return array{recipients: int, delivered: int, failed: int, skipped_up_to_date: int}|null
+     * @return array{
+     *     total_customers: int,
+     *     with_push_devices: int,
+     *     without_devices: int,
+     *     recipients: int,
+     *     delivered: int,
+     *     failed: int,
+     *     skipped_up_to_date: int
+     * }|null
      */
     public function notifyUsersOfRelease(): ?array
     {
@@ -339,15 +347,52 @@ class MobileAppAdminService
 
     /**
      * @param  array{
+     *     total_customers?: int,
+     *     with_push_devices?: int,
+     *     without_devices?: int,
+     *     recipients: int,
+     *     delivered: int,
+     *     failed: int,
+     *     skipped_up_to_date: int
+     * }|null  $summary
+     */
+    public function formatNotifySummary(?array $summary): string
+    {
+        if ($summary === null) {
+            return 'No update notifications were sent.';
+        }
+
+        return sprintf(
+            'Notifications: active customers %d, with push device %d, no device %d, notified %d (delivered: %d, failed: %d), already up to date: %d.',
+            (int) ($summary['total_customers'] ?? 0),
+            (int) ($summary['with_push_devices'] ?? 0),
+            (int) ($summary['without_devices'] ?? 0),
+            (int) $summary['recipients'],
+            (int) $summary['delivered'],
+            (int) $summary['failed'],
+            (int) $summary['skipped_up_to_date'],
+        );
+    }
+
+    /**
+     * @param  array{
      *     version: string,
      *     version_code: int,
      *     apk: string,
      *     force_update: bool,
      *     min_version_code: int|null,
      *     notes_ar: string,
-     *     notes_en: string,
+     *     notes_en: string
      * }|null  $existing
-     * @return array{recipients: int, delivered: int, failed: int, skipped_up_to_date: int}|null
+     * @return array{
+     *     total_customers: int,
+     *     with_push_devices: int,
+     *     without_devices: int,
+     *     recipients: int,
+     *     delivered: int,
+     *     failed: int,
+     *     skipped_up_to_date: int
+     * }|null
      */
     private function finalizeUpload(string $version, int $versionCode, string $filename, ?array $existing = null, bool $notifyUsers = true): ?array
     {
@@ -382,7 +427,15 @@ class MobileAppAdminService
      *     notes_ar?: string|null,
      *     notes_en?: string|null,
      * }  $data
-     * @return array{recipients: int, delivered: int, failed: int, skipped_up_to_date: int}|null
+     * @return array{
+     *     total_customers: int,
+     *     with_push_devices: int,
+     *     without_devices: int,
+     *     recipients: int,
+     *     delivered: int,
+     *     failed: int,
+     *     skipped_up_to_date: int
+     * }|null
      */
     public function updateReleaseSettings(array $data, bool $notifyUsers = false): ?array
     {

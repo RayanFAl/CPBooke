@@ -65,15 +65,9 @@ class ImportMobileApkCommand extends Command
 
         if ($notifyUsers) {
             if ($notifySummary === null) {
-                $this->info('No update notifications were sent.');
+                $this->info($adminService->formatNotifySummary(null));
             } else {
-                $this->info(sprintf(
-                    'Notifications: %d recipients (delivered: %d, failed: %d, already up to date: %d).',
-                    $notifySummary['recipients'],
-                    $notifySummary['delivered'],
-                    $notifySummary['failed'],
-                    $notifySummary['skipped_up_to_date'],
-                ));
+                $this->info($adminService->formatNotifySummary($notifySummary));
             }
         }
 

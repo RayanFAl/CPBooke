@@ -78,20 +78,18 @@ class MobileAppController
     }
 
     /**
-     * @param  array{recipients: int, delivered: int, failed: int, skipped_up_to_date: int}|null  $summary
+     * @param  array{
+     *     total_customers?: int,
+     *     with_push_devices?: int,
+     *     without_devices?: int,
+     *     recipients: int,
+     *     delivered: int,
+     *     failed: int,
+     *     skipped_up_to_date: int
+     * }|null  $summary
      */
     private function formatNotifySummary(?array $summary): string
     {
-        if ($summary === null) {
-            return 'No update notifications were sent.';
-        }
-
-        return sprintf(
-            'Notifications: %d recipients (delivered: %d, failed: %d, already up to date: %d).',
-            $summary['recipients'],
-            $summary['delivered'],
-            $summary['failed'],
-            $summary['skipped_up_to_date'],
-        );
+        return $this->adminService->formatNotifySummary($summary);
     }
 }

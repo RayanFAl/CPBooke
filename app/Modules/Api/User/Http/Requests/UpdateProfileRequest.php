@@ -27,8 +27,8 @@ class UpdateProfileRequest extends ApiFormRequest
 
         return [
             'name' => ['required', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:30', Rule::unique('users', 'phone')->ignore($userId)],
-            'country' => ['nullable', 'string', 'max:100'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:30', Rule::unique('users', 'phone')->ignore($userId)],
+            'country' => ['sometimes', 'nullable', 'string', 'max:100'],
         ];
     }
 

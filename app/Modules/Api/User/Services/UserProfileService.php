@@ -35,8 +35,8 @@ class UserProfileService
         $user->fill([
             'name' => $data['name'],
             'full_name' => $data['name'],
-            'phone' => $data['phone'] ?: null,
-            'country' => $data['country'] ?: null,
+            ...(array_key_exists('phone', $data) ? ['phone' => $data['phone'] ?: null] : []),
+            ...(array_key_exists('country', $data) ? ['country' => $data['country'] ?: null] : []),
         ])->save();
 
         return $user->refresh();

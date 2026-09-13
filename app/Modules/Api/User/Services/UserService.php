@@ -6,6 +6,8 @@ use App\Models\User;
 use App\Modules\Api\DTO\UpdateProfileDTO;
 use App\Modules\Api\SavedPassengers\Services\SavedPassengerService;
 use App\Modules\Loyalty\Services\LoyaltyService;
+use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -35,23 +37,45 @@ class UserService
      */
     public function update(User $user, UpdateProfileDTO $data): User
     {
-        $phoneChanged = $data->phone !== null
-            && trim((string) $data->phone) !== trim((string) $user->phone);
+        $phoneChanged = $data->phoneProvided
+            && trim((string) ($data->phone ?? '')) !== trim((string) ($user->phone ?? ''));
 
         $this->forgetTransientAttributes($user);
 
-        $user->fill([
+        $attributes = [
             'name' => $data->name,
             'full_name' => $data->name,
-            'phone' => $data->phone,
-            'country' => $data->country,
-        ]);
+        ];
+
+        if ($data->phoneProvided) {
+            $attributes['phone'] = $data->phone;
+        }
+
+        if ($data->countryProvided) {
+            $attributes['country'] = $data->country;
+        }
+
+        $user->fill($attributes);
 
         if ($phoneChanged) {
             $user->phone_verified_at = null;
         }
 
-        $user->save();
+        try {
+            $user->save();
+        } catch (UniqueConstraintViolationException $exception) {
+            throw ValidationException::withMessages([
+                'phone' => [__('validation.unique', ['attribute' => 'phone'])],
+            ]);
+        } catch (QueryException $exception) {
+            if ($this->isDuplicatePhoneConstraint($exception)) {
+                throw ValidationException::withMessages([
+                    'phone' => [__('validation.unique', ['attribute' => 'phone'])],
+                ]);
+            }
+
+            throw $exception;
+        }
 
         return $this->profile($user->refresh());
     }
@@ -198,5 +222,18 @@ class UserService
     private function forgetTransientAttributes(User $user): void
     {
         $user->offsetUnset('loyalty');
+    }
+
+    private function isDuplicatePhoneConstraint(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+
+        if (! str_contains($message, 'phone')) {
+            return false;
+        }
+
+        return str_contains($message, 'unique')
+            || str_contains($message, 'duplicate')
+            || (string) $exception->getCode() === '23000';
     }
 }

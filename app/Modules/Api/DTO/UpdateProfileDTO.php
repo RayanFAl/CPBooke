@@ -8,6 +8,8 @@ final readonly class UpdateProfileDTO
         public string $name,
         public ?string $phone,
         public ?string $country,
+        public bool $phoneProvided = false,
+        public bool $countryProvided = false,
     ) {
     }
 
@@ -18,10 +20,15 @@ final readonly class UpdateProfileDTO
      */
     public static function fromArray(array $data): self
     {
+        $phoneProvided = array_key_exists('phone', $data);
+        $countryProvided = array_key_exists('country', $data);
+
         return new self(
-            name: $data['name'],
-            phone: $data['phone'] ?: null,
-            country: $data['country'] ?: null,
+            name: (string) $data['name'],
+            phone: $phoneProvided ? (filled($data['phone'] ?? null) ? trim((string) $data['phone']) : null) : null,
+            country: $countryProvided ? (filled($data['country'] ?? null) ? trim((string) $data['country']) : null) : null,
+            phoneProvided: $phoneProvided,
+            countryProvided: $countryProvided,
         );
     }
 }

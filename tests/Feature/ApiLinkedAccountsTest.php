@@ -4,10 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\LinkedAccount;
 use App\Models\LinkedAccountRequest;
+use App\Models\NotificationLog;
 use App\Models\User;
-use App\Modules\Notifications\Events\PassengerActionDue;
+use App\Models\UserNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -54,8 +54,6 @@ class ApiLinkedAccountsTest extends TestCase
 
     public function test_customer_can_send_link_request_by_phone(): void
     {
-        Event::fake([PassengerActionDue::class]);
-
         $from = $this->customer(['full_name' => 'Sender Name']);
         $to = $this->customer(['phone' => '+966501234567']);
 
@@ -83,13 +81,34 @@ class ApiLinkedAccountsTest extends TestCase
             'status' => LinkedAccountRequest::STATUS_PENDING,
         ]);
 
-        Event::assertDispatched(PassengerActionDue::class, function (PassengerActionDue $event) use ($from, $to): bool {
-            return $event->code === 'LINK_REQUEST_RECEIVED'
-                && $event->user->is($to)
-                && ($event->payload['sender_name'] ?? null) === 'Sender Name'
-                && ($event->payload['deep_link'] ?? null) === '/linked-accounts'
-                && ($event->payload['from_user_id'] ?? null) === (string) $from->id;
-        });
+        $this->assertDatabaseHas('notification_logs', [
+            'user_id' => $to->id,
+            'template_code' => 'LINK_REQUEST_RECEIVED',
+            'channel' => 'in_app',
+        ]);
+
+        $this->assertDatabaseHas('notification_logs', [
+            'user_id' => $to->id,
+            'template_code' => 'LINK_REQUEST_RECEIVED',
+            'channel' => 'push',
+        ]);
+
+        $this->assertTrue(
+            UserNotification::query()
+                ->where('user_id', $to->id)
+                ->where('template_code', 'LINK_REQUEST_RECEIVED')
+                ->exists(),
+        );
+
+        $pushLog = NotificationLog::query()
+            ->where('user_id', $to->id)
+            ->where('template_code', 'LINK_REQUEST_RECEIVED')
+            ->where('channel', 'push')
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($pushLog);
+        $this->assertNotSame('pending', $pushLog->status);
     }
 
     public function test_customer_cannot_link_themselves(): void
@@ -160,8 +179,6 @@ class ApiLinkedAccountsTest extends TestCase
 
     public function test_recipient_can_accept_request_and_both_sides_are_created(): void
     {
-        Event::fake([PassengerActionDue::class]);
-
         $from = $this->customer();
         $to = $this->customer(['full_name' => 'Accepter']);
 
@@ -202,18 +219,22 @@ class ApiLinkedAccountsTest extends TestCase
             'is_active' => true,
         ]);
 
-        Event::assertDispatched(PassengerActionDue::class, function (PassengerActionDue $event) use ($from): bool {
-            return $event->code === 'LINK_REQUEST_ACCEPTED'
-                && $event->user->is($from)
-                && ($event->payload['recipient_name'] ?? null) === 'Accepter'
-                && ($event->payload['deep_link'] ?? null) === '/linked-accounts';
-        });
+        $this->assertDatabaseHas('notification_logs', [
+            'user_id' => $from->id,
+            'template_code' => 'LINK_REQUEST_ACCEPTED',
+            'channel' => 'push',
+        ]);
+
+        $this->assertTrue(
+            UserNotification::query()
+                ->where('user_id', $from->id)
+                ->where('template_code', 'LINK_REQUEST_ACCEPTED')
+                ->exists(),
+        );
     }
 
     public function test_recipient_can_reject_request(): void
     {
-        Event::fake([PassengerActionDue::class]);
-
         $from = $this->customer();
         $to = $this->customer(['full_name' => 'Rejecter']);
 
@@ -233,11 +254,18 @@ class ApiLinkedAccountsTest extends TestCase
 
         $this->assertDatabaseCount('linked_accounts', 0);
 
-        Event::assertDispatched(PassengerActionDue::class, function (PassengerActionDue $event) use ($from): bool {
-            return $event->code === 'LINK_REQUEST_REJECTED'
-                && $event->user->is($from)
-                && ($event->payload['recipient_name'] ?? null) === 'Rejecter';
-        });
+        $this->assertDatabaseHas('notification_logs', [
+            'user_id' => $from->id,
+            'template_code' => 'LINK_REQUEST_REJECTED',
+            'channel' => 'push',
+        ]);
+
+        $this->assertTrue(
+            UserNotification::query()
+                ->where('user_id', $from->id)
+                ->where('template_code', 'LINK_REQUEST_REJECTED')
+                ->exists(),
+        );
     }
 
     public function test_non_recipient_cannot_respond_to_request(): void

@@ -6,12 +6,18 @@ use App\Models\LinkedAccount;
 use App\Models\LinkedAccountRequest;
 use App\Models\User;
 use App\Modules\Notifications\Events\PassengerActionDue;
+use App\Modules\Notifications\Services\NotificationService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class LinkedAccountService
 {
+    public function __construct(
+        private readonly NotificationService $notificationService,
+    ) {}
+
     /**
      * List active linked accounts for the authenticated user.
      *
@@ -97,7 +103,7 @@ class LinkedAccountService
         ]);
 
         $this->dispatchAfterCommit(function () use ($fromUser, $toUser, $request): void {
-            event(new PassengerActionDue(
+            $this->dispatchLinkNotification(
                 $toUser,
                 'LINK_REQUEST_RECEIVED',
                 [
@@ -106,9 +112,8 @@ class LinkedAccountService
                     'request_id' => $request->id,
                     'from_user_id' => (string) $fromUser->id,
                 ],
-                'linked_account_request',
                 $request->id,
-            ));
+            );
         });
 
         return $request;
@@ -193,7 +198,7 @@ class LinkedAccountService
 
         if ($fromUser instanceof User) {
             $this->dispatchAfterCommit(function () use ($fromUser, $actor, $code, $result): void {
-                event(new PassengerActionDue(
+                $this->dispatchLinkNotification(
                     $fromUser,
                     $code,
                     [
@@ -201,9 +206,8 @@ class LinkedAccountService
                         'deep_link' => '/linked-accounts',
                         'request_id' => $result['request']->id,
                     ],
-                    'linked_account_request',
                     $result['request']->id,
-                ));
+                );
             });
         }
 
@@ -323,6 +327,30 @@ class LinkedAccountService
     private function displayName(User $user): string
     {
         return $user->full_name ?: $user->name ?: 'Customer';
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function dispatchLinkNotification(
+        User $user,
+        string $code,
+        array $payload,
+        int|string $requestId,
+    ): void {
+        try {
+            // Sync dispatch (not via queued PassengerActionDue listener) so link-request
+            // inbox + push work without notifications-dispatch / notifications-push workers.
+            $this->notificationService->dispatchForEvent(new PassengerActionDue(
+                $user,
+                $code,
+                $payload,
+                'linked_account_request',
+                $requestId,
+            ));
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     private function dispatchAfterCommit(callable $callback): void

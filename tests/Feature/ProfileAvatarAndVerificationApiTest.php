@@ -143,4 +143,63 @@ class ProfileAvatarAndVerificationApiTest extends TestCase
 
         $this->assertNull($user->fresh()->phone_verified_at);
     }
+
+    public function test_profile_update_accepts_name_and_phone_without_country(): void
+    {
+        $user = User::factory()->create([
+            'name' => 'Fathi Hammel',
+            'full_name' => 'Fathi Hammel',
+            'phone' => '+218900000010',
+            'country' => 'LY',
+            'phone_verified_at' => now(),
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->putJson('/api/v1/users/profile', [
+            'name' => 'Fathi Hammel',
+            'phone' => '+21894321527',
+        ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.phone', '+21894321527')
+            ->assertJsonPath('data.user.country', 'LY')
+            ->assertJsonPath('data.user.phone_verified', false);
+
+        $fresh = $user->fresh();
+        $this->assertSame('+21894321527', $fresh->phone);
+        $this->assertSame('LY', $fresh->country);
+        $this->assertNull($fresh->phone_verified_at);
+    }
+
+    public function test_profile_update_returns_validation_error_for_taken_phone(): void
+    {
+        User::factory()->create([
+            'phone' => '+21894321527',
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $user = User::factory()->create([
+            'name' => 'Fathi Hammel',
+            'phone' => '+218900000011',
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->putJson('/api/v1/users/profile', [
+            'name' => 'Fathi Hammel',
+            'phone' => '+21894321527',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'validation_failed')
+            ->assertJsonStructure([
+                'errors' => ['phone'],
+            ]);
+    }
 }

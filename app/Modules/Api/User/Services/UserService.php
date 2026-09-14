@@ -19,6 +19,7 @@ class UserService
         private readonly LoyaltyService $loyaltyService,
         private readonly ProfileOtpService $profileOtpService,
         private readonly SavedPassengerService $savedPassengerService,
+        private readonly CustomerAccountDeletionService $customerAccountDeletionService,
     ) {
     }
 
@@ -199,24 +200,23 @@ class UserService
     }
 
     /**
-     * Permanently delete the authenticated customer account.
+     * Permanently delete or schedule deletion of the authenticated customer account.
+     *
+     * @return array<string, mixed>
      */
-    public function deleteAccount(User $user): void
+    public function deleteAccount(User $user, string $mode): array
     {
-        if (! $user->isCustomerAccount()) {
-            throw ValidationException::withMessages([
-                'account' => ['Only customer accounts can be deleted from the mobile app.'],
-            ]);
-        }
+        return $this->customerAccountDeletionService->requestDeletion($user, $mode);
+    }
 
-        if ($user->avatar_path) {
-            Storage::disk('public')->delete($user->avatar_path);
-        }
-
-        $this->savedPassengerService->purgePassportImagesForUser($user);
-
-        $user->tokens()->delete();
-        $user->delete();
+    /**
+     * Cancel a pending scheduled account deletion using credentials or Google token.
+     *
+     * @return array<string, mixed>
+     */
+    public function cancelAccountDeletion(User $user): array
+    {
+        return $this->customerAccountDeletionService->cancel($user);
     }
 
     private function forgetTransientAttributes(User $user): void

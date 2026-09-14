@@ -69,7 +69,7 @@ const launchTiers = computed(() => props.dashboard.tiers
 
 const requirementLabel = (monthlySpend) => {
     if (Number(monthlySpend) <= 0) {
-        return t('Not configured');
+        return t('On registration / login');
     }
 
     return `${monthlySpend} ${props.program.default_currency} ${t('this month')}`;
@@ -77,7 +77,7 @@ const requirementLabel = (monthlySpend) => {
 
 const durationLabel = (months) => {
     if (!months) {
-        return t('Not configured');
+        return t('Permanent');
     }
 
     return `${months} ${t('months')}`;
@@ -123,6 +123,9 @@ const saveProgramTier = (entry) => {
             allow_downgrade: entry.rule.allow_downgrade,
             is_active: entry.rule.is_active,
             priority: entry.rule.priority,
+            benefit_duration_months: entry.duration_months === '' || entry.duration_months === null
+                ? null
+                : Number(entry.duration_months),
         }).put(route('admin.loyalty.rules.update', entry.rule.id), {
             preserveScroll: true,
         });
@@ -204,8 +207,20 @@ const inputClass = 'mt-1 block w-full rounded-lg border border-slate-200 px-3 py
                             </p>
                             <h2 class="mt-2 text-2xl font-semibold text-slate-950">{{ t('Loyalty program') }}</h2>
                             <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                                {{ t('Customers unlock discounts by monthly spend. Each level stays active for a fixed number of months and renews when the spend target is hit again.') }}
+                                {{ t('Level 1 starts automatically on registration or login with a permanent discount. Higher levels unlock from monthly spend and stay active for a fixed number of months.') }}
                             </p>
+                            <div class="mt-3 max-w-2xl rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
+                                <p class="font-semibold text-slate-800">{{ t('How the discount is calculated') }}</p>
+                                <ul class="mt-2 list-disc space-y-1 ps-4">
+                                    <li>{{ t('Fare = ticket/base price only (before tax). This is the amount loyalty can discount.') }}</li>
+                                    <li>{{ t('Tax = taxes and fees. Loyalty never discounts tax.') }}</li>
+                                    <li>{{ t('Discount = Fare × membership percentage (example: Level 1 = 3%).') }}</li>
+                                    <li>{{ t('Final price = (Fare − Discount) + Tax') }}</li>
+                                </ul>
+                                <p class="mt-2 text-slate-700">
+                                    {{ t('Example: Fare 490, Tax 0, discount 3% → Discount 14.7 → Final ≈ 475.3. If Tax exists (e.g. Fare 613 + Tax 127 = 740), discount applies to 613 only, then tax is added back.') }}
+                                </p>
+                            </div>
                         </div>
 
                         <div class="flex flex-wrap items-center gap-2">
@@ -254,7 +269,7 @@ const inputClass = 'mt-1 block w-full rounded-lg border border-slate-200 px-3 py
                         <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                             <h3 class="text-sm font-semibold text-slate-950">{{ t('Tier ladder') }}</h3>
                             <p class="mt-1 text-sm text-slate-600">
-                                {{ t('Spend in the current calendar month unlocks timed discounts.') }}
+                                {{ t('Level 1 is granted on registration or login. Higher levels unlock from monthly spend.') }}
                             </p>
 
                             <div v-if="launchTiers.length === 0" class="mt-4 rounded-lg bg-slate-50 px-4 py-4 text-sm text-slate-600">
@@ -362,7 +377,7 @@ const inputClass = 'mt-1 block w-full rounded-lg border border-slate-200 px-3 py
                             <div>
                                 <h3 class="text-sm font-semibold text-slate-950">{{ t('Tier configuration') }}</h3>
                                 <p class="mt-1 text-sm text-slate-600">
-                                    {{ t('Each card combines the level name, monthly spend target, discount, and active duration.') }}
+                                    {{ t('Each card combines the level name, how it unlocks, discount, and active duration. Leave monthly spend at 0 for the starter level.') }}
                                 </p>
                             </div>
 
@@ -420,9 +435,19 @@ const inputClass = 'mt-1 block w-full rounded-lg border border-slate-200 px-3 py
                                         </label>
                                         <label class="block text-sm">
                                             <span class="font-medium text-slate-700">{{ t('Active for (months)') }}</span>
-                                            <p class="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                                                {{ durationLabel(entry.duration_months) }}
-                                            </p>
+                                            <input
+                                                v-if="entry.rule"
+                                                v-model="entry.duration_months"
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                :class="inputClass"
+                                                :disabled="!canManageRules"
+                                                :placeholder="t('Empty = permanent')"
+                                            >
+                                            <span class="mt-1 block text-xs text-slate-500">
+                                                {{ t('Leave empty or 0 for a permanent discount (starter Level 1).') }}
+                                            </span>
                                         </label>
                                     </div>
                                 </form>

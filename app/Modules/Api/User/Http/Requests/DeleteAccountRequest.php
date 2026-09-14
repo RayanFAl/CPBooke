@@ -3,6 +3,7 @@
 namespace App\Modules\Api\User\Http\Requests;
 
 use App\Modules\Api\Support\Http\Requests\ApiFormRequest;
+use App\Modules\Api\User\Services\CustomerAccountDeletionService;
 use Illuminate\Validation\Rule;
 
 class DeleteAccountRequest extends ApiFormRequest
@@ -19,15 +20,30 @@ class DeleteAccountRequest extends ApiFormRequest
     {
         $user = $this->user();
 
-        if ($user !== null && filled($user->google_id)) {
-            return [
-                'confirmation' => ['required', 'string', Rule::in(['DELETE'])],
-            ];
+        if ($user !== null && $user->trashed()) {
+            return [];
         }
 
-        return [
-            'password' => ['required', 'current_password:sanctum'],
+        $rules = [
+            'mode' => [
+                'required',
+                'string',
+                Rule::in([
+                    CustomerAccountDeletionService::MODE_IMMEDIATE,
+                    CustomerAccountDeletionService::MODE_SCHEDULED,
+                ]),
+            ],
         ];
+
+        if ($user !== null && filled($user->google_id)) {
+            $rules['confirmation'] = ['required', 'string', Rule::in(['DELETE'])];
+
+            return $rules;
+        }
+
+        $rules['password'] = ['required', 'current_password:sanctum'];
+
+        return $rules;
     }
 
     /**
@@ -36,6 +52,7 @@ class DeleteAccountRequest extends ApiFormRequest
     public function messages(): array
     {
         return [
+            'mode.in' => 'Choose immediate or scheduled account deletion.',
             'confirmation.in' => 'Type DELETE to confirm account deletion.',
             'password.current_password' => 'The password is incorrect.',
         ];

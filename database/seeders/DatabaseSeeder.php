@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionsSeeder::class,
             AdminUserSeeder::class,
             SystemSettingsSeeder::class,
+            ExchangeRateSeeder::class,
             ProviderSeeder::class,
             HomeContentSeeder::class,
             MobileCatalogSeeder::class,

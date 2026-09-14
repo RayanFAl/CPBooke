@@ -11,9 +11,11 @@ use App\Models\User;
 use App\Modules\Notifications\Events\AbandonedFlightSearchDue;
 use App\Modules\Notifications\Events\PriceAlertHit;
 use App\Modules\Notifications\Events\SeatAlertAvailable;
+use App\Modules\Notifications\Events\SeatAlertStillWatching;
 use App\Modules\Notifications\Services\JourneyCampaignDispatcher;
 use App\Modules\Notifications\Support\NotificationChannels;
 use App\Modules\Notifications\Support\NotificationDefinitionRegistry;
+use App\Modules\Notifications\Support\NotificationInboxContract;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
@@ -75,7 +77,7 @@ class TravelMarketingNotificationsTest extends TestCase
 
     public function test_abandoned_search_dispatches_once_for_unbooked_intent(): void
     {
-        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class]);
+        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class, SeatAlertStillWatching::class]);
 
         $user = User::factory()->create(['account_type' => User::ACCOUNT_TYPE_CUSTOMER]);
         $intent = TravelSearchIntent::query()->create([
@@ -97,14 +99,14 @@ class TravelMarketingNotificationsTest extends TestCase
 
         $this->assertNotNull($intent->fresh()->abandoned_notified_at);
 
-        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class]);
+        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class, SeatAlertStillWatching::class]);
         (new SendBookingReminderNotificationsJob)->handle(app(JourneyCampaignDispatcher::class));
         Event::assertNotDispatched(AbandonedFlightSearchDue::class);
     }
 
     public function test_price_alert_fires_when_latest_search_is_at_or_below_target(): void
     {
-        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class]);
+        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class, SeatAlertStillWatching::class]);
 
         $user = User::factory()->create(['account_type' => User::ACCOUNT_TYPE_CUSTOMER]);
         Sanctum::actingAs($user);
@@ -167,7 +169,7 @@ class TravelMarketingNotificationsTest extends TestCase
 
     public function test_seat_alert_fires_when_latest_search_meets_min_seats(): void
     {
-        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class]);
+        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class, SeatAlertStillWatching::class]);
 
         $user = User::factory()->create(['account_type' => User::ACCOUNT_TYPE_CUSTOMER]);
         Sanctum::actingAs($user);
@@ -205,6 +207,7 @@ class TravelMarketingNotificationsTest extends TestCase
 
         $alert = SeatAlert::query()->firstOrFail();
         $this->assertSame(3, (int) $alert->last_triggered_seats);
+        $this->assertFalse($alert->is_active);
 
         $defs = app(NotificationDefinitionRegistry::class)
             ->definitionsFor(new SeatAlertAvailable($alert->load('user'), 3));
@@ -214,6 +217,141 @@ class TravelMarketingNotificationsTest extends TestCase
         $this->assertContains(NotificationChannels::IN_APP, $defs[0]['channels']);
         $this->assertStringContainsString('/flights?', $defs[0]['payload']['deep_link']);
         $this->assertStringContainsString('origin=TIP', $defs[0]['payload']['deep_link']);
+    }
+
+    public function test_seat_alert_sends_periodic_still_watching_reminder(): void
+    {
+        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class, SeatAlertStillWatching::class]);
+
+        $user = User::factory()->create(['account_type' => User::ACCOUNT_TYPE_CUSTOMER]);
+        $routeKey = TravelSearchIntent::routeKeyFor('TIP', 'TUN', '2026-10-01');
+        $alert = $this->ageSeatAlert(SeatAlert::query()->create([
+            'user_id' => $user->id,
+            'origin' => 'TIP',
+            'destination' => 'TUN',
+            'route_key' => $routeKey,
+            'watch_key' => SeatAlert::watchKeyFor($routeKey, '8U401', null, 'economy'),
+            'departure_date' => '2026-10-01',
+            'flight_number' => '8U401',
+            'cabin' => 'economy',
+            'min_seats' => 2,
+            'is_active' => true,
+        ]), 13);
+
+        (new SendBookingReminderNotificationsJob)->handle(app(JourneyCampaignDispatcher::class));
+
+        Event::assertDispatched(SeatAlertStillWatching::class, function (SeatAlertStillWatching $event) use ($alert): bool {
+            return $event->alert->is($alert);
+        });
+        Event::assertNotDispatched(SeatAlertAvailable::class);
+
+        $alert->refresh();
+        $this->assertTrue($alert->is_active);
+        $this->assertNotNull($alert->last_reminded_at);
+
+        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class, SeatAlertStillWatching::class]);
+        (new SendBookingReminderNotificationsJob)->handle(app(JourneyCampaignDispatcher::class));
+        Event::assertNotDispatched(SeatAlertStillWatching::class);
+
+        $this->travel(12)->hours();
+
+        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class, SeatAlertStillWatching::class]);
+        (new SendBookingReminderNotificationsJob)->handle(app(JourneyCampaignDispatcher::class));
+        Event::assertDispatched(SeatAlertStillWatching::class);
+
+        $defs = app(NotificationDefinitionRegistry::class)
+            ->definitionsFor(new SeatAlertStillWatching($alert->load('user')));
+
+        $this->assertSame('SEAT_ALERT_STILL_WATCHING', $defs[0]['code']);
+        $this->assertContains(NotificationChannels::PUSH, $defs[0]['channels']);
+        $this->assertStringContainsString('still looking for a seat', strtolower($defs[0]['body']));
+        $this->assertSame('marketing', NotificationInboxContract::family('SEAT_ALERT_STILL_WATCHING'));
+    }
+
+    public function test_fresh_seat_alert_does_not_remind_immediately(): void
+    {
+        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class, SeatAlertStillWatching::class]);
+
+        $user = User::factory()->create(['account_type' => User::ACCOUNT_TYPE_CUSTOMER]);
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/notifications/seat-alerts', [
+            'origin' => 'TIP',
+            'destination' => 'TUN',
+            'departure_date' => '2026-10-01',
+            'min_seats' => 1,
+        ])->assertOk();
+
+        (new SendBookingReminderNotificationsJob)->handle(app(JourneyCampaignDispatcher::class));
+
+        Event::assertNotDispatched(SeatAlertStillWatching::class);
+        $this->assertNull(SeatAlert::query()->firstOrFail()->last_reminded_at);
+    }
+
+    public function test_seat_alert_stops_reminders_after_seats_become_available(): void
+    {
+        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class, SeatAlertStillWatching::class]);
+
+        $user = User::factory()->create(['account_type' => User::ACCOUNT_TYPE_CUSTOMER]);
+        $routeKey = TravelSearchIntent::routeKeyFor('TIP', 'TUN', '2026-10-01');
+        $this->ageSeatAlert(SeatAlert::query()->create([
+            'user_id' => $user->id,
+            'origin' => 'TIP',
+            'destination' => 'TUN',
+            'route_key' => $routeKey,
+            'watch_key' => SeatAlert::watchKeyFor($routeKey, null, null, null),
+            'departure_date' => '2026-10-01',
+            'min_seats' => 2,
+            'is_active' => true,
+        ]), 13);
+
+        TravelSearchIntent::query()->create([
+            'user_id' => $user->id,
+            'origin' => 'TIP',
+            'destination' => 'TUN',
+            'route_key' => $routeKey,
+            'departure_date' => '2026-10-01',
+            'last_seen_seats' => 4,
+            'currency' => 'LYD',
+            'last_searched_at' => now()->subMinutes(10),
+        ]);
+
+        (new SendBookingReminderNotificationsJob)->handle(app(JourneyCampaignDispatcher::class));
+
+        Event::assertDispatched(SeatAlertAvailable::class);
+        Event::assertNotDispatched(SeatAlertStillWatching::class);
+        $this->assertFalse(SeatAlert::query()->firstOrFail()->is_active);
+
+        $this->travel(12)->hours();
+        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class, SeatAlertStillWatching::class]);
+        (new SendBookingReminderNotificationsJob)->handle(app(JourneyCampaignDispatcher::class));
+        Event::assertNotDispatched(SeatAlertStillWatching::class);
+        Event::assertNotDispatched(SeatAlertAvailable::class);
+    }
+
+    public function test_expired_seat_alert_is_deactivated_without_reminder(): void
+    {
+        Event::fake([AbandonedFlightSearchDue::class, PriceAlertHit::class, SeatAlertAvailable::class, SeatAlertStillWatching::class]);
+
+        $user = User::factory()->create(['account_type' => User::ACCOUNT_TYPE_CUSTOMER]);
+        $routeKey = TravelSearchIntent::routeKeyFor('TIP', 'TUN', now()->subDay()->toDateString());
+        SeatAlert::query()->create([
+            'user_id' => $user->id,
+            'origin' => 'TIP',
+            'destination' => 'TUN',
+            'route_key' => $routeKey,
+            'watch_key' => SeatAlert::watchKeyFor($routeKey, null, null, null),
+            'departure_date' => now()->subDay()->toDateString(),
+            'min_seats' => 1,
+            'is_active' => true,
+            'created_at' => now()->subDays(3),
+            'updated_at' => now()->subDays(3),
+        ]);
+
+        (new SendBookingReminderNotificationsJob)->handle(app(JourneyCampaignDispatcher::class));
+
+        Event::assertNotDispatched(SeatAlertStillWatching::class);
+        $this->assertFalse(SeatAlert::query()->firstOrFail()->is_active);
     }
 
     public function test_seat_alert_can_be_disabled_by_owner(): void
@@ -236,5 +374,17 @@ class TravelMarketingNotificationsTest extends TestCase
         $this->deleteJson('/api/v1/notifications/seat-alerts/'.$alert->id)
             ->assertOk()
             ->assertJsonPath('data.is_active', false);
+    }
+
+    private function ageSeatAlert(SeatAlert $alert, int $hours): SeatAlert
+    {
+        $agedAt = now()->subHours($hours);
+        $alert->timestamps = false;
+        $alert->forceFill([
+            'created_at' => $agedAt,
+            'updated_at' => $agedAt,
+        ])->save();
+
+        return $alert->refresh();
     }
 }

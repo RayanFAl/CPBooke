@@ -5,6 +5,7 @@ namespace App\Modules\Notifications\Channels;
 use App\Models\NotificationLog;
 use App\Models\NotificationTemplate;
 use App\Models\User;
+use App\Models\UserNotificationDevice;
 use App\Modules\Notifications\Contracts\NotificationChannel;
 use App\Modules\Notifications\Services\FcmHttpV1Client;
 use App\Modules\Notifications\Support\NotificationChannels;
@@ -91,6 +92,10 @@ class PushNotificationChannel implements NotificationChannel
                     ? '/my-orders'
                     : null
             ),
+            'origin' => isset($variables['origin']) ? (string) $variables['origin'] : null,
+            'destination' => isset($variables['destination']) ? (string) $variables['destination'] : null,
+            'departure_date' => isset($variables['departure_date']) ? (string) $variables['departure_date'] : null,
+            'flight_number' => isset($variables['flight_number']) ? (string) $variables['flight_number'] : null,
             'download_url' => isset($variables['download_url']) ? (string) $variables['download_url'] : null,
             'page_url' => isset($variables['page_url']) ? (string) $variables['page_url'] : null,
             'version' => isset($variables['version']) ? (string) $variables['version'] : null,
@@ -159,6 +164,7 @@ class PushNotificationChannel implements NotificationChannel
                 $success++;
             } else {
                 $failure++;
+                $this->deactivateUnregisteredToken($user, $deviceToken, $result);
             }
         }
 
@@ -170,5 +176,27 @@ class PushNotificationChannel implements NotificationChannel
             'failure' => $failure,
             'results' => $results,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function deactivateUnregisteredToken(User $user, string $deviceToken, array $result): void
+    {
+        $errorCode = (string) data_get($result, 'response.error.details.0.errorCode', '');
+        $message = (string) data_get($result, 'response.error.message', '');
+
+        if ($errorCode !== 'UNREGISTERED' && $message !== 'NotRegistered') {
+            return;
+        }
+
+        UserNotificationDevice::query()
+            ->where('user_id', $user->id)
+            ->where('device_token', $deviceToken)
+            ->where('is_active', true)
+            ->update([
+                'is_active' => false,
+                'updated_at' => now(),
+            ]);
     }
 }

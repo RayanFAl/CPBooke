@@ -41,6 +41,14 @@ class AuditLog extends Model
 
     public const MODULE_SYSTEM = 'system';
 
+    public const MODULE_PROVIDERS = 'providers';
+
+    public const MODULE_EXCHANGE_RATES = 'exchange_rates';
+
+    public const MODULE_LOYALTY = 'loyalty';
+
+    public const ENTITY_EXCHANGE_RATE = 'exchange_rate';
+
     public const ENTITY_ORDER = 'order';
 
     public const ENTITY_SUPPORT_TICKET = 'support_ticket';
@@ -55,7 +63,13 @@ class AuditLog extends Model
 
     public const ENTITY_PROVIDER = 'provider';
 
-    public const MODULE_PROVIDERS = 'providers';
+    public const ENTITY_LOYALTY_TIER = 'loyalty_tier';
+
+    public const ENTITY_LOYALTY_RULE = 'loyalty_rule';
+
+    public const ENTITY_LOYALTY_BENEFIT = 'loyalty_benefit';
+
+    public const ENTITY_LOYALTY_SETTINGS = 'loyalty_settings';
 
     /**
      * @return array<string, string>

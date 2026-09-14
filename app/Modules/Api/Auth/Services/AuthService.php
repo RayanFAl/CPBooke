@@ -6,6 +6,9 @@ use App\Modules\Api\DTO\AuthResultDTO;
 use App\Modules\Api\DTO\LoginDTO;
 use App\Modules\Api\DTO\RegisterDTO;
 use App\Models\User;
+use App\Models\UserLoyaltyProfile;
+use App\Modules\Loyalty\Services\LoyaltyService;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -14,7 +17,7 @@ class AuthService
     public function __construct(
         private readonly ApiTokenService $tokenService,
         private readonly TwoFactorService $twoFactorService,
-        private readonly LoginAlertService $loginAlertService,
+        private readonly LoyaltyService $loyaltyService,
     ) {
     }
 
@@ -34,6 +37,8 @@ class AuthService
             'is_admin' => false,
             'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
         ]);
+
+        event(new Registered($user));
 
         return $this->tokenService->issueTokenPair(
             $user->refresh(),
@@ -64,6 +69,16 @@ class AuthService
             ]);
         }
 
+        if ($user->isDeletedCustomerAccount()) {
+            throw ValidationException::withMessages([
+                'login' => ['The provided credentials are incorrect.'],
+            ]);
+        }
+
+        if ($user->hasPendingAccountDeletion()) {
+            return $user->pendingAccountDeletionPayload();
+        }
+
         if (! $user->is_active) {
             throw ValidationException::withMessages([
                 'login' => ['This account has been deactivated.'],
@@ -92,10 +107,22 @@ class AuthService
      *
      * Skips password and 2FA checks because the identity provider verified the user.
      *
+     * @return AuthResultDTO|array{account_pending_deletion: bool, can_cancel: bool, grace_period_days: int, deletion_scheduled_at: ?string, deletion_due_at: ?string}
+     *
      * @throws ValidationException
      */
-    public function loginViaProvider(User $user, string $deviceName, bool $rememberMe, ?string $ip = null): AuthResultDTO
+    public function loginViaProvider(User $user, string $deviceName, bool $rememberMe, ?string $ip = null): AuthResultDTO|array
     {
+        if ($user->isDeletedCustomerAccount()) {
+            throw ValidationException::withMessages([
+                'id_token' => ['This account has been deactivated.'],
+            ]);
+        }
+
+        if ($user->hasPendingAccountDeletion()) {
+            return $user->pendingAccountDeletionPayload();
+        }
+
         if (! $user->is_active) {
             throw ValidationException::withMessages([
                 'id_token' => ['This account has been deactivated.'],
@@ -257,15 +284,46 @@ class AuthService
             'last_login_at' => now(),
         ])->save();
 
+        $this->ensureCustomerLoyaltyInitialized($user);
+
         $auth = $this->tokenService->issueTokenPair(
             $user->refresh(),
             $deviceName,
             $rememberMe,
         );
 
-        $this->loginAlertService->notify($user, $deviceName, $ip);
+        // Send the HTTP response first; run SMTP/FCM afterwards (no queue worker).
+        $userId = (int) $user->id;
+        dispatch(function () use ($userId, $deviceName, $ip): void {
+            $loginUser = User::query()->find($userId);
+
+            if ($loginUser === null || ! $loginUser->is_active) {
+                return;
+            }
+
+            app(LoginAlertService::class)->notify($loginUser, $deviceName, $ip);
+        })->afterResponse();
 
         return $auth;
+    }
+
+    /**
+     * Grant the starter loyalty tier (Level 1 / 3%) on first customer login when needed.
+     *
+     * Returning customers already initialized at registration skip the heavy
+     * recalculation so login stays fast.
+     */
+    private function ensureCustomerLoyaltyInitialized(User $user): void
+    {
+        if (! $user->isCustomerAccount()) {
+            return;
+        }
+
+        if (UserLoyaltyProfile::query()->where('user_id', $user->id)->whereNotNull('current_tier_id')->exists()) {
+            return;
+        }
+
+        $this->loyaltyService->upgradeUserIfEligible($user);
     }
 
     private function resolveUserForLogin(string $login): ?User

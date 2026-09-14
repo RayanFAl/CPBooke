@@ -3,6 +3,10 @@
 use App\Modules\Api\User\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
+Route::post('/users/account/deletion/cancel', [ProfileController::class, 'cancelDeletion'])
+    ->middleware('throttle:5,1')
+    ->name('users.account.deletion.cancel');
+
 Route::middleware('auth:sanctum')
     ->prefix('users')
     ->as('users.')

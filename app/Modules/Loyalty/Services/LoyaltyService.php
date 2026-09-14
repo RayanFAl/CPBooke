@@ -440,8 +440,27 @@ class LoyaltyService
 
             $threshold = (float) $rule->min_period_spend;
             $durationMonths = (int) ($rule->metadata['benefit_duration_months'] ?? 0);
+            $isStarterTier = (bool) $tier->is_default || $threshold <= 0;
 
-            if ($threshold <= 0 || $durationMonths <= 0 || $monthSpend < $threshold) {
+            // Phase-one starter: every registered/logged-in customer gets Level 1 permanently.
+            if ($isStarterTier) {
+                $existing = $entitlements[(string) $tier->id] ?? [];
+                $entitlements[(string) $tier->id] = [
+                    'tier_id' => $tier->id,
+                    'tier_code' => $tier->code,
+                    'tier_level' => $tier->level,
+                    'qualified_at' => $existing['qualified_at'] ?? $now->toIso8601String(),
+                    'expires_at' => null,
+                    'qualification_spend' => 0,
+                    'threshold' => 0,
+                    'duration_months' => null,
+                    'grant_reason' => 'registration',
+                ];
+
+                continue;
+            }
+
+            if ($durationMonths <= 0 || $monthSpend < $threshold) {
                 continue;
             }
 
@@ -460,6 +479,10 @@ class LoyaltyService
         $activeEntitlements = collect($entitlements)
             ->filter(function (array $entitlement) use ($now): bool {
                 $expiresAt = $entitlement['expires_at'] ?? null;
+
+                if ($expiresAt === null) {
+                    return true;
+                }
 
                 return is_string($expiresAt) && Carbon::parse($expiresAt)->greaterThan($now);
             });
@@ -919,14 +942,19 @@ class LoyaltyService
             return null;
         }
 
-        $expiresAt = Carbon::parse($active['expires_at']);
+        $expiresAtRaw = $active['expires_at'] ?? null;
+        $expiresAt = is_string($expiresAtRaw) ? Carbon::parse($expiresAtRaw) : null;
 
         return [
             'tier_code' => $active['tier_code'] ?? null,
             'qualified_at' => $active['qualified_at'] ?? null,
-            'expires_at' => $expiresAt->toIso8601String(),
-            'days_remaining' => max(0, (int) now()->diffInDays($expiresAt, false)),
-            'duration_months' => (int) ($active['duration_months'] ?? 0),
+            'expires_at' => $expiresAt?->toIso8601String(),
+            'days_remaining' => $expiresAt !== null
+                ? max(0, (int) now()->diffInDays($expiresAt, false))
+                : null,
+            'duration_months' => isset($active['duration_months'])
+                ? (int) $active['duration_months']
+                : null,
             'qualification_spend' => isset($active['qualification_spend'])
                 ? number_format((float) $active['qualification_spend'], 2, '.', '')
                 : null,
@@ -951,6 +979,10 @@ class LoyaltyService
         }
 
         $expiresAt = $entitlement['expires_at'] ?? null;
+
+        if ($expiresAt === null) {
+            return $entitlement;
+        }
 
         if (! is_string($expiresAt) || ! Carbon::parse($expiresAt)->greaterThan(now())) {
             return null;

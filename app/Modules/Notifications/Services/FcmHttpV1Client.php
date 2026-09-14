@@ -43,6 +43,7 @@ class FcmHttpV1Client
                     'priority' => 'HIGH',
                     'notification' => [
                         'channel_id' => 'cpbooke_default',
+                        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
                         'sound' => 'default',
                         'default_vibrate_timings' => true,
                         'notification_priority' => 'PRIORITY_HIGH',

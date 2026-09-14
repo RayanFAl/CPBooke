@@ -74,6 +74,9 @@ class AuditCenterService
                 AuditLog::MODULE_WALLETS,
                 AuditLog::MODULE_SETTLEMENTS,
                 AuditLog::MODULE_APPROVALS,
+                AuditLog::MODULE_EXCHANGE_RATES,
+                AuditLog::MODULE_LOYALTY,
+                AuditLog::MODULE_PROVIDERS,
                 AuditLog::MODULE_SYSTEM,
             ],
             'statuses' => [AuditLog::STATUS_SUCCESS, AuditLog::STATUS_FAILED],
@@ -83,6 +86,12 @@ class AuditCenterService
                 AuditLog::ENTITY_PROVIDER_WALLET,
                 AuditLog::ENTITY_SETTLEMENT,
                 AuditLog::ENTITY_APPROVAL,
+                AuditLog::ENTITY_EXCHANGE_RATE,
+                AuditLog::ENTITY_LOYALTY_SETTINGS,
+                AuditLog::ENTITY_LOYALTY_TIER,
+                AuditLog::ENTITY_LOYALTY_RULE,
+                AuditLog::ENTITY_LOYALTY_BENEFIT,
+                AuditLog::ENTITY_PROVIDER,
             ],
         ];
     }
@@ -127,6 +136,11 @@ class AuditCenterService
             AuditLog::ENTITY_PROVIDER_WALLET => route('admin.provider-wallets.show', $entityId, absolute: false),
             AuditLog::ENTITY_SETTLEMENT => route('admin.settlements.show', $entityId, absolute: false),
             AuditLog::ENTITY_APPROVAL => route('admin.approvals.show', $entityId, absolute: false),
+            AuditLog::ENTITY_EXCHANGE_RATE => route('admin.exchange-rates.index', absolute: false),
+            AuditLog::ENTITY_LOYALTY_SETTINGS,
+            AuditLog::ENTITY_LOYALTY_TIER,
+            AuditLog::ENTITY_LOYALTY_RULE,
+            AuditLog::ENTITY_LOYALTY_BENEFIT => route('admin.loyalty.index', absolute: false),
             default => null,
         };
     }

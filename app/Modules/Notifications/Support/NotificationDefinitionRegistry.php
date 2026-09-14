@@ -3,8 +3,11 @@
 namespace App\Modules\Notifications\Support;
 
 use App\Models\FinancialTransaction;
+use App\Models\LoyaltyBenefit;
+use App\Models\LoyaltyHistory;
 use App\Models\Order;
 use App\Models\User;
+use App\Modules\Admin\ExchangeRates\Events\ExchangeRateUpdated;
 use App\Modules\Admin\Finance\Events\CriticalFinanceAnomaliesDetected;
 use App\Modules\Admin\MobileApp\Events\MobileAppReleasePublished;
 use App\Modules\Admin\Support\Events\SupportTicketAssigned;
@@ -16,6 +19,7 @@ use App\Modules\Notifications\Events\AbandonedFlightSearchDue;
 use App\Modules\Notifications\Events\PassengerActionDue;
 use App\Modules\Notifications\Events\PriceAlertHit;
 use App\Modules\Notifications\Events\SeatAlertAvailable;
+use App\Modules\Notifications\Events\SeatAlertStillWatching;
 use App\Modules\Notifications\Services\JourneyOfferResolver;
 use App\Modules\Orders\Events\BookingReminderDue;
 use App\Modules\Orders\Events\FlightStatusUpdated;
@@ -55,9 +59,11 @@ class NotificationDefinitionRegistry
             $event instanceof SupportTicketStatusChanged => $this->supportTicketStatusChangedDefinitions($event),
             $event instanceof LoyaltyTierChanged => $this->loyaltyTierChangedDefinitions($event),
             $event instanceof CriticalFinanceAnomaliesDetected => $this->criticalFinanceAnomalyDefinitions($event),
+            $event instanceof ExchangeRateUpdated => [$this->exchangeRateUpdatedDefinition($event)],
             $event instanceof AbandonedFlightSearchDue => [$this->abandonedFlightSearchDefinition($event)],
             $event instanceof PriceAlertHit => [$this->priceAlertHitDefinition($event)],
             $event instanceof SeatAlertAvailable => [$this->seatAlertAvailableDefinition($event)],
+            $event instanceof SeatAlertStillWatching => [$this->seatAlertStillWatchingDefinition($event)],
             $event instanceof PassengerActionDue => [$this->passengerActionDefinition($event)],
             $event instanceof MobileAppReleasePublished => [$this->mobileAppReleasePublishedDefinition($event)],
             default => [],
@@ -1058,6 +1064,12 @@ class NotificationDefinitionRegistry
     private function loyaltyTierChangedDefinitions(LoyaltyTierChanged $event): array
     {
         $history = $event->history;
+        $user = $history->user;
+
+        if ($user === null) {
+            return [];
+        }
+
         $benefitNames = $history->toTier?->benefits
             ?->where('is_active', true)
             ->pluck('name')
@@ -1065,21 +1077,52 @@ class NotificationDefinitionRegistry
             ->values()
             ->all() ?? [];
 
+        $discountPercentage = $this->loyaltyDiscountPercentage($history);
+        $tierName = $history->toTier?->name ?: 'Level 1';
+        $userName = $user->full_name ?: $user->name ?: 'Customer';
+
+        // First loyalty grant (registration / first login): one welcome push about account + discount.
+        if ($history->from_tier_id === null) {
+            $formattedDiscount = $discountPercentage !== null
+                ? rtrim(rtrim(number_format($discountPercentage, 2, '.', ''), '0'), '.')
+                : '3';
+
+            return [[
+                'code' => 'ACCOUNT_WELCOME_LOYALTY',
+                'name' => 'Account Welcome + Loyalty',
+                'subject' => 'Welcome to Booke, {user_name}!',
+                'body' => 'Your account is ready. You unlocked {tier_name} with a permanent {discount_percentage}% fare discount.',
+                'channels' => [NotificationChannels::PUSH, NotificationChannels::IN_APP],
+                'variables' => ['user_name', 'tier_name', 'discount_percentage', 'deep_link'],
+                'notification_type' => 'success',
+                'related_type' => 'user',
+                'related_id' => $history->user_id,
+                'users' => [$user],
+                'payload' => [
+                    'user_name' => $userName,
+                    'tier_name' => $tierName,
+                    'discount_percentage' => $formattedDiscount,
+                    'deep_link' => '/loyalty',
+                    'idempotency_key' => 'account_welcome_loyalty|'.$history->user_id.'|'.$history->id,
+                ],
+            ]];
+        }
+
         $definitions = [[
             'code' => 'LOYALTY_TIER_CHANGED',
             'name' => 'Loyalty Tier Changed',
             'subject' => 'Your loyalty tier is now {tier_name}',
             'body' => 'Hello {user_name}, your loyalty tier changed from {from_tier} to {tier_name}.',
-            'channels' => [NotificationChannels::EMAIL, NotificationChannels::PUSH, NotificationChannels::IN_APP],
+            'channels' => [NotificationChannels::PUSH, NotificationChannels::IN_APP],
             'variables' => ['user_name', 'from_tier', 'tier_name', 'deep_link'],
             'notification_type' => 'success',
             'related_type' => 'user',
             'related_id' => $history->user_id,
-            'users' => array_filter([$history->user]),
+            'users' => [$user],
             'payload' => [
-                'user_name' => $history->user?->full_name ?: $history->user?->name ?: 'Customer',
+                'user_name' => $userName,
                 'from_tier' => $history->fromTier?->name ?: 'Starter',
-                'tier_name' => $history->toTier?->name ?: 'Current Tier',
+                'tier_name' => $tierName,
                 'deep_link' => '/loyalty',
             ],
         ]];
@@ -1095,10 +1138,10 @@ class NotificationDefinitionRegistry
                 'notification_type' => 'success',
                 'related_type' => 'user',
                 'related_id' => $history->user_id,
-                'users' => array_filter([$history->user]),
+                'users' => [$user],
                 'payload' => [
-                    'user_name' => $history->user?->full_name ?: $history->user?->name ?: 'Customer',
-                    'tier_name' => $history->toTier?->name ?: 'Current Tier',
+                    'user_name' => $userName,
+                    'tier_name' => $tierName,
                     'benefits' => implode(', ', $benefitNames),
                     'deep_link' => '/loyalty',
                 ],
@@ -1106,6 +1149,67 @@ class NotificationDefinitionRegistry
         }
 
         return $definitions;
+    }
+
+    private function loyaltyDiscountPercentage(LoyaltyHistory $history): ?float
+    {
+        $tier = $history->toTier;
+
+        if ($tier === null) {
+            return null;
+        }
+
+        $benefits = $tier->relationLoaded('benefits')
+            ? $tier->benefits
+            : $tier->benefits()->where('is_active', true)->get();
+
+        $benefit = $benefits
+            ->where('is_active', true)
+            ->where('benefit_type', LoyaltyBenefit::TYPE_DISCOUNT)
+            ->where('value_type', LoyaltyBenefit::VALUE_TYPE_PERCENTAGE)
+            ->sortByDesc('is_highlighted')
+            ->sortBy('display_order')
+            ->first();
+
+        if ($benefit === null || $benefit->value === null) {
+            return null;
+        }
+
+        return (float) $benefit->value;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function exchangeRateUpdatedDefinition(ExchangeRateUpdated $event): array
+    {
+        $customers = User::query()
+            ->where('account_type', User::ACCOUNT_TYPE_CUSTOMER)
+            ->where('is_active', true)
+            ->whereNull('account_deleted_at')
+            ->get()
+            ->all();
+
+        return [
+            'code' => 'EXCHANGE_RATE_UPDATED',
+            'name' => 'Exchange Rate Updated',
+            'subject' => 'Exchange Rate Updated',
+            'body' => "{currency_code} rate changed:\n{old_rate} LYD → {new_rate} LYD",
+            'channels' => [NotificationChannels::PUSH, NotificationChannels::IN_APP],
+            'variables' => ['currency_code', 'old_rate', 'new_rate', 'deep_link'],
+            'notification_type' => 'system',
+            'topic' => null,
+            'related_type' => 'exchange_rate',
+            'related_id' => null,
+            'users' => $customers,
+            'payload' => [
+                'currency_code' => $event->currencyCode,
+                'old_rate' => $event->oldRate,
+                'new_rate' => $event->newRate,
+                'deep_link' => '/currency',
+                'idempotency_key' => 'exchange_rate|'.$event->currencyCode.'|'.$event->newRate.'|'.now()->timestamp,
+            ],
+        ];
     }
 
     /**
@@ -1204,6 +1308,36 @@ class NotificationDefinitionRegistry
             'name' => 'Seat alert available',
             'subject' => '{seats} seats now available to {destination}',
             'body' => 'Your watched trip now has at least {min_seats} seats available.',
+            'channels' => [NotificationChannels::PUSH, NotificationChannels::IN_APP],
+            'variables' => ['user_name', 'origin', 'destination', 'route', 'departure_date', 'flight_number', 'offer_id', 'cabin', 'seats', 'min_seats', 'deep_link'],
+            'notification_type' => 'tag',
+            'topic' => null,
+            'related_type' => 'seat_alert',
+            'related_id' => $alert->id,
+            'users' => array_filter([$alert->user]),
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function seatAlertStillWatchingDefinition(SeatAlertStillWatching $event): array
+    {
+        $alert = $event->alert->loadMissing('user');
+        $payload = $alert->notificationPayload();
+
+        return [
+            'code' => 'SEAT_ALERT_STILL_WATCHING',
+            'name' => 'Seat alert still watching',
+            'subject' => 'Still searching for a seat to {destination}',
+            'body' => 'We are still looking for a seat on your trip. We will notify you as soon as one becomes available.',
+            'translations' => [
+                NotificationLocales::AR => [
+                    'subject' => 'البحث عن مقعد إلى {destination} ما زال مستمر',
+                    'body' => 'البحث عن مقعد على رحلتك ما زال مستمر. عند التوفر سنخبرك حالا.',
+                ],
+            ],
             'channels' => [NotificationChannels::PUSH, NotificationChannels::IN_APP],
             'variables' => ['user_name', 'origin', 'destination', 'route', 'departure_date', 'flight_number', 'offer_id', 'cabin', 'seats', 'min_seats', 'deep_link'],
             'notification_type' => 'tag',

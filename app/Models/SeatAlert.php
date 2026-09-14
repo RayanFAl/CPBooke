@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'last_triggered_seats',
     'is_active',
     'last_triggered_at',
+    'last_reminded_at',
 ])]
 class SeatAlert extends Model
 {
@@ -34,6 +35,7 @@ class SeatAlert extends Model
             'last_triggered_seats' => 'integer',
             'is_active' => 'boolean',
             'last_triggered_at' => 'datetime',
+            'last_reminded_at' => 'datetime',
         ];
     }
 

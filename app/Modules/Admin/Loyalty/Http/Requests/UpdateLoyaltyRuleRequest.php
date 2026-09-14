@@ -26,6 +26,7 @@ class UpdateLoyaltyRuleRequest extends FormRequest
             'allow_downgrade' => ['required', 'boolean'],
             'is_active' => ['required', 'boolean'],
             'priority' => ['required', 'integer', 'min:0', 'max:255'],
+            'benefit_duration_months' => ['nullable', 'integer', 'min:0', 'max:120'],
         ];
     }
 }

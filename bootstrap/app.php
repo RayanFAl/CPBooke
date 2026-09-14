@@ -30,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->api(append: [
             \App\Http\Middleware\EnsureApiNotInMaintenance::class,
+            \App\Http\Middleware\RejectInactiveOrDeletedApiUsers::class,
             \App\Http\Middleware\RecordSlowRequests::class,
         ]);
 

@@ -14,6 +14,7 @@ Route::prefix('v1')
 		require __DIR__.'/api/v1/home.php';
 		require __DIR__.'/api/v1/catalog.php';
 		require __DIR__.'/api/v1/content.php';
+		require __DIR__.'/api/v1/currency.php';
 		require __DIR__.'/api/v1/app.php';
 		require __DIR__.'/api/v1/hotel-reviews.php';
 		require __DIR__.'/api/v1/notifications.php';
@@ -26,5 +27,6 @@ Route::prefix('v1')
 		require __DIR__.'/api/v1/linked-accounts.php';
 		require __DIR__.'/api/v1/support.php';
 		require __DIR__.'/api/v1/user.php';
+		require __DIR__.'/api/v1/customer.php';
 		require __DIR__.'/api/v1/wallet.php';
 	});

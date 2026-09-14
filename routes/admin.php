@@ -26,6 +26,7 @@ Route::prefix('admin')
         require base_path('routes/admin/notifications.php');
         require base_path('routes/admin/support.php');
         require base_path('routes/admin/settings.php');
+        require base_path('routes/admin/exchange-rates.php');
         require base_path('routes/admin/partners.php');
         require base_path('routes/admin/ai.php');
         require base_path('routes/admin/home.php');

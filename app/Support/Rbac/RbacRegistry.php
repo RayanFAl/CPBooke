@@ -124,6 +124,8 @@ class RbacRegistry
             self::permission('notifications.manage-templates', 'notifications', 'update_templates', 'Manage notification templates', 'Edit notification templates and channel settings.'),
             self::permission('notifications.retry-failed', 'notifications', 'retry', 'Retry failed notifications', 'Retry failed notification deliveries from the admin dashboard.'),
             self::permission('settings.manage', 'admin', 'manage_settings', 'Manage settings', 'Access platform settings and global administrative configuration.'),
+            self::permission('exchange-rates.view', 'exchange_rates', 'view', 'View exchange rates', 'View LYD/USD/EUR exchange rates in the admin dashboard.'),
+            self::permission('exchange-rates.manage', 'exchange_rates', 'manage', 'Update exchange rates', 'Update USD and EUR rates against LYD.'),
             self::permission('partners.view', 'partners', 'view', 'View partners', 'Access partner integrations, API keys metadata, and webhook endpoints.'),
             self::permission('partners.manage', 'partners', 'manage', 'Manage partners', 'Create partners, issue/revoke API keys, and configure webhook endpoints.'),
         ];
@@ -192,6 +194,8 @@ class RbacRegistry
                 'notifications.manage-templates',
                 'notifications.retry-failed',
                 'settings.manage',
+                'exchange-rates.view',
+                'exchange-rates.manage',
                 'partners.view',
                 'partners.manage',
             ],
@@ -263,6 +267,8 @@ class RbacRegistry
                 'loyalty.view',
                 'notifications.view',
                 'partners.view',
+                'exchange-rates.view',
+                'exchange-rates.manage',
             ],
             self::ROLE_LOYALTY_MANAGER => [
                 'orders.view',
@@ -293,6 +299,7 @@ class RbacRegistry
                 'loyalty.view',
                 'notifications.view',
                 'partners.view',
+                'exchange-rates.view',
             ],
         ];
     }

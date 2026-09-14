@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Schema;
@@ -34,12 +35,15 @@ use Laravel\Sanctum\HasApiTokens;
     'two_factor_confirmed_at',
     'email_verified_at',
     'phone_verified_at',
+    'account_deleted_at',
+    'deletion_scheduled_at',
+    'deletion_due_at',
 ])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'avatar_path'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     public const ACCOUNT_TYPE_CUSTOMER = 'customer';
 
@@ -61,7 +65,37 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'last_login_at' => 'datetime',
             'two_factor_confirmed_at' => 'datetime',
+            'account_deleted_at' => 'datetime',
+            'deletion_scheduled_at' => 'datetime',
+            'deletion_due_at' => 'datetime',
             'password' => 'hashed',
+        ];
+    }
+
+    public function isDeletedCustomerAccount(): bool
+    {
+        return $this->isCustomerAccount() && ($this->trashed() || $this->account_deleted_at !== null);
+    }
+
+    public function hasPendingAccountDeletion(): bool
+    {
+        return $this->isCustomerAccount()
+            && $this->deletion_due_at !== null
+            && $this->account_deleted_at === null
+            && ! $this->trashed();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function pendingAccountDeletionPayload(): array
+    {
+        return [
+            'account_pending_deletion' => true,
+            'can_cancel' => true,
+            'grace_period_days' => \App\Modules\Api\User\Services\CustomerAccountDeletionService::GRACE_PERIOD_DAYS,
+            'deletion_scheduled_at' => $this->deletion_scheduled_at?->toIso8601String(),
+            'deletion_due_at' => $this->deletion_due_at?->toIso8601String(),
         ];
     }
 

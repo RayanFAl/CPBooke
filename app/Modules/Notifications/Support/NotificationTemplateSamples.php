@@ -66,7 +66,7 @@ final class NotificationTemplateSamples
                 'to_value' => '17:00',
                 'route' => 'Tripoli → Tunis',
             ]),
-            'OFFER_ESIM', 'OFFER_INSURANCE', 'OFFER_ESIM_FOR_TRIP', 'OFFER_INSURANCE_FOR_TRIP', 'OFFER_HOTELS_AT_DESTINATION', 'OFFER_CARS_AT_DESTINATION', 'OFFER_RETURN_FLIGHT', 'POST_TRIP_THANKS', 'POST_TRIP_NEXT', 'LOYALTY_NEAR_REWARD', 'DESTINATION_ARRIVAL', 'ABANDONED_FLIGHT_SEARCH', 'PRICE_ALERT_HIT', 'SEAT_ALERT_AVAILABLE' => array_merge($samples, [
+            'OFFER_ESIM', 'OFFER_INSURANCE', 'OFFER_ESIM_FOR_TRIP', 'OFFER_INSURANCE_FOR_TRIP', 'OFFER_HOTELS_AT_DESTINATION', 'OFFER_CARS_AT_DESTINATION', 'OFFER_RETURN_FLIGHT', 'POST_TRIP_THANKS', 'POST_TRIP_NEXT', 'LOYALTY_NEAR_REWARD', 'DESTINATION_ARRIVAL', 'ABANDONED_FLIGHT_SEARCH', 'PRICE_ALERT_HIT', 'SEAT_ALERT_AVAILABLE', 'SEAT_ALERT_STILL_WATCHING' => array_merge($samples, [
                 'destination' => 'Tunis',
                 'origin' => 'Tripoli',
                 'route' => 'Tripoli → Tunis',
@@ -100,6 +100,12 @@ final class NotificationTemplateSamples
                 'force_update' => '0',
                 'deep_link' => '/app',
             ]),
+            'EXCHANGE_RATE_UPDATED' => array_merge($samples, [
+                'currency_code' => 'USD',
+                'old_rate' => '6.50000000',
+                'new_rate' => '6.60000000',
+                'deep_link' => '/currency',
+            ]),
             default => $samples,
         };
     }
@@ -113,8 +119,8 @@ final class NotificationTemplateSamples
             'FLIGHT_SEAT_CHANGED', 'FLIGHT_CLASS_CHANGED', 'FLIGHT_DELAYED', 'FLIGHT_CANCELLED' => 'flight',
             'ORDER_CREATED' => 'order',
             'PAYMENT_REMINDER' => 'payment',
-            'OFFER_ESIM', 'OFFER_INSURANCE', 'OFFER_ESIM_FOR_TRIP', 'OFFER_INSURANCE_FOR_TRIP', 'OFFER_HOTELS_AT_DESTINATION', 'OFFER_CARS_AT_DESTINATION', 'OFFER_RETURN_FLIGHT', 'POST_TRIP_NEXT', 'ABANDONED_FLIGHT_SEARCH', 'PRICE_ALERT_HIT', 'SEAT_ALERT_AVAILABLE' => 'tag',
-            'DESTINATION_ARRIVAL', 'POST_TRIP_THANKS', 'ORDER_CONFIRMED', 'HOTEL_BOOKING_CONFIRMED', 'HOTEL_CHECKIN_REMINDER_24H', 'INSURANCE_POLICY_ISSUED', 'ESIM_ORDER_CONFIRMED', 'LOYALTY_TIER_CHANGED', 'LOYALTY_NEAR_REWARD' => 'success',
+            'OFFER_ESIM', 'OFFER_INSURANCE', 'OFFER_ESIM_FOR_TRIP', 'OFFER_INSURANCE_FOR_TRIP', 'OFFER_HOTELS_AT_DESTINATION', 'OFFER_CARS_AT_DESTINATION', 'OFFER_RETURN_FLIGHT', 'POST_TRIP_NEXT', 'ABANDONED_FLIGHT_SEARCH', 'PRICE_ALERT_HIT', 'SEAT_ALERT_AVAILABLE', 'SEAT_ALERT_STILL_WATCHING' => 'tag',
+            'DESTINATION_ARRIVAL', 'POST_TRIP_THANKS', 'ORDER_CONFIRMED', 'HOTEL_BOOKING_CONFIRMED', 'HOTEL_CHECKIN_REMINDER_24H', 'INSURANCE_POLICY_ISSUED', 'ESIM_ORDER_CONFIRMED', 'LOYALTY_TIER_CHANGED', 'ACCOUNT_WELCOME_LOYALTY', 'LOYALTY_NEAR_REWARD' => 'success',
             'BOOKING_CANCELLED', 'BOOKING_FAILED', 'HOTEL_BOOKING_CANCELLED', 'HOTEL_BOOKING_MODIFIED', 'HOTEL_CHECKIN_CHANGED', 'HOTEL_CHECKOUT_CHANGED' => 'order',
             default => match ($category) {
                 NotificationTemplateCategories::PAYMENTS => 'payment',

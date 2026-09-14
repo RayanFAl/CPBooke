@@ -5,15 +5,21 @@ namespace App\Modules\Api\User\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Api\Resources\UserResource;
 use App\Modules\Api\Support\Http\Responses\ApiResponse;
+use App\Modules\Api\User\Http\Requests\CancelAccountDeletionRequest;
 use App\Modules\Api\User\Http\Requests\ConfirmOtpRequest;
 use App\Modules\Api\User\Http\Requests\DeleteAccountRequest;
 use App\Modules\Api\User\Http\Requests\EmailChangeRequest;
 use App\Modules\Api\User\Http\Requests\EmailChangeVerifyRequest;
 use App\Modules\Api\User\Http\Requests\UpdateProfileRequest;
 use App\Modules\Api\User\Http\Requests\UploadAvatarRequest;
+use App\Modules\Api\User\Services\CustomerAccountDeletionService;
 use App\Modules\Api\User\Services\UserService;
+use App\Modules\Api\Auth\Contracts\GoogleIdTokenVerifierInterface;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class ProfileController extends Controller
 {
@@ -65,11 +71,24 @@ class ProfileController extends Controller
 
     public function destroy(DeleteAccountRequest $request): JsonResponse
     {
-        $this->userService->deleteAccount($request->user());
+        $mode = (string) $request->validated('mode');
+        $payload = $this->userService->deleteAccount($request->user(), $mode);
+
+        $message = $mode === CustomerAccountDeletionService::MODE_SCHEDULED
+            ? 'Your account will be permanently deleted in '.CustomerAccountDeletionService::GRACE_PERIOD_DAYS.' days.'
+            : 'Account deleted successfully.';
+
+        return ApiResponse::success($payload, $message);
+    }
+
+    public function cancelDeletion(CancelAccountDeletionRequest $request, GoogleIdTokenVerifierInterface $googleIdTokenVerifier): JsonResponse
+    {
+        $user = $this->resolveUserForCancellation($request, $googleIdTokenVerifier);
+        $payload = $this->userService->cancelAccountDeletion($user);
 
         return ApiResponse::success(
-            [],
-            'Account deleted successfully.',
+            $payload,
+            'Account deletion cancelled successfully. You can sign in again.',
         );
     }
 
@@ -138,5 +157,47 @@ class ProfileController extends Controller
             ['user' => UserResource::make($user)->resolve($request)],
             'Phone verified successfully.',
         );
+    }
+
+    private function resolveUserForCancellation(
+        CancelAccountDeletionRequest $request,
+        GoogleIdTokenVerifierInterface $googleIdTokenVerifier,
+    ): User {
+        $idToken = $request->validated('id_token');
+
+        if (filled($idToken)) {
+            $claims = $googleIdTokenVerifier->verify((string) $idToken);
+
+            $user = User::query()
+                ->where(function ($query) use ($claims): void {
+                    $query->where('google_id', $claims['sub'])
+                        ->orWhere('email', $claims['email']);
+                })
+                ->first();
+
+            if ($user === null || ! $user->isCustomerAccount()) {
+                throw ValidationException::withMessages([
+                    'id_token' => ['No account scheduled for deletion was found for this Google account.'],
+                ]);
+            }
+
+            return $user;
+        }
+
+        $login = (string) $request->validated('login');
+        $password = (string) $request->validated('password');
+
+        $user = User::query()
+            ->where('email', $login)
+            ->orWhere('phone', $login)
+            ->first();
+
+        if ($user === null || ! Hash::check($password, $user->password) || ! $user->isCustomerAccount()) {
+            throw ValidationException::withMessages([
+                'login' => ['The provided credentials are incorrect.'],
+            ]);
+        }
+
+        return $user;
     }
 }

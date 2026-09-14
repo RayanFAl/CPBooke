@@ -43,11 +43,20 @@ class NotificationEngine
 
             foreach ($this->uniqueUsers($definition['users'] ?? []) as $user) {
                 $channels = $this->preferenceResolver->allowedChannels($user, $templateChannels, $definition);
-                // Wallet, linked-account, and app-update pushes run sync so FCM does not depend on queue workers.
+                // Wallet, linked-account, app-update, exchange-rate, and seat-alert
+                // pushes run sync so FCM does not depend on queue workers.
                 $code = (string) ($definition['code'] ?? $template->code);
                 $syncOutbound = str_starts_with($code, 'WALLET_')
                     || str_starts_with($code, 'LINK_REQUEST_')
-                    || $code === 'APP_UPDATE_AVAILABLE';
+                    || $code === 'APP_UPDATE_AVAILABLE'
+                    || $code === 'EXCHANGE_RATE_UPDATED'
+                    || in_array($code, [
+                        'ACCOUNT_WELCOME_LOYALTY',
+                        'LOYALTY_TIER_CHANGED',
+                        'LOYALTY_BENEFIT_UNLOCKED',
+                        'SEAT_ALERT_AVAILABLE',
+                        'SEAT_ALERT_STILL_WATCHING',
+                    ], true);
                 $this->deliverToUser($user, $template, $definition, $channels, $event::class, $syncOutbound);
             }
         }

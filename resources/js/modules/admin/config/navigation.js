@@ -205,6 +205,13 @@ export const navigationItems = [
                 icon: 'settings',
             },
             {
+                label: 'Exchange Rates',
+                route: 'admin.exchange-rates.index',
+                startsWith: '/admin/exchange-rates',
+                permission: 'exchange-rates.view',
+                icon: 'settings',
+            },
+            {
                 label: 'Mobile App',
                 route: 'admin.mobile-app.index',
                 startsWith: '/admin/mobile-app',

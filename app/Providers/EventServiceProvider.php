@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Modules\Admin\ExchangeRates\Events\ExchangeRateUpdated;
 use App\Modules\Admin\Finance\Events\CriticalFinanceAnomaliesDetected;
 use App\Modules\Admin\Support\Events\SupportTicketAssigned;
 use App\Modules\Admin\Support\Events\SupportTicketCreated;
@@ -15,6 +16,10 @@ use App\Modules\Notifications\Events\AbandonedFlightSearchDue;
 use App\Modules\Notifications\Events\PassengerActionDue;
 use App\Modules\Notifications\Events\PriceAlertHit;
 use App\Modules\Notifications\Events\SeatAlertAvailable;
+use App\Modules\Notifications\Events\SeatAlertStillWatching;
+use App\Modules\Notifications\Listeners\DispatchExchangeRateUpdatedNotificationListener;
+use App\Modules\Notifications\Listeners\DispatchLoyaltyTierChangedNotificationListener;
+use App\Modules\Notifications\Listeners\DispatchSeatAlertNotificationListener;
 use App\Modules\Notifications\Listeners\DispatchSystemNotificationListener;
 use App\Modules\Orders\Events\BookingReminderDue;
 use App\Modules\Orders\Events\FlightStatusUpdated;
@@ -102,7 +107,10 @@ class EventServiceProvider extends ServiceProvider
             DispatchSystemNotificationListener::class,
         ],
         SeatAlertAvailable::class => [
-            DispatchSystemNotificationListener::class,
+            DispatchSeatAlertNotificationListener::class,
+        ],
+        SeatAlertStillWatching::class => [
+            DispatchSeatAlertNotificationListener::class,
         ],
         PassengerActionDue::class => [
             DispatchSystemNotificationListener::class,
@@ -119,10 +127,13 @@ class EventServiceProvider extends ServiceProvider
             DispatchSystemNotificationListener::class,
         ],
         LoyaltyTierChanged::class => [
-            DispatchSystemNotificationListener::class,
+            DispatchLoyaltyTierChangedNotificationListener::class,
         ],
         CriticalFinanceAnomaliesDetected::class => [
             DispatchSystemNotificationListener::class,
+        ],
+        ExchangeRateUpdated::class => [
+            DispatchExchangeRateUpdatedNotificationListener::class,
         ],
     ];
 }

@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Api\Auth\Contracts\GoogleIdTokenVerifierInterface;
 use App\Modules\Api\DTO\AuthResultDTO;
 use App\Modules\Api\DTO\GoogleAuthDTO;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -22,14 +23,16 @@ class GoogleAuthService
     /**
      * Authenticate or register a customer using a verified Google ID token.
      *
+     * @return AuthResultDTO|array{account_pending_deletion: bool, can_cancel: bool, grace_period_days: int, deletion_scheduled_at: ?string, deletion_due_at: ?string}
+     *
      * @throws ValidationException
      * @throws HttpException
      */
-    public function authenticate(GoogleAuthDTO $data, ?string $ip = null): AuthResultDTO
+    public function authenticate(GoogleAuthDTO $data, ?string $ip = null): AuthResultDTO|array
     {
         $claims = $this->tokenVerifier->verify($data->idToken);
 
-        return DB::transaction(function () use ($claims, $data, $ip): AuthResultDTO {
+        return DB::transaction(function () use ($claims, $data, $ip): AuthResultDTO|array {
             $user = $this->resolveUser($claims);
 
             if ($user === null) {
@@ -57,12 +60,18 @@ class GoogleAuthService
             ->first();
 
         if ($byGoogleId) {
-            return $byGoogleId;
+            return $byGoogleId->isDeletedCustomerAccount() ? null : $byGoogleId;
         }
 
-        return User::query()
+        $byEmail = User::query()
             ->where('email', $claims['email'])
             ->first();
+
+        if ($byEmail === null || $byEmail->isDeletedCustomerAccount()) {
+            return null;
+        }
+
+        return $byEmail;
     }
 
     /**
@@ -70,6 +79,10 @@ class GoogleAuthService
      */
     private function linkGoogleAccount(User $user, array $claims): void
     {
+        if ($user->isDeletedCustomerAccount()) {
+            throw new HttpException(403, 'This account is no longer available.');
+        }
+
         if ($user->google_id !== null && $user->google_id !== $claims['sub']) {
             throw new HttpException(
                 409,
@@ -109,7 +122,7 @@ class GoogleAuthService
     {
         $displayName = $this->resolveDisplayName($claims) ?: Str::before($claims['email'], '@');
 
-        return User::query()->create([
+        $user = User::query()->create([
             'name' => $displayName,
             'full_name' => $displayName,
             'email' => $claims['email'],
@@ -122,6 +135,10 @@ class GoogleAuthService
             'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
             'email_verified_at' => now(),
         ]);
+
+        event(new Registered($user));
+
+        return $user;
     }
 
     /**

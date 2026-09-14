@@ -200,8 +200,8 @@ export const pageHelpEntries = [
     },
     {
         match: 'admin.loyalty',
-        en: 'Loyalty program: tiers, rules, and benefits. Points and upgrades follow these rules after bookings.',
-        ar: 'برنامج الولاء: المستويات والقواعد والمزايا. النقاط والترقيات تتبع هذه القواعد بعد الحجوزات.',
+        en: 'Loyalty program: Level 1 starts on registration/login; higher tiers unlock by monthly spend. Discount applies to fare only.',
+        ar: 'برنامج الولاء: المستوى 1 يبدأ عند التسجيل/تسجيل الدخول؛ المستويات الأعلى تُفتح بالإنفاق الشهري. الخصم يطبّق على الأجرة فقط.',
     },
     {
         match: 'admin.notifications',
@@ -247,6 +247,11 @@ export const pageHelpEntries = [
         match: 'admin.partners',
         en: 'External API partners (bank, agency, or another app) that connect to Booke. Not a travel supplier. Give them an API key and optional webhooks for order and refund events. Leave empty if you have no such company yet.',
         ar: 'شركاء API خارجيون (بنك أو وكالة أو تطبيق آخر) يرتبطون بـ بوكي. ليسوا مزوّدي سفر. أعطهم مفتاح API واختياريّاً إشعارات للطلبات والاسترداد. اترك الصفحة فارغة إذا لا توجد شركة من هذا النوع بعد.',
+    },
+    {
+        match: 'admin.exchange-rates',
+        en: 'Set how many LYD equal 1 USD and 1 EUR. Cross rates (EUR↔USD) are calculated through LYD automatically.',
+        ar: 'حدد كم دينار ليبي يساوي دولاراً أو يورو. التحويل بين اليورو والدولار يُحسب تلقائياً عبر الدينار.',
     },
     {
         match: 'admin.settings',

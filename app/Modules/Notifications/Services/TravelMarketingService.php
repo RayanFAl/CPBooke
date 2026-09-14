@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Modules\Notifications\Events\AbandonedFlightSearchDue;
 use App\Modules\Notifications\Events\PriceAlertHit;
 use App\Modules\Notifications\Events\SeatAlertAvailable;
+use App\Modules\Notifications\Events\SeatAlertStillWatching;
 use App\Modules\Notifications\Support\OrderNotificationContext;
 use App\Support\Airports\AirportPopularityService;
 use Illuminate\Support\Carbon;
@@ -150,6 +151,8 @@ class TravelMarketingService
             'min_seats' => $minSeats,
         ]);
 
+        $reactivating = ! $alert->exists || $alert->is_active === false;
+
         $alert->fill([
             'origin' => $origin,
             'destination' => $destination,
@@ -160,6 +163,13 @@ class TravelMarketingService
             'cabin' => $cabin,
             'is_active' => true,
         ]);
+
+        if ($reactivating) {
+            $alert->last_triggered_seats = null;
+            $alert->last_triggered_at = null;
+            $alert->last_reminded_at = null;
+        }
+
         $alert->save();
 
         return $alert->fresh() ?? $alert;
@@ -170,7 +180,9 @@ class TravelMarketingService
         $this->markConvertedIntents();
         $this->dispatchAbandonedSearches($now);
         $this->dispatchPriceAlerts();
+        $this->expirePastSeatAlerts($now);
         $this->dispatchSeatAlerts();
+        $this->dispatchSeatAlertReminders($now);
     }
 
     private function dispatchAbandonedSearches(Carbon $now): void
@@ -256,6 +268,10 @@ class TravelMarketingService
                         continue;
                     }
 
+                    if ($this->deactivateSeatAlertIfBooked($alert)) {
+                        continue;
+                    }
+
                     $intent = TravelSearchIntent::query()
                         ->where('user_id', $alert->user_id)
                         ->where('route_key', $alert->route_key)
@@ -276,22 +292,77 @@ class TravelMarketingService
                         continue;
                     }
 
-                    $lastTriggered = $alert->last_triggered_seats !== null
-                        ? (int) $alert->last_triggered_seats
-                        : null;
-
-                    // Re-fire only when more seats became available than last notification.
-                    if ($lastTriggered !== null && $current <= $lastTriggered) {
-                        continue;
-                    }
-
                     event(new SeatAlertAvailable($alert, $current));
                     $alert->forceFill([
                         'last_triggered_at' => now(),
                         'last_triggered_seats' => $current,
+                        'is_active' => false,
                     ])->save();
                 }
             });
+    }
+
+    private function dispatchSeatAlertReminders(Carbon $now): void
+    {
+        $dueBefore = $now->copy()->subMinutes($this->seatAlertReminderMinutes());
+
+        SeatAlert::query()
+            ->with('user')
+            ->where('is_active', true)
+            ->where('created_at', '<=', $dueBefore)
+            ->where(function ($query) use ($dueBefore): void {
+                $query->whereNull('last_reminded_at')
+                    ->orWhere('last_reminded_at', '<=', $dueBefore);
+            })
+            ->orderBy('id')
+            ->chunkById(100, function ($alerts) use ($now): void {
+                foreach ($alerts as $alert) {
+                    if ($alert->user === null) {
+                        continue;
+                    }
+
+                    if ($this->deactivateSeatAlertIfBooked($alert)) {
+                        continue;
+                    }
+
+                    event(new SeatAlertStillWatching($alert));
+                    $alert->forceFill(['last_reminded_at' => $now])->save();
+                }
+            });
+    }
+
+    private function expirePastSeatAlerts(Carbon $now): void
+    {
+        SeatAlert::query()
+            ->where('is_active', true)
+            ->whereNotNull('departure_date')
+            ->whereDate('departure_date', '<', $now->toDateString())
+            ->update(['is_active' => false]);
+    }
+
+    private function deactivateSeatAlertIfBooked(SeatAlert $alert): bool
+    {
+        if ($alert->user === null) {
+            return true;
+        }
+
+        if (! $this->userBookedRoute(
+            $alert->user,
+            $alert->origin,
+            $alert->destination,
+            $alert->departure_date?->toDateString(),
+        )) {
+            return false;
+        }
+
+        $alert->forceFill(['is_active' => false])->save();
+
+        return true;
+    }
+
+    private function seatAlertReminderMinutes(): int
+    {
+        return max(1, (int) config('notifications.seat_alert_reminder_minutes', 12 * 60));
     }
 
     private function seatAlertMatchesIntent(SeatAlert $alert, TravelSearchIntent $intent): bool

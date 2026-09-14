@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Loyalty;
 
+use App\Models\AuditLog;
 use App\Models\LoyaltySetting;
 use App\Models\User;
 use App\Modules\Admin\Loyalty\Http\Requests\UpdateLoyaltySettingsRequest;
@@ -58,6 +59,26 @@ class LoyaltySettingsAdminServiceTest extends TestCase
 
         $this->assertSame('EUR', $settings->default_currency);
         $this->assertTrue($settings->allow_discount_stacking);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'module' => AuditLog::MODULE_LOYALTY,
+            'action' => 'loyalty.settings.updated',
+            'entity_type' => AuditLog::ENTITY_LOYALTY_SETTINGS,
+            'entity_id' => $settings->id,
+            'status' => AuditLog::STATUS_SUCCESS,
+        ]);
+
+        $audit = AuditLog::query()
+            ->where('action', 'loyalty.settings.updated')
+            ->where('entity_id', $settings->id)
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($audit);
+        $this->assertSame('LYD', $audit->old_values['default_currency'] ?? null);
+        $this->assertSame('EUR', $audit->new_values['default_currency'] ?? null);
+        $this->assertFalse((bool) ($audit->old_values['allow_discount_stacking'] ?? true));
+        $this->assertTrue((bool) ($audit->new_values['allow_discount_stacking'] ?? false));
     }
 
     public function test_increments_version_and_updates_updated_by_user_id(): void

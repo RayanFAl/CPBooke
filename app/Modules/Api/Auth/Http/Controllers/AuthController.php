@@ -49,6 +49,15 @@ class AuthController extends Controller
     {
         $result = $this->authService->login($request->toDto(), $request->ip());
 
+        if (is_array($result) && ($result['account_pending_deletion'] ?? false)) {
+            return ApiResponse::error(
+                'Your account is scheduled for permanent deletion.',
+                $result,
+                'account_pending_deletion',
+                403,
+            );
+        }
+
         if (is_array($result)) {
             return ApiResponse::success(
                 $result,
@@ -64,10 +73,19 @@ class AuthController extends Controller
 
     public function google(GoogleAuthRequest $request, GoogleAuthService $googleAuthService): JsonResponse
     {
+        $result = $googleAuthService->authenticate($request->toDto(), $request->ip());
+
+        if (is_array($result) && ($result['account_pending_deletion'] ?? false)) {
+            return ApiResponse::error(
+                'Your account is scheduled for permanent deletion.',
+                $result,
+                'account_pending_deletion',
+                403,
+            );
+        }
+
         return ApiResponse::success(
-            new AuthUserResource(
-                $googleAuthService->authenticate($request->toDto(), $request->ip()),
-            ),
+            new AuthUserResource($result),
             'Login completed successfully.',
         );
     }

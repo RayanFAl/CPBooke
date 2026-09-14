@@ -20,6 +20,7 @@ use App\Models\TravelSearchIntent;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Models\UserNotificationDevice;
+use App\Modules\Content\Services\MobileAppReleaseService;
 use App\Modules\Notifications\Support\NotificationInboxContract;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
@@ -30,6 +31,11 @@ class CustomerCrmActivityService
     private const TIMELINE_LIMIT = 120;
 
     private const LIST_LIMIT = 40;
+
+    public function __construct(
+        private readonly MobileAppReleaseService $mobileAppReleaseService,
+    ) {
+    }
 
     /**
      * Build the CRM activity payload for a customer profile.
@@ -79,6 +85,7 @@ class CustomerCrmActivityService
             'sessions' => $sessions,
             'session_history' => $sessionHistory,
             'devices' => $devices,
+            'latest_app_release' => $this->latestAppReleaseSummary(),
             'support_tickets' => $tickets,
             'wallets' => $wallets,
             'saved_passengers' => $passengers,
@@ -498,23 +505,78 @@ class CustomerCrmActivityService
             return [];
         }
 
+        $latestRelease = $this->latestAppReleaseSummary();
+        $latestVersionCode = $latestRelease['version_code'] ?? null;
+        $hasVersionCodeColumn = Schema::hasColumn('user_notification_devices', 'app_version_code');
+
         return UserNotificationDevice::query()
             ->whereBelongsTo($user)
             ->orderByDesc('last_seen_at')
             ->orderByDesc('id')
             ->limit(self::LIST_LIMIT)
             ->get()
-            ->map(fn (UserNotificationDevice $device): array => [
-                'id' => $device->id,
-                'channel' => $device->channel,
-                'platform' => $device->platform,
-                'app_version' => $device->app_version,
-                'is_active' => (bool) $device->is_active,
-                'last_seen_at' => $device->last_seen_at?->toIso8601String(),
-                'created_at' => $device->created_at?->toIso8601String(),
-            ])
+            ->map(function (UserNotificationDevice $device) use ($latestVersionCode, $hasVersionCodeColumn): array {
+                $hasToken = filled($device->device_token);
+                $versionCode = $hasVersionCodeColumn ? $device->app_version_code : null;
+
+                return [
+                    'id' => $device->id,
+                    'channel' => $device->channel,
+                    'platform' => $device->platform,
+                    'app_version' => $device->app_version,
+                    'app_version_code' => $versionCode,
+                    'is_active' => (bool) $device->is_active,
+                    'has_token' => $hasToken,
+                    'update_push_status' => $this->updatePushStatus(
+                        (bool) $device->is_active,
+                        $hasToken,
+                        $versionCode,
+                        $latestVersionCode,
+                    ),
+                    'last_seen_at' => $device->last_seen_at?->toIso8601String(),
+                    'created_at' => $device->created_at?->toIso8601String(),
+                ];
+            })
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array{version: string, version_code: int}|null
+     */
+    private function latestAppReleaseSummary(): ?array
+    {
+        $release = $this->mobileAppReleaseService->latestRelease();
+
+        if ($release === null) {
+            return null;
+        }
+
+        return [
+            'version' => (string) $release['version'],
+            'version_code' => (int) $release['version_code'],
+        ];
+    }
+
+    private function updatePushStatus(bool $isActive, bool $hasToken, ?int $versionCode, ?int $latestVersionCode): string
+    {
+        if (! $isActive) {
+            return 'inactive';
+        }
+
+        if (! $hasToken) {
+            return 'no_token';
+        }
+
+        if ($latestVersionCode === null) {
+            return 'unknown_latest';
+        }
+
+        if ($versionCode !== null && $versionCode >= $latestVersionCode) {
+            return 'already_latest';
+        }
+
+        return 'will_receive';
     }
 
     /**

@@ -59,6 +59,7 @@ const crm = computed(() => props.user.crm ?? {
     sessions: [],
     session_history: [],
     devices: [],
+    latest_app_release: null,
     support_tickets: [],
     wallets: [],
     saved_passengers: [],
@@ -269,6 +270,42 @@ const formatValueLabel = (value) => {
     }
 
     return titleCased;
+};
+
+const updatePushStatusLabel = (status) => {
+    if (status === 'will_receive') {
+        return t('Will receive the next app-update push');
+    }
+
+    if (status === 'already_latest') {
+        return t('Already on the latest APK — update push is skipped');
+    }
+
+    if (status === 'no_token') {
+        return t('No FCM token — update push cannot be sent');
+    }
+
+    if (status === 'inactive') {
+        return t('Inactive device — update push is skipped');
+    }
+
+    return t('Latest APK is not published yet');
+};
+
+const updatePushStatusClass = (status) => {
+    if (status === 'will_receive') {
+        return 'text-amber-700';
+    }
+
+    if (status === 'already_latest') {
+        return 'text-emerald-700';
+    }
+
+    if (status === 'no_token' || status === 'inactive') {
+        return 'text-rose-700';
+    }
+
+    return 'text-slate-600';
 };
 
 const conversationStateLabel = (value) => {
@@ -997,6 +1034,13 @@ onBeforeUnmount(() => {
 
                     <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                         <h3 class="text-lg font-semibold text-slate-950">{{ t('Push devices') }}</h3>
+                        <p class="mt-2 text-sm text-slate-600">
+                            {{ t('App update pushes are sent only to active devices still below the latest APK version code.') }}
+                        </p>
+                        <p v-if="crm.latest_app_release" class="mt-2 text-sm text-slate-700">
+                            {{ t('Latest APK') }}: {{ crm.latest_app_release.version }}
+                            ({{ t('Version code') }} {{ crm.latest_app_release.version_code }})
+                        </p>
                         <div class="mt-5 space-y-4">
                             <div
                                 v-for="device in crm.devices"
@@ -1006,13 +1050,19 @@ onBeforeUnmount(() => {
                                 <div class="flex flex-wrap items-start justify-between gap-4">
                                     <div>
                                         <p class="font-medium text-slate-900">{{ formatValueLabel(device.platform || device.channel) }}</p>
-                                        <p class="mt-2 text-sm text-slate-600">{{ device.app_version || t('No app version') }}</p>
+                                        <p class="mt-2 text-sm text-slate-600">
+                                            {{ device.app_version || t('No app version') }}
+                                            · {{ t('Version code') }} {{ device.app_version_code ?? t('Unknown') }}
+                                        </p>
                                     </div>
                                     <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]" :class="device.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'">
                                         {{ device.is_active ? t('Active') : t('Inactive') }}
                                     </span>
                                 </div>
-                                <p class="mt-3 text-xs uppercase tracking-[0.16em] text-slate-500">{{ t('Last seen') }}: {{ formatDateTime(device.last_seen_at) }}</p>
+                                <p class="mt-3 text-sm" :class="updatePushStatusClass(device.update_push_status)">
+                                    {{ updatePushStatusLabel(device.update_push_status) }}
+                                </p>
+                                <p class="mt-2 text-xs uppercase tracking-[0.16em] text-slate-500">{{ t('Last seen') }}: {{ formatDateTime(device.last_seen_at) }}</p>
                             </div>
                             <p v-if="crm.devices.length === 0" class="text-sm text-slate-500">{{ t('No push devices registered.') }}</p>
                         </div>

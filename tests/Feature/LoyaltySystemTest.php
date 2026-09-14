@@ -152,17 +152,30 @@ class LoyaltySystemTest extends TestCase
 
         $this->getJson('/api/v1/users/profile')
             ->assertOk()
+            ->assertJsonPath('data.user.loyalty.program.enabled', true)
             ->assertJsonPath('data.user.loyalty.current_tier.code', 'level_1')
+            ->assertJsonPath('data.user.loyalty.current_tier.discount_percentage', 5)
             ->assertJsonPath('data.user.loyalty.current_level', 1)
             ->assertJsonPath('data.user.loyalty.next_tier.code', 'level_2')
+            ->assertJsonPath('data.user.loyalty.next_tier.discount_percentage', 8)
             ->assertJsonPath('data.user.loyalty.progress_to_next_level.current_metrics.month_spend', '1000.00')
             ->assertJsonPath('data.user.loyalty.progress_to_next_level.next_threshold', '5000.00')
+            ->assertJsonPath('data.user.loyalty.progress_to_next_level.amount_remaining', '4000.00')
             ->assertJsonPath('data.user.loyalty.benefits_unlocked.0.code', 'level_1_discount')
             ->assertJsonPath('data.user.loyalty.membership.discount_percentage', 5)
             ->assertJsonStructure([
                 'data' => [
                     'user' => [
                         'loyalty' => [
+                            'tiers' => [
+                                [
+                                    'code',
+                                    'name',
+                                    'discount_percentage',
+                                    'monthly_spend_required',
+                                    'active_for_months',
+                                ],
+                            ],
                             'entitlement' => [
                                 'expires_at',
                                 'days_remaining',
@@ -172,6 +185,11 @@ class LoyaltySystemTest extends TestCase
                     ],
                 ],
             ]);
+
+        $this->getJson('/api/v1/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.user.loyalty.tiers.0.code', 'level_1')
+            ->assertJsonPath('data.user.loyalty.next_tier.discount_percentage', 8);
 
         Carbon::setTestNow();
     }
@@ -291,6 +309,9 @@ class LoyaltySystemTest extends TestCase
         $this->assertFalse($payload['show_welcome_message']);
         $this->assertNull($payload['current_tier']);
         $this->assertNull($payload['membership']);
+        $this->assertNotEmpty($payload['tiers']);
+        $this->assertSame('level_1', $payload['next_tier']['code'] ?? null);
+        $this->assertSame('1000.00', $payload['progress_to_next_level']['amount_remaining']);
     }
 
     public function test_registered_event_is_listened_for_loyalty_initialization(): void

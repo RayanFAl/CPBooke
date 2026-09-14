@@ -5,6 +5,7 @@ namespace App\Modules\Loyalty\Services;
 use App\Models\LoyaltyBenefit;
 use App\Models\LoyaltyHistory;
 use App\Models\LoyaltyRule;
+use App\Models\LoyaltySetting;
 use App\Models\LoyaltyTier;
 use App\Models\Order;
 use App\Models\User;
@@ -191,11 +192,20 @@ class LoyaltyService
         }
 
         $profile = $user->loyaltyProfile()
-            ->with(['currentTier.benefits', 'nextTier'])
+            ->with([
+                'currentTier.benefits',
+                'nextTier.rules',
+                'nextTier.benefits',
+            ])
             ->first();
 
         if ($profile === null && $initializeIfMissing) {
             $profile = $this->upgradeUserIfEligible($user);
+            $profile->load([
+                'currentTier.benefits',
+                'nextTier.rules',
+                'nextTier.benefits',
+            ]);
         }
 
         $history = $user->loyaltyHistory()
@@ -204,25 +214,18 @@ class LoyaltyService
             ->limit(10)
             ->get();
 
+        $programTiers = $this->programTiersCatalog();
+
         return [
+            'program' => $this->programSettingsPayload(),
+            'tiers' => $programTiers,
             'current_level' => $profile?->currentTier?->level ?? 0,
-            'current_tier' => $profile?->currentTier ? $this->tierPayload($profile->currentTier) : null,
-            'next_tier' => $profile?->nextTier ? $this->tierPayload($profile->nextTier) : null,
+            'current_tier' => $profile?->currentTier ? $this->tierMobilePayload($profile->currentTier) : null,
+            'next_tier' => $profile?->nextTier ? $this->tierMobilePayload($profile->nextTier) : null,
             'membership' => $this->membershipPayload($profile),
             'show_welcome_message' => $this->shouldShowWelcomeMessage($profile),
             'welcome_message' => $this->welcomeMessage($profile),
-            'progress_to_next_level' => [
-                'percentage' => (int) ($profile?->progress_percentage ?? 0),
-                'current_metrics' => [
-                    'lifetime_orders_count' => (int) ($profile?->lifetime_orders_count ?? 0),
-                    'completed_orders_count' => (int) ($profile?->completed_orders_count ?? 0),
-                    'lifetime_spend' => number_format((float) ($profile?->lifetime_spend ?? 0), 2, '.', ''),
-                    'month_spend' => number_format((float) ($profile?->period_spend ?? 0), 2, '.', ''),
-                    'period_orders_count' => (int) ($profile?->period_orders_count ?? 0),
-                    'period_spend' => number_format((float) ($profile?->period_spend ?? 0), 2, '.', ''),
-                ],
-                'next_threshold' => $this->nextThresholdAmount($profile),
-            ],
+            'progress_to_next_level' => $this->progressToNextLevelPayload($profile),
             'entitlement' => $this->entitlementPayload($profile),
             'benefits_unlocked' => $profile !== null ? $this->getUserBenefits($user) : [],
             'history' => $history->map(fn (LoyaltyHistory $entry): array => [
@@ -243,29 +246,95 @@ class LoyaltyService
     private function emptyProfilePayload(): array
     {
         return [
+            'program' => [
+                'enabled' => false,
+                'visible_in_mobile_app' => false,
+                'default_currency' => 'LYD',
+            ],
+            'tiers' => [],
             'current_level' => 0,
             'current_tier' => null,
             'next_tier' => null,
             'membership' => null,
             'show_welcome_message' => false,
             'welcome_message' => null,
-            'progress_to_next_level' => [
-                'percentage' => 0,
-                'current_metrics' => [
-                    'lifetime_orders_count' => 0,
-                    'completed_orders_count' => 0,
-                    'lifetime_spend' => number_format(0, 2, '.', ''),
-                    'month_spend' => number_format(0, 2, '.', ''),
-                    'period_orders_count' => 0,
-                    'period_spend' => number_format(0, 2, '.', ''),
-                ],
-                'next_threshold' => null,
-            ],
+            'progress_to_next_level' => $this->progressToNextLevelPayload(null),
             'entitlement' => null,
             'benefits_unlocked' => [],
             'history' => [],
             'last_calculated_at' => null,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function programSettingsPayload(): array
+    {
+        $settings = LoyaltySetting::current();
+
+        return [
+            'enabled' => (bool) $settings->loyalty_enabled,
+            'visible_in_mobile_app' => (bool) $settings->visible_in_mobile_app,
+            'default_currency' => (string) ($settings->default_currency ?: 'LYD'),
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function programTiersCatalog(): array
+    {
+        $tiers = LoyaltyTier::query()
+            ->where('is_active', true)
+            ->where('level', '>', 0)
+            ->with([
+                'rules' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->where('rule_type', LoyaltyRule::TYPE_UPGRADE),
+                'benefits' => fn ($query) => $query->where('is_active', true),
+            ])
+            ->orderBy('level')
+            ->get();
+
+        return $tiers
+            ->map(fn (LoyaltyTier $tier): array => $this->tierMobilePayload($tier))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function progressToNextLevelPayload(?UserLoyaltyProfile $profile): array
+    {
+        return [
+            'percentage' => (int) ($profile?->progress_percentage ?? 0),
+            'current_metrics' => [
+                'lifetime_orders_count' => (int) ($profile?->lifetime_orders_count ?? 0),
+                'completed_orders_count' => (int) ($profile?->completed_orders_count ?? 0),
+                'lifetime_spend' => number_format((float) ($profile?->lifetime_spend ?? 0), 2, '.', ''),
+                'month_spend' => number_format((float) ($profile?->period_spend ?? 0), 2, '.', ''),
+                'period_orders_count' => (int) ($profile?->period_orders_count ?? 0),
+                'period_spend' => number_format((float) ($profile?->period_spend ?? 0), 2, '.', ''),
+            ],
+            'next_threshold' => $this->nextThresholdAmount($profile),
+            'amount_remaining' => $this->amountRemaining($profile),
+        ];
+    }
+
+    private function amountRemaining(?UserLoyaltyProfile $profile): ?string
+    {
+        $threshold = $this->nextThresholdAmount($profile);
+
+        if ($threshold === null) {
+            return null;
+        }
+
+        $monthSpend = (float) ($profile?->period_spend ?? 0);
+        $remaining = max(((float) $threshold) - $monthSpend, 0);
+
+        return number_format($remaining, 2, '.', '');
     }
 
     private function loyaltySchemaIsAvailable(): bool
@@ -689,6 +758,46 @@ class LoyaltyService
     }
 
     /**
+     * Tier snapshot for mobile clients, including discount and qualification fields.
+     *
+     * @return array<string, mixed>
+     */
+    private function tierMobilePayload(LoyaltyTier $tier): array
+    {
+        $rule = $tier->relationLoaded('rules')
+            ? $tier->rules->firstWhere('rule_type', LoyaltyRule::TYPE_UPGRADE)
+            : $tier->rules()
+                ->where('is_active', true)
+                ->where('rule_type', LoyaltyRule::TYPE_UPGRADE)
+                ->first();
+
+        $monthlySpendRequired = null;
+
+        if ($rule instanceof LoyaltyRule) {
+            $spend = (float) $rule->min_period_spend;
+
+            if ($spend > 0) {
+                $monthlySpendRequired = number_format($spend, 2, '.', '');
+            }
+        }
+
+        $durationMonths = null;
+
+        if ($rule instanceof LoyaltyRule) {
+            $duration = (int) ($rule->metadata['benefit_duration_months'] ?? 0);
+            $durationMonths = $duration > 0 ? $duration : null;
+        }
+
+        $discountPercentage = $this->primaryDiscountPercentageForTier($tier);
+
+        return array_merge($this->tierPayload($tier), [
+            'discount_percentage' => $discountPercentage,
+            'monthly_spend_required' => $monthlySpendRequired,
+            'active_for_months' => $durationMonths,
+        ]);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function benefitPayload(LoyaltyBenefit $benefit): array
@@ -775,7 +884,16 @@ class LoyaltyService
             return null;
         }
 
-        $benefit = $profile->currentTier->benefits
+        return $this->primaryDiscountPercentageForTier($profile->currentTier);
+    }
+
+    private function primaryDiscountPercentageForTier(LoyaltyTier $tier): ?float
+    {
+        $benefits = $tier->relationLoaded('benefits')
+            ? $tier->benefits
+            : $tier->benefits()->where('is_active', true)->get();
+
+        $benefit = $benefits
             ->where('is_active', true)
             ->where('benefit_type', LoyaltyBenefit::TYPE_DISCOUNT)
             ->where('value_type', LoyaltyBenefit::VALUE_TYPE_PERCENTAGE)

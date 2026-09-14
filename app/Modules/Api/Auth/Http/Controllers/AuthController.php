@@ -21,6 +21,7 @@ use App\Modules\Api\DTO\AuthResultDTO;
 use App\Modules\Api\Resources\AuthUserResource;
 use App\Modules\Api\Resources\UserResource;
 use App\Modules\Api\Support\Http\Responses\ApiResponse;
+use App\Modules\Api\User\Services\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -28,6 +29,7 @@ class AuthController extends Controller
 {
     public function __construct(
         private readonly AuthService $authService,
+        private readonly UserService $userService,
         private readonly PasswordResetService $passwordResetService,
         private readonly TwoFactorService $twoFactorService,
     ) {
@@ -80,8 +82,10 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
+        $user = $this->authService->me($request->user());
+
         return ApiResponse::success(
-            ['user' => UserResource::make($this->authService->me($request->user()))->resolve($request)],
+            ['user' => UserResource::make($this->userService->profile($user))->resolve($request)],
             'Authenticated user fetched successfully.',
         );
     }

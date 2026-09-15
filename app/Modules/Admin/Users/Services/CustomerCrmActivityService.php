@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Models\UserNotification;
 use App\Models\UserNotificationDevice;
 use App\Modules\Content\Services\MobileAppReleaseService;
+use App\Modules\CustomerWallets\Services\CustomerWalletService;
 use App\Modules\Notifications\Support\NotificationInboxContract;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
@@ -617,10 +618,19 @@ class CustomerCrmActivityService
             return [];
         }
 
+        if ($user->isCustomerAccount()) {
+            app(CustomerWalletService::class)->ensureSupportedWallets($user);
+        }
+
+        $supported = app(CustomerWalletService::class)->supportedCurrencies();
+        $order = array_flip($supported);
+
         return CustomerWallet::query()
             ->where('user_id', $user->id)
-            ->orderBy('currency')
+            ->whereIn('currency', $supported)
             ->get()
+            ->sortBy(fn (CustomerWallet $wallet): int => $order[$wallet->currency] ?? 99)
+            ->values()
             ->map(function (CustomerWallet $wallet): array {
                 $transactions = Schema::hasTable('customer_wallet_transactions')
                     ? $wallet->transactions()
@@ -656,7 +666,6 @@ class CustomerCrmActivityService
                     'transactions' => $transactions,
                 ];
             })
-            ->values()
             ->all();
     }
 

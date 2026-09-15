@@ -61,6 +61,22 @@ class CustomerWalletController
     {
         $customerWallet->loadMissing('user:id,name,full_name,email,phone');
 
+        if ($customerWallet->user) {
+            $this->walletService->ensureSupportedWallets($customerWallet->user);
+        }
+
+        $currencyTabs = $this->currencyTabsForCustomer((int) $customerWallet->user_id, $request->input('action'));
+
+        // If the requested wallet was replaced/created, keep showing the matching currency.
+        $activeWallet = collect($currencyTabs)
+            ->firstWhere('currency', $customerWallet->currency);
+
+        if (is_array($activeWallet) && (int) ($activeWallet['id'] ?? 0) !== (int) $customerWallet->id) {
+            $customerWallet = CustomerWallet::query()
+                ->with('user:id,name,full_name,email,phone')
+                ->findOrFail((int) $activeWallet['id']);
+        }
+
         $transactions = $customerWallet->transactions()
             ->with(['order:id,booking_reference,external_booking_id', 'creator:id,name,full_name'])
             ->latest('id')
@@ -70,8 +86,8 @@ class CustomerWalletController
 
         return Inertia::render('admin/customer-wallets/pages/Show', [
             'wallet' => $this->serializeWallet($customerWallet->refresh()),
+            'currency_tabs' => $currencyTabs,
             'transactions' => $transactions,
-            'credit_reasons' => $this->creditReasons(),
             'open_add_money' => $request->input('action') === 'add-money',
             'receipt_id' => $request->integer('receipt') ?: null,
             'can_manage' => $request->user()?->can('customer-wallets.manage') ?? false,
@@ -88,7 +104,7 @@ class CustomerWalletController
             $data['amount'],
             $request->user(),
             [
-                'reason' => $data['reason'],
+                'reason' => $data['reason'] ?? null,
                 'note' => $data['note'] ?? null,
             ],
         );
@@ -149,6 +165,8 @@ class CustomerWalletController
 
     public function createForUser(Request $request, User $user): RedirectResponse
     {
+        $this->walletService->ensureSupportedWallets($user);
+
         $wallet = $this->walletService->resolveWallet(
             $user,
             (string) $request->input('currency', config('customer_wallets.default_currency', 'LYD')),
@@ -161,6 +179,8 @@ class CustomerWalletController
 
     public function addMoney(Request $request, User $user): RedirectResponse
     {
+        $this->walletService->ensureSupportedWallets($user);
+
         $wallet = $this->walletService->resolveWallet(
             $user,
             (string) $request->input('currency', config('customer_wallets.default_currency', 'LYD')),
@@ -274,20 +294,6 @@ class CustomerWalletController
     }
 
     /**
-     * @return list<array{value: string, label: string}>
-     */
-    private function creditReasons(): array
-    {
-        return array_map(
-            fn (string $reason): array => [
-                'value' => $reason,
-                'label' => CustomerWalletTransaction::adminCreditReasonLabel($reason),
-            ],
-            CustomerWalletTransaction::adminCreditReasons(),
-        );
-    }
-
-    /**
      * @return array<string, mixed>
      */
     private function serializePrintTransaction(CustomerWalletTransaction $transaction): array
@@ -347,6 +353,39 @@ class CustomerWalletController
             CustomerWalletTransaction::TYPE_ADJUSTMENT => 'تسوية',
             default => $type,
         };
+    }
+
+    /**
+     * @return list<array{id: int, currency: string, balance: string, status: string, is_frozen: bool, is_active_tab: bool, url: string, add_money_url: string}>
+     */
+    private function currencyTabsForCustomer(int $userId, mixed $action = null): array
+    {
+        $supported = $this->walletService->supportedCurrencies();
+        $order = array_flip($supported);
+        $keepAddMoney = $action === 'add-money';
+
+        $wallets = CustomerWallet::query()
+            ->where('user_id', $userId)
+            ->whereIn('currency', $supported)
+            ->get()
+            ->sortBy(fn (CustomerWallet $wallet): int => $order[$wallet->currency] ?? 99)
+            ->values();
+
+        return $wallets->map(function (CustomerWallet $wallet) use ($keepAddMoney): array {
+            return [
+                'id' => $wallet->id,
+                'currency' => $wallet->currency,
+                'balance' => (string) $wallet->balance,
+                'status' => $wallet->status,
+                'is_frozen' => $wallet->isFrozen(),
+                'url' => route('admin.customer-wallets.show', $wallet, absolute: false),
+                'add_money_url' => route('admin.customer-wallets.show', [
+                    'customerWallet' => $wallet,
+                    'action' => 'add-money',
+                ], absolute: false),
+                'keep_add_money' => $keepAddMoney,
+            ];
+        })->all();
     }
 
     /**

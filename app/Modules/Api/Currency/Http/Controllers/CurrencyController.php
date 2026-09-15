@@ -3,6 +3,7 @@
 namespace App\Modules\Api\Currency\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\ExchangeRate;
 use App\Modules\Api\Currency\Http\Requests\ConvertCurrencyRequest;
 use App\Modules\Api\Support\Http\Responses\ApiResponse;
 use App\Modules\ExchangeRates\Services\ExchangeRateService;
@@ -20,15 +21,9 @@ class CurrencyController extends Controller
     {
         $payload = $this->exchangeRateService->getRatesPayload();
 
-        // Cast rate strings to numeric values for JSON (6.5 not "6.50000000").
-        $rates = [];
-        foreach ($payload['rates'] as $code => $rate) {
-            $rates[$code] = (float) $rate;
-        }
-
         return ApiResponse::success([
             'base_currency' => $payload['base_currency'],
-            'rates' => $rates,
+            'rates' => $payload['rates'],
             'updated_at' => $payload['updated_at'],
         ], 'Exchange rates fetched successfully.');
     }
@@ -42,6 +37,7 @@ class CurrencyController extends Controller
                 $validated['amount'],
                 $validated['from'],
                 $validated['to'],
+                $validated['side'] ?? ExchangeRate::SIDE_MID,
             );
         } catch (InvalidArgumentException $exception) {
             return ApiResponse::error($exception->getMessage(), [], 'invalid_currency_conversion', 422);

@@ -38,6 +38,9 @@ class LoyaltyController
                 'loyalty_enabled' => (bool) $settings->loyalty_enabled,
                 'default_currency' => (string) $settings->default_currency,
             ],
+            'settings' => $this->settingsPayload($settings),
+            'settings_update_url' => route('admin.loyalty.settings.update'),
+            'can_manage_settings' => Gate::allows('loyalty.settings.manage'),
         ]);
     }
 

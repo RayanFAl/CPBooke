@@ -22,6 +22,7 @@ class ConvertCurrencyRequest extends FormRequest
             'amount' => ['required', 'numeric', 'min:0'],
             'from' => ['required', 'string', 'size:3', Rule::in(ExchangeRate::SUPPORTED_CURRENCIES)],
             'to' => ['required', 'string', 'size:3', Rule::in(ExchangeRate::SUPPORTED_CURRENCIES)],
+            'side' => ['sometimes', 'nullable', 'string', Rule::in(ExchangeRate::CONVERSION_SIDES)],
         ];
     }
 
@@ -33,6 +34,10 @@ class ConvertCurrencyRequest extends FormRequest
 
         if ($this->has('to')) {
             $this->merge(['to' => ExchangeRate::normalizeCode((string) $this->input('to'))]);
+        }
+
+        if ($this->has('side') && is_string($this->input('side'))) {
+            $this->merge(['side' => strtolower(trim((string) $this->input('side')))]);
         }
     }
 }

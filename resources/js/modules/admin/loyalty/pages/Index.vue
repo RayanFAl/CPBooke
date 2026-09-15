@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import LoyaltySettingsPanel from '../components/LoyaltySettingsPanel.vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
@@ -13,17 +14,91 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    settings: {
+        type: Object,
+        default: null,
+    },
+    settings_update_url: {
+        type: String,
+        default: '',
+    },
+    can_manage_settings: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const { t, forwardArrow } = useAdminLocale();
 const page = usePage();
 const activeTab = ref('overview');
+const programEnabled = ref(Boolean(props.program.loyalty_enabled));
+const isTogglingProgram = ref(false);
+const toggleError = ref('');
 
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
 const canManageTiers = computed(() => permissions.value.includes('loyalty.manage'));
 const canManageRules = computed(() => permissions.value.includes('loyalty.manage-rules'));
 const canManageBenefits = computed(() => permissions.value.includes('loyalty.manage-benefits'));
 const canEditProgram = computed(() => canManageTiers.value || canManageRules.value || canManageBenefits.value);
+const canManageSettings = computed(
+    () => props.can_manage_settings || permissions.value.includes('loyalty.settings.manage'),
+);
+
+const csrfToken = () => {
+    if (typeof document === 'undefined') {
+        return '';
+    }
+
+    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+};
+
+const toggleLoyaltyProgram = async () => {
+    if (!canManageSettings.value || !props.settings_update_url || isTogglingProgram.value) {
+        return;
+    }
+
+    isTogglingProgram.value = true;
+    toggleError.value = '';
+
+    const nextEnabled = !programEnabled.value;
+    const current = props.settings ?? {};
+
+    try {
+        const response = await fetch(props.settings_update_url, {
+            method: 'PUT',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+                loyalty_enabled: nextEnabled,
+                auto_upgrade_enabled: Boolean(current.auto_upgrade_enabled ?? true),
+                auto_downgrade_enabled: Boolean(current.auto_downgrade_enabled ?? false),
+                visible_in_mobile_app: Boolean(current.visible_in_mobile_app ?? true),
+                allow_discount_stacking: Boolean(current.allow_discount_stacking ?? false),
+                default_currency: String(current.default_currency ?? props.program.default_currency ?? 'LYD'),
+                max_global_discount_amount: current.max_global_discount_amount ?? null,
+                minimum_discountable_order_amount: current.minimum_discountable_order_amount ?? null,
+            }),
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok || payload.success === false) {
+            toggleError.value = t('Unable to save loyalty settings right now.');
+
+            return;
+        }
+
+        programEnabled.value = Boolean(payload.data?.loyalty_enabled);
+    } catch {
+        toggleError.value = t('Unable to save loyalty settings right now.');
+    } finally {
+        isTogglingProgram.value = false;
+    }
+};
 
 const workspaceTabs = computed(() => [
     { id: 'overview', label: t('Overview') },
@@ -171,15 +246,13 @@ const metrics = computed(() => [
 
 const activeTiersCount = computed(() => launchTiers.value.length);
 
-const programStatusLabel = computed(() => (props.program.loyalty_enabled ? t('Enabled') : t('Disabled')));
-
-const programStatusTone = computed(() => {
-    if (!props.program.loyalty_enabled) {
-        return 'bg-rose-50 text-rose-700 ring-rose-200';
+const onSettingsSaved = (settings) => {
+    if (settings && typeof settings.loyalty_enabled === 'boolean') {
+        programEnabled.value = settings.loyalty_enabled;
     }
+};
 
-    return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
-});
+const programStatusLabel = computed(() => (programEnabled.value ? t('Enabled') : t('Disabled')));
 
 const recentUsers = computed(() => props.dashboard.users_per_tier.flatMap((bucket) => bucket.users.map((entry) => ({
     ...entry,
@@ -223,16 +296,37 @@ const inputClass = 'mt-1 block w-full rounded-lg border border-slate-200 px-3 py
                             </div>
                         </div>
 
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span
-                                class="inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium ring-1"
-                                :class="programStatusTone"
-                            >
-                                {{ programStatusLabel }}
-                            </span>
-                            <span class="rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white">
-                                {{ activeTiersCount }} {{ t('active tiers') }}
-                            </span>
+                        <div class="flex flex-col items-start gap-2 lg:items-end">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    :disabled="!canManageSettings || isTogglingProgram"
+                                    :aria-pressed="programEnabled"
+                                    @click="toggleLoyaltyProgram"
+                                >
+                                    <span class="font-medium">{{ t('Loyalty') }}</span>
+                                    <span
+                                        class="relative inline-flex h-6 w-11 shrink-0 rounded-full transition"
+                                        :class="programEnabled ? 'bg-slate-950' : 'bg-slate-300'"
+                                    >
+                                        <span
+                                            class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition"
+                                            :class="programEnabled ? 'start-5' : 'start-0.5'"
+                                        />
+                                    </span>
+                                    <span class="min-w-14 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                        {{ isTogglingProgram ? t('Saving...') : programStatusLabel }}
+                                    </span>
+                                </button>
+                                <span class="rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white">
+                                    {{ activeTiersCount }} {{ t('active tiers') }}
+                                </span>
+                            </div>
+                            <p v-if="toggleError" class="text-xs text-rose-600">{{ toggleError }}</p>
+                            <p v-else-if="!canManageSettings" class="text-xs text-slate-500">
+                                {{ t('Only Super Admin can enable or disable loyalty.') }}
+                            </p>
                         </div>
                     </div>
 
@@ -373,6 +467,13 @@ const inputClass = 'mt-1 block w-full rounded-lg border border-slate-200 px-3 py
                     </div>
 
                     <div v-else class="space-y-5">
+                        <LoyaltySettingsPanel
+                            :initial-settings="settings"
+                            :can-manage="canManageSettings"
+                            :update-url="settings_update_url"
+                            @saved="onSettingsSaved"
+                        />
+
                         <div class="space-y-4">
                             <div>
                                 <h3 class="text-sm font-semibold text-slate-950">{{ t('Tier configuration') }}</h3>

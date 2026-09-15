@@ -689,13 +689,13 @@ final class NotificationTemplateCatalog
                 code: 'EXCHANGE_RATE_UPDATED',
                 name: 'Exchange Rate Updated',
                 category: NotificationTemplateCategories::GENERAL,
-                description: 'Sent when an admin updates the USD or EUR rate against LYD.',
+                description: 'Sent when an admin updates the USD or EUR buy/sell rates against LYD.',
                 subject: 'Exchange Rate Updated',
-                body: "{currency_code} rate changed:\n{old_rate} LYD → {new_rate} LYD",
+                body: "{currency_code} rates changed:\nBuy: {old_buy} → {new_buy} LYD\nSell: {old_sell} → {new_sell} LYD",
                 arSubject: 'تم تحديث سعر الصرف',
-                arBody: "تغير سعر {currency_code}:\n{old_rate} د.ل ← {new_rate} د.ل",
+                arBody: "تغيرت أسعار {currency_code}:\nشراء: {old_buy} ← {new_buy} د.ل\nبيع: {old_sell} ← {new_sell} د.ل",
                 channels: [NotificationChannels::PUSH, NotificationChannels::IN_APP],
-                variables: ['currency_code', 'old_rate', 'new_rate', 'deep_link'],
+                variables: ['currency_code', 'old_buy', 'new_buy', 'old_sell', 'new_sell', 'old_rate', 'new_rate', 'deep_link'],
             ),
         ];
 

@@ -42,9 +42,32 @@ abstract class SavedPassengerFormRequest extends ApiFormRequest
             'passport_expiry' => ['required', 'date', 'after:today'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
+            'phone_2' => ['nullable', 'string', 'max:30'],
+            'phone_3' => ['nullable', 'string', 'max:30'],
             'seat_preference' => ['nullable', 'string', 'max:30'],
             'meal_preference' => ['nullable', 'string', 'max:30'],
             'is_default' => ['sometimes', 'boolean'],
         ];
+    }
+
+    /**
+     * Normalize blank phone fields to null so cleared extras are deleted.
+     */
+    protected function prepareForValidation(): void
+    {
+        $payload = [];
+
+        foreach (['phone', 'phone_2', 'phone_3'] as $field) {
+            if (! $this->exists($field)) {
+                continue;
+            }
+
+            $value = $this->input($field);
+            $payload[$field] = is_string($value) && trim($value) === '' ? null : $value;
+        }
+
+        if ($payload !== []) {
+            $this->merge($payload);
+        }
     }
 }

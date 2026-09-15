@@ -164,16 +164,19 @@ class PricingPreviewApiTest extends TestCase
     {
         $customer = $this->createCustomerWithDiscountBenefit();
 
-        $this->actingAsCustomer($customer)
-            ->postJson(route('api.v1.pricing.preview'), [
-                'service_type' => 'insurance',
-                'currency' => 'LYD',
-                'base_amount' => 1200,
-            ])
-            ->assertOk()
-            ->assertJsonPath('data.discount_total', 180)
-            ->assertJsonPath('data.final_amount', 1020)
-            ->assertJsonCount(1, 'data.adjustments');
+        foreach (['flight', 'hotel', 'insurance', 'esim'] as $serviceType) {
+            $this->actingAsCustomer($customer)
+                ->postJson(route('api.v1.pricing.preview'), [
+                    'service_type' => $serviceType,
+                    'currency' => 'LYD',
+                    'base_amount' => 1200,
+                ])
+                ->assertOk()
+                ->assertJsonPath('data.discount_total', 180)
+                ->assertJsonPath('data.final_amount', 1020)
+                ->assertJsonCount(1, 'data.adjustments')
+                ->assertJsonPath('data.adjustments.0.source_type', 'loyalty');
+        }
     }
 
     public function test_preview_forbids_requesting_another_user_pricing(): void

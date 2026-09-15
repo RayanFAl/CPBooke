@@ -5,7 +5,7 @@ import RoleBadge from '../components/RoleBadge.vue';
 import SystemTimeline from '../../components/SystemTimeline.vue';
 import UserStatusBadge from '../components/UserStatusBadge.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
 import { useAdminConfirm } from '../../composables/useAdminConfirm';
@@ -108,7 +108,36 @@ const profileDescription = computed(() => (isCustomerProfile.value
     ? 'CRM snapshot with wallet, bookings, and support in one place.'
     : 'Control Panel staff profile with roles and permissions. No customer wallet.'));
 const canDepositToWallet = computed(() => isCustomerProfile.value && canManageCustomerWallets.value);
-const primaryWallet = computed(() => crm.value.wallets?.[0] ?? null);
+const primaryWallet = computed(() => {
+    const wallets = crm.value.wallets ?? [];
+    const preferred = String(defaultCurrency.value || 'LYD').toUpperCase();
+
+    return wallets.find((wallet) => String(wallet.currency).toUpperCase() === preferred)
+        ?? wallets.find((wallet) => String(wallet.currency).toUpperCase() === 'LYD')
+        ?? wallets[0]
+        ?? null;
+});
+
+const selectedWalletCurrency = ref('LYD');
+
+const selectedWallet = computed(() => {
+    const wallets = crm.value.wallets ?? [];
+    const selected = String(selectedWalletCurrency.value || 'LYD').toUpperCase();
+
+    return wallets.find((wallet) => String(wallet.currency).toUpperCase() === selected)
+        ?? primaryWallet.value
+        ?? null;
+});
+
+watch(
+    primaryWallet,
+    (wallet) => {
+        if (wallet?.currency) {
+            selectedWalletCurrency.value = wallet.currency;
+        }
+    },
+    { immediate: true },
+);
 
 const formatWalletMoney = (amount, currency = 'LYD') => new Intl.NumberFormat(locale.value, {
     style: 'currency',
@@ -116,11 +145,11 @@ const formatWalletMoney = (amount, currency = 'LYD') => new Intl.NumberFormat(lo
 }).format(Number(amount ?? 0));
 
 const primaryWalletBalanceLabel = computed(() => {
-    if (!primaryWallet.value) {
+    if (!selectedWallet.value) {
         return formatWalletMoney(0, defaultCurrency.value);
     }
 
-    return formatWalletMoney(primaryWallet.value.balance, primaryWallet.value.currency);
+    return formatWalletMoney(selectedWallet.value.balance, selectedWallet.value.currency);
 });
 const loyalty = computed(() => props.user.loyalty ?? {
     current_level: 0,
@@ -227,7 +256,10 @@ const startAddMoney = (walletId = null) => {
         return;
     }
 
-    const existingWalletId = crm.value.wallets?.[0]?.id ?? null;
+    const existingWalletId = selectedWallet.value?.id
+        ?? primaryWallet.value?.id
+        ?? crm.value.wallets?.[0]?.id
+        ?? null;
 
     if (existingWalletId) {
         router.visit(`${route('admin.customer-wallets.show', existingWalletId)}?action=add-money`);
@@ -640,24 +672,45 @@ onBeforeUnmount(() => {
                     >
                         <div class="bg-gradient-to-br from-emerald-50 via-white to-slate-50 px-6 py-6">
                             <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">{{ t('Wallet') }}</p>
+
+                            <div v-if="crm.wallets.length" class="mt-4 flex flex-wrap gap-2">
+                                <button
+                                    v-for="wallet in crm.wallets"
+                                    :key="wallet.id"
+                                    type="button"
+                                    class="rounded-2xl px-3 py-1.5 text-xs font-semibold transition"
+                                    :class="selectedWallet?.id === wallet.id
+                                        ? 'bg-slate-950 text-white'
+                                        : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'"
+                                    @click="selectedWalletCurrency = wallet.currency"
+                                >
+                                    {{ wallet.currency }}
+                                </button>
+                            </div>
+
                             <p class="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
                                 {{ primaryWalletBalanceLabel }}
                             </p>
                             <p class="mt-2 text-sm text-slate-500">
-                                {{ primaryWallet ? `${primaryWallet.wallet_number} · ${formatValueLabel(primaryWallet.status)}` : t('No wallet yet') }}
+                                <template v-if="selectedWallet">
+                                    {{ selectedWallet.currency }} · {{ selectedWallet.wallet_number }} · {{ formatValueLabel(selectedWallet.status) }}
+                                </template>
+                                <template v-else>
+                                    {{ t('No wallet yet') }}
+                                </template>
                             </p>
                             <div class="mt-5 flex flex-col gap-2">
                                 <button
                                     v-if="canDepositToWallet"
                                     type="button"
                                     class="inline-flex items-center justify-center rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
-                                    @click="startAddMoney(primaryWallet?.id)"
+                                    @click="startAddMoney(selectedWallet?.id)"
                                 >
-                                    {{ t('Deposit') }}
+                                    {{ t('Deposit') }} {{ selectedWallet ? `(${selectedWallet.currency})` : '' }}
                                 </button>
                                 <Link
-                                    v-if="canViewCustomerWallets && primaryWallet"
-                                    :href="route('admin.customer-wallets.show', primaryWallet.id)"
+                                    v-if="canViewCustomerWallets && selectedWallet"
+                                    :href="route('admin.customer-wallets.show', selectedWallet.id)"
                                     class="inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-white hover:text-slate-950"
                                 >
                                     {{ t('View ledger') }}

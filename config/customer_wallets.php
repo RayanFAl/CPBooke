@@ -3,10 +3,20 @@
 return [
     /*
     |--------------------------------------------------------------------------
-    | Default currency for new customer wallets
+    | Default currency for customer wallets
     |--------------------------------------------------------------------------
     */
     'default_currency' => env('CUSTOMER_WALLET_DEFAULT_CURRENCY', 'LYD'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Supported wallet currencies (strict allow-list)
+    |--------------------------------------------------------------------------
+    |
+    | Every customer gets one wallet per currency in this list.
+    |
+    */
+    'supported_currencies' => ['LYD', 'USD', 'EUR'],
 
     /*
     |--------------------------------------------------------------------------

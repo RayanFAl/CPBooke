@@ -20,6 +20,8 @@ final readonly class CreateSavedPassengerDTO
         public string $passportExpiry,
         public ?string $email,
         public ?string $phone,
+        public ?string $phone2,
+        public ?string $phone3,
         public ?string $seatPreference,
         public ?string $mealPreference,
         public bool $isDefault,
@@ -52,7 +54,9 @@ final readonly class CreateSavedPassengerDTO
             passportIssueDate: $data['passport_issue_date'] ?? null,
             passportExpiry: $data['passport_expiry'],
             email: isset($data['email']) ? strtolower($data['email']) : null,
-            phone: $data['phone'] ?? null,
+            phone: self::nullablePhone($data['phone'] ?? null),
+            phone2: self::nullablePhone($data['phone_2'] ?? null),
+            phone3: self::nullablePhone($data['phone_3'] ?? null),
             seatPreference: $data['seat_preference'] ?? null,
             mealPreference: $data['meal_preference'] ?? null,
             isDefault: (bool) ($data['is_default'] ?? false),
@@ -81,9 +85,22 @@ final readonly class CreateSavedPassengerDTO
             'passport_expiry' => $this->passportExpiry,
             'email' => $this->email,
             'phone' => $this->phone,
+            'phone_2' => $this->phone2,
+            'phone_3' => $this->phone3,
             'seat_preference' => $this->seatPreference,
             'meal_preference' => $this->mealPreference,
             'is_default' => $this->isDefault,
         ];
+    }
+
+    private static function nullablePhone(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 }

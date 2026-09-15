@@ -135,13 +135,7 @@ class LoyaltyPricingProvider implements PricingAdjustmentProvider
 
     private function matchesServiceType(LoyaltyBenefit $benefit, string $serviceType): bool
     {
-        $services = $benefit->applies_to_services;
-
-        if (! is_array($services) || $services === []) {
-            return true;
-        }
-
-        return in_array($serviceType, $services, true);
+        return $benefit->appliesToServiceType($serviceType);
     }
 
     private function passesEffectiveWindow(LoyaltyBenefit $benefit, ?CarbonInterface $evaluationTime): bool

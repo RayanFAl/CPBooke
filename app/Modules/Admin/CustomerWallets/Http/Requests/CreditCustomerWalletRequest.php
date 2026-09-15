@@ -20,7 +20,7 @@ class CreditCustomerWalletRequest extends FormRequest
     {
         return [
             'amount' => ['required', 'numeric', 'gt:0', 'max:9999999.99'],
-            'reason' => ['required', 'string', Rule::in(CustomerWalletTransaction::adminCreditReasons())],
+            'reason' => ['nullable', 'string', Rule::in(CustomerWalletTransaction::adminCreditReasons())],
             'note' => ['nullable', 'string', 'max:500'],
         ];
     }

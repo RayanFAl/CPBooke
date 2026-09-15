@@ -3,9 +3,8 @@ import AdminButton from '../../components/AdminButton.vue';
 import AdminInput from '../../components/AdminInput.vue';
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import AdminModal from '../../components/AdminModal.vue';
-import AdminSelect from '../../components/AdminSelect.vue';
 import AdminTextarea from '../../components/AdminTextarea.vue';
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useAdminConfirm } from '../../composables/useAdminConfirm';
 import { useAdminLocale } from '../../composables/useAdminLocale';
@@ -15,13 +14,13 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    currency_tabs: {
+        type: Array,
+        default: () => [],
+    },
     transactions: {
         type: Object,
         required: true,
-    },
-    credit_reasons: {
-        type: Array,
-        default: () => [],
     },
     open_add_money: {
         type: Boolean,
@@ -72,7 +71,6 @@ const translatedFlashSuccess = computed(() => {
 
 const creditForm = useForm({
     amount: '',
-    reason: '',
     note: '',
 });
 
@@ -82,6 +80,16 @@ const debitForm = useForm({
 });
 
 const showAddMoney = ref(false);
+
+const currencyLabel = (code) => {
+    const labels = {
+        LYD: t('Libyan Dinar'),
+        USD: t('US Dollar'),
+        EUR: t('Euro'),
+    };
+
+    return labels[code] ?? code;
+};
 
 const formatMoney = (amount, currency) => new Intl.NumberFormat(locale.value, {
     style: 'currency',
@@ -112,19 +120,6 @@ const typeLabel = (type) => {
     };
 
     return labels[type] ?? type;
-};
-
-const reasonLabel = (reason) => {
-    const labels = {
-        cash_received: t('Cash received'),
-        bank_transfer: t('Bank transfer'),
-        compensation: t('Compensation'),
-        promotional: t('Promotional credit'),
-        correction: t('Balance correction'),
-        other: t('Other'),
-    };
-
-    return labels[reason] ?? reason;
 };
 
 const creditAmount = computed(() => {
@@ -158,16 +153,22 @@ const closeAddMoney = () => {
     showAddMoney.value = false;
 };
 
-const submitCredit = async () => {
-    if (!creditAmount.value || !creditForm.reason) {
-        creditForm.post(route('admin.customer-wallets.credit', props.wallet.id), {
-            preserveScroll: true,
-            onSuccess: () => {
-                creditForm.reset();
-                showAddMoney.value = false;
-            },
-        });
+const switchCurrencyTab = (tab, { keepAddMoney = false } = {}) => {
+    if (!tab || Number(tab.id) === Number(props.wallet.id)) {
+        return;
+    }
 
+    const href = keepAddMoney || showAddMoney.value
+        ? tab.add_money_url
+        : tab.url;
+
+    router.visit(href, {
+        preserveScroll: true,
+    });
+};
+
+const submitCredit = async () => {
+    if (!creditAmount.value) {
         return;
     }
 
@@ -178,10 +179,10 @@ const submitCredit = async () => {
                 admin: page.props.auth?.user?.full_name || page.props.auth?.user?.name || t('Admin'),
                 amount: formatMoney(creditPreview.value.added, props.wallet.currency),
             }),
+            `${t('Wallet')}: ${props.wallet.currency}`,
             `${t('Before')}: ${formatMoney(creditPreview.value.before, props.wallet.currency)}`,
             `${t('Added')}: +${formatMoney(creditPreview.value.added, props.wallet.currency)}`,
             `${t('After')}: ${formatMoney(creditPreview.value.after, props.wallet.currency)}`,
-            `${t('Reason')}: ${reasonLabel(creditForm.reason)}`,
         ].join('\n'),
         confirmLabel: 'Record top-up',
         cancelLabel: 'Cancel',
@@ -236,6 +237,15 @@ watch(
         }
     },
     { deep: true },
+);
+
+watch(
+    () => props.open_add_money,
+    (value) => {
+        if (value && canAddMoney.value) {
+            showAddMoney.value = true;
+        }
+    },
 );
 </script>
 
@@ -294,6 +304,30 @@ watch(
                     </div>
                 </div>
 
+                <div v-if="currency_tabs.length" class="mt-5">
+                    <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {{ t('Choose wallet currency') }}
+                    </p>
+                    <div class="flex flex-wrap gap-2">
+                        <button
+                            v-for="tab in currency_tabs"
+                            :key="tab.id"
+                            type="button"
+                            class="rounded-2xl px-4 py-2 text-sm font-medium transition"
+                            :class="Number(tab.id) === Number(wallet.id)
+                                ? 'bg-slate-950 text-white'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                            @click="switchCurrencyTab(tab)"
+                        >
+                            <span>{{ tab.currency }}</span>
+                            <span class="ms-2 opacity-80">{{ formatMoney(tab.balance, tab.currency) }}</span>
+                        </button>
+                    </div>
+                    <p class="mt-2 text-xs text-slate-500">
+                        {{ t('Active wallet') }}: {{ currencyLabel(wallet.currency) }}
+                    </p>
+                </div>
+
                 <div
                     v-if="translatedFlashSuccess"
                     class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
@@ -339,7 +373,10 @@ watch(
             <div v-if="can_manage && !wallet.is_frozen" class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <form class="space-y-3" @submit.prevent="submitDebit">
                     <h3 class="text-base font-semibold text-slate-950">{{ t('Deduct credit') }}</h3>
-                    <p class="text-sm text-slate-600">{{ t('Manual debit from the customer wallet.') }}</p>
+                    <p class="text-sm text-slate-600">
+                        {{ t('Manual debit from the customer wallet.') }}
+                        ({{ wallet.currency }})
+                    </p>
 
                     <div class="grid gap-3 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
                         <div>
@@ -376,7 +413,9 @@ watch(
             <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                 <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
                     <div>
-                        <h3 class="text-base font-semibold text-slate-950">{{ t('Wallet transactions') }}</h3>
+                        <h3 class="text-base font-semibold text-slate-950">
+                            {{ t('Wallet transactions') }} · {{ wallet.currency }}
+                        </h3>
                         <p class="mt-1 text-sm text-slate-600">{{ t('Every balance change is a ledger row with amount, admin, and before/after balances.') }}</p>
                     </div>
                     <a
@@ -467,11 +506,32 @@ watch(
         <AdminModal
             :show="showAddMoney"
             title="Add money"
-            description="Record an admin top-up as a wallet transaction. The balance is never edited directly."
+            description="Choose the wallet currency tab, then record the top-up."
             max-width="lg"
             @close="closeAddMoney"
         >
             <form class="space-y-4" @submit.prevent="submitCredit">
+                <div v-if="currency_tabs.length">
+                    <p class="mb-2 text-sm font-medium text-slate-800">{{ t('Deposit into') }}</p>
+                    <div class="flex flex-wrap gap-2">
+                        <button
+                            v-for="tab in currency_tabs"
+                            :key="`modal-${tab.id}`"
+                            type="button"
+                            class="rounded-2xl px-4 py-2 text-sm font-medium transition"
+                            :class="Number(tab.id) === Number(wallet.id)
+                                ? 'bg-slate-950 text-white'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                            @click="switchCurrencyTab(tab, { keepAddMoney: true })"
+                        >
+                            {{ tab.currency }}
+                        </button>
+                    </div>
+                    <p class="mt-2 text-xs text-slate-500">
+                        {{ t('Selected') }}: {{ wallet.currency }} · {{ formatMoney(wallet.balance, wallet.currency) }}
+                    </p>
+                </div>
+
                 <div class="grid gap-4 sm:grid-cols-2">
                     <AdminInput
                         v-model="creditForm.amount"
@@ -488,22 +548,6 @@ watch(
                         disabled
                     />
                 </div>
-
-                <AdminSelect
-                    v-model="creditForm.reason"
-                    :label="t('Reason')"
-                    required
-                    :error="creditForm.errors.reason"
-                >
-                    <option value="" disabled>{{ t('Select a reason') }}</option>
-                    <option
-                        v-for="reason in credit_reasons"
-                        :key="reason.value"
-                        :value="reason.value"
-                    >
-                        {{ t(reason.label) }}
-                    </option>
-                </AdminSelect>
 
                 <AdminTextarea
                     v-model="creditForm.note"

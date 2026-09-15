@@ -51,6 +51,16 @@ class LoyaltyBenefit extends Model
     public const VALUE_TYPE_TEXT = 'text';
 
     /**
+     * Default catalog services eligible for loyalty percentage discounts.
+     *
+     * @return array<int, string>
+     */
+    public static function defaultDiscountServiceTypes(): array
+    {
+        return Order::serviceTypes();
+    }
+
+    /**
      * Get the attribute casts.
      *
      * @return array<string, string>
@@ -78,5 +88,59 @@ class LoyaltyBenefit extends Model
     public function tier(): BelongsTo
     {
         return $this->belongsTo(LoyaltyTier::class, 'tier_id');
+    }
+
+    /**
+     * Resolve which service types this benefit applies to.
+     *
+     * Prefer `applies_to_services`, then `configuration.applies_to`.
+     * An empty list means the benefit applies to the full catalog
+     * (flight, hotel, insurance, esim).
+     *
+     * @return array<int, string>
+     */
+    public function applicableServiceTypes(): array
+    {
+        $fromColumn = $this->normalizeServiceTypes($this->applies_to_services);
+
+        if ($fromColumn !== []) {
+            return $fromColumn;
+        }
+
+        $fromConfiguration = $this->normalizeServiceTypes(
+            is_array($this->configuration) ? ($this->configuration['applies_to'] ?? null) : null,
+        );
+
+        if ($fromConfiguration !== []) {
+            return $fromConfiguration;
+        }
+
+        return self::defaultDiscountServiceTypes();
+    }
+
+    public function appliesToServiceType(string $serviceType): bool
+    {
+        return in_array($serviceType, $this->applicableServiceTypes(), true);
+    }
+
+    /**
+     * @param  mixed  $services
+     * @return array<int, string>
+     */
+    private function normalizeServiceTypes(mixed $services): array
+    {
+        if (! is_array($services)) {
+            return [];
+        }
+
+        $allowed = self::defaultDiscountServiceTypes();
+
+        return array_values(array_unique(array_filter(
+            array_map(
+                static fn (mixed $service): string => strtolower(trim((string) $service)),
+                $services,
+            ),
+            static fn (string $service): bool => $service !== '' && in_array($service, $allowed, true),
+        )));
     }
 }

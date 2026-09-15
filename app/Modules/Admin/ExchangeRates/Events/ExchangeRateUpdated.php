@@ -13,9 +13,24 @@ class ExchangeRateUpdated
 
     public function __construct(
         public readonly string $currencyCode,
-        public readonly string $oldRate,
-        public readonly string $newRate,
+        public readonly string $oldBuy,
+        public readonly string $newBuy,
+        public readonly string $oldSell,
+        public readonly string $newSell,
         public readonly ?User $actor = null,
     ) {
+    }
+
+    /**
+     * Backward-compatible summary for templates that still expect old_rate/new_rate.
+     */
+    public function oldRateSummary(): string
+    {
+        return "buy {$this->oldBuy} / sell {$this->oldSell}";
+    }
+
+    public function newRateSummary(): string
+    {
+        return "buy {$this->newBuy} / sell {$this->newSell}";
     }
 }

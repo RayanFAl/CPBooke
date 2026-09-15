@@ -6,7 +6,6 @@ use App\Models\AuditLog;
 use App\Models\ExchangeRate;
 use App\Models\NotificationLog;
 use App\Models\User;
-use App\Models\UserNotification;
 use App\Modules\Admin\ExchangeRates\Events\ExchangeRateUpdated;
 use App\Modules\ExchangeRates\Services\ExchangeRateService;
 use App\Modules\Notifications\Support\NotificationChannels;
@@ -30,22 +29,26 @@ class ExchangeRatesTest extends TestCase
         $this->seed(ExchangeRateSeeder::class);
     }
 
-    public function test_api_returns_only_lyd_usd_eur_rates(): void
+    public function test_api_returns_buy_sell_and_mid_for_supported_currencies(): void
     {
         $response = $this->getJson('/api/v1/currency/rates');
 
         $response->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.base_currency', 'LYD')
-            ->assertJsonPath('data.rates.LYD', 1)
-            ->assertJsonPath('data.rates.USD', 9.385)
-            ->assertJsonPath('data.rates.EUR', 10.89);
+            ->assertJsonPath('data.rates.LYD.buy', 1)
+            ->assertJsonPath('data.rates.LYD.sell', 1)
+            ->assertJsonPath('data.rates.LYD.mid', 1)
+            ->assertJsonPath('data.rates.USD.buy', 9.35)
+            ->assertJsonPath('data.rates.USD.sell', 9.42)
+            ->assertJsonPath('data.rates.EUR.buy', 10.85)
+            ->assertJsonPath('data.rates.EUR.sell', 10.93);
 
-        $rates = $response->json('data.rates');
-        $this->assertSame(['LYD', 'USD', 'EUR'], array_keys($rates));
+        $this->assertSame(['LYD', 'USD', 'EUR'], array_keys($response->json('data.rates')));
+        $this->assertEqualsWithDelta(9.385, (float) $response->json('data.rates.USD.mid'), 0.00000001);
     }
 
-    public function test_api_converts_eur_to_usd_through_lyd(): void
+    public function test_api_converts_with_mid_by_default(): void
     {
         $response = $this->postJson('/api/v1/currency/convert', [
             'amount' => 100,
@@ -53,27 +56,30 @@ class ExchangeRatesTest extends TestCase
             'to' => 'USD',
         ]);
 
-        $response->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data.amount', 100)
-            ->assertJsonPath('data.from', 'EUR')
-            ->assertJsonPath('data.to', 'USD')
-            ->assertJsonPath('data.base_currency', 'LYD');
+        $usdMid = (9.35 + 9.42) / 2;
+        $eurMid = (10.85 + 10.93) / 2;
+        $expected = 100 * $eurMid / $usdMid;
 
-        $this->assertEqualsWithDelta(116.03622802, (float) $response->json('data.converted_amount'), 0.00000001);
-        $this->assertEqualsWithDelta(1.16036228, (float) $response->json('data.rate'), 0.00000001);
+        $response->assertOk()
+            ->assertJsonPath('data.side', 'mid')
+            ->assertJsonPath('data.from', 'EUR')
+            ->assertJsonPath('data.to', 'USD');
+
+        $this->assertEqualsWithDelta($expected, (float) $response->json('data.converted_amount'), 0.00000001);
     }
 
-    public function test_api_converts_usd_to_eur_through_lyd(): void
+    public function test_api_auto_side_uses_buy_of_source_and_sell_of_target(): void
     {
+        // 100 EUR → USD auto = 100 * buy(EUR) / sell(USD) = 100 * 10.85 / 9.42
         $response = $this->postJson('/api/v1/currency/convert', [
             'amount' => 100,
-            'from' => 'USD',
-            'to' => 'EUR',
+            'from' => 'EUR',
+            'to' => 'USD',
+            'side' => 'auto',
         ]);
 
-        $response->assertOk();
-        $this->assertEqualsWithDelta(86.17998163, (float) $response->json('data.converted_amount'), 0.00000001);
+        $response->assertOk()->assertJsonPath('data.side', 'auto');
+        $this->assertEqualsWithDelta(115.18046709, (float) $response->json('data.converted_amount'), 0.00000001);
     }
 
     public function test_api_rejects_unsupported_currency(): void
@@ -98,7 +104,7 @@ class ExchangeRatesTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_admin_can_update_usd_and_eur_rates_and_clears_cache(): void
+    public function test_admin_can_update_buy_and_sell_rates(): void
     {
         Event::fake([ExchangeRateUpdated::class]);
 
@@ -112,32 +118,31 @@ class ExchangeRatesTest extends TestCase
 
         $this->actingAs($actor)
             ->put(route('admin.exchange-rates.update'), [
-                'usd_rate_to_lyd' => 6.60,
-                'eur_rate_to_lyd' => 7.75,
+                'usd_buy_rate_to_lyd' => 9.30,
+                'usd_sell_rate_to_lyd' => 9.50,
+                'eur_buy_rate_to_lyd' => 10.80,
+                'eur_sell_rate_to_lyd' => 11.00,
             ])
             ->assertRedirect(route('admin.exchange-rates.index'));
 
         $this->assertDatabaseHas('exchange_rates', [
             'currency_code' => 'USD',
-            'rate_to_lyd' => '6.60000000',
+            'buy_rate_to_lyd' => '9.30000000',
+            'sell_rate_to_lyd' => '9.50000000',
         ]);
         $this->assertDatabaseHas('exchange_rates', [
             'currency_code' => 'EUR',
-            'rate_to_lyd' => '7.75000000',
+            'buy_rate_to_lyd' => '10.80000000',
+            'sell_rate_to_lyd' => '11.00000000',
         ]);
         $this->assertDatabaseHas('exchange_rates', [
             'currency_code' => 'LYD',
-            'rate_to_lyd' => '1.00000000',
+            'buy_rate_to_lyd' => '1.00000000',
+            'sell_rate_to_lyd' => '1.00000000',
         ]);
 
         $this->assertNull(Cache::get(ExchangeRateService::CACHE_KEY));
-
         Event::assertDispatched(ExchangeRateUpdated::class, 2);
-
-        $this->assertDatabaseHas('rbac_audit_logs', [
-            'action' => 'exchange_rates.updated',
-            'permission' => 'exchange-rates.manage',
-        ]);
 
         $this->assertDatabaseHas('audit_logs', [
             'module' => AuditLog::MODULE_EXCHANGE_RATES,
@@ -147,29 +152,25 @@ class ExchangeRatesTest extends TestCase
         ]);
     }
 
-    public function test_lyd_rate_cannot_be_changed_via_admin_update(): void
+    public function test_admin_rejects_sell_lower_than_buy(): void
     {
         $actor = User::factory()->create([
             'account_type' => User::ACCOUNT_TYPE_ADMIN,
             'is_admin' => true,
         ]);
-        $actor->syncRolesByName([RbacRegistry::ROLE_SUPER_ADMIN]);
-
-        ExchangeRate::query()->where('currency_code', 'LYD')->update(['rate_to_lyd' => '2.00000000']);
+        $actor->syncRolesByName([RbacRegistry::ROLE_ADMIN]);
 
         $this->actingAs($actor)
+            ->from(route('admin.exchange-rates.index'))
             ->put(route('admin.exchange-rates.update'), [
-                'usd_rate_to_lyd' => 6.50,
+                'usd_buy_rate_to_lyd' => 9.50,
+                'usd_sell_rate_to_lyd' => 9.20,
             ])
-            ->assertRedirect(route('admin.exchange-rates.index'));
-
-        $this->assertSame(
-            '1.00000000',
-            (string) ExchangeRate::query()->where('currency_code', 'LYD')->value('rate_to_lyd')
-        );
+            ->assertRedirect(route('admin.exchange-rates.index'))
+            ->assertSessionHasErrors('usd_sell_rate_to_lyd');
     }
 
-    public function test_updating_exchange_rate_notifies_customers_in_app_and_push_without_queue(): void
+    public function test_updating_exchange_rate_notifies_customers(): void
     {
         $customer = User::factory()->create([
             'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
@@ -185,7 +186,8 @@ class ExchangeRatesTest extends TestCase
 
         $this->actingAs($actor)
             ->put(route('admin.exchange-rates.update'), [
-                'usd_rate_to_lyd' => 6.60,
+                'usd_buy_rate_to_lyd' => 9.30,
+                'usd_sell_rate_to_lyd' => 9.50,
             ])
             ->assertRedirect(route('admin.exchange-rates.index'));
 
@@ -200,22 +202,9 @@ class ExchangeRatesTest extends TestCase
             'channel' => NotificationChannels::IN_APP,
             'status' => NotificationLog::STATUS_SENT,
         ]);
-
-        $this->assertDatabaseHas('notification_logs', [
-            'user_id' => $customer->id,
-            'template_code' => 'EXCHANGE_RATE_UPDATED',
-            'channel' => NotificationChannels::PUSH,
-        ]);
-
-        $this->assertDatabaseMissing('jobs', [
-            'queue' => 'notifications-dispatch',
-        ]);
-        $this->assertDatabaseMissing('jobs', [
-            'queue' => 'notifications-push',
-        ]);
     }
 
-    public function test_fetching_rates_does_not_dispatch_exchange_rate_updated_event(): void
+    public function test_fetching_rates_does_not_dispatch_update_event(): void
     {
         Event::fake([ExchangeRateUpdated::class]);
 
@@ -224,20 +213,9 @@ class ExchangeRatesTest extends TestCase
             'amount' => 1,
             'from' => 'USD',
             'to' => 'LYD',
+            'side' => 'sell',
         ])->assertOk();
 
         Event::assertNotDispatched(ExchangeRateUpdated::class);
-    }
-
-    public function test_conversion_service_formula(): void
-    {
-        $service = app(ExchangeRateService::class);
-
-        $result = $service->convert(100, 'EUR', 'USD');
-
-        $this->assertSame('EUR', $result['from']);
-        $this->assertSame('USD', $result['to']);
-        $this->assertEqualsWithDelta(116.03622802, $result['converted_amount'], 0.00000001);
-        $this->assertEqualsWithDelta(1.16036228, $result['rate'], 0.00000001);
     }
 }

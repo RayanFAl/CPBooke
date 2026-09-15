@@ -22,6 +22,8 @@ const props = defineProps({
     },
 });
 
+const emit = defineEmits(['saved']);
+
 const { t } = useAdminLocale();
 const { defaultCurrency } = usePlatformCurrency();
 
@@ -123,8 +125,10 @@ const submit = async () => {
             return;
         }
 
-        Object.assign(form, normalizeSettings(responsePayload.data));
+        const nextSettings = normalizeSettings(responsePayload.data);
+        Object.assign(form, nextSettings);
         successMessage.value = t('Loyalty settings saved successfully.');
+        emit('saved', nextSettings);
     } catch {
         errorMessage.value = t('Unable to save loyalty settings right now.');
     } finally {

@@ -87,6 +87,79 @@ class ApiSavedPassengersTest extends TestCase
         );
     }
 
+    public function test_customer_can_save_and_clear_extra_phone_numbers(): void
+    {
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $create = $this->postJson('/api/v1/saved-passengers', $this->validPassengerPayload([
+            'phone' => '+218912345678',
+            'phone_2' => '+218923456789',
+            'phone_3' => '+218934567890',
+        ]));
+
+        $create
+            ->assertCreated()
+            ->assertJsonPath('data.phone', '+218912345678')
+            ->assertJsonPath('data.phone_2', '+218923456789')
+            ->assertJsonPath('data.phone_3', '+218934567890')
+            ->assertJsonPath('data.phones', [
+                '+218912345678',
+                '+218923456789',
+                '+218934567890',
+            ]);
+
+        $passengerId = $create->json('data.id');
+
+        $this->getJson("/api/v1/saved-passengers/{$passengerId}")
+            ->assertOk()
+            ->assertJsonPath('data.phone_2', '+218923456789')
+            ->assertJsonPath('data.phone_3', '+218934567890');
+
+        $this->putJson("/api/v1/saved-passengers/{$passengerId}", $this->validPassengerPayload([
+            'phone' => '+218912345678',
+            'phone_2' => '',
+            'phone_3' => null,
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.phone', '+218912345678')
+            ->assertJsonPath('data.phone_2', null)
+            ->assertJsonPath('data.phone_3', null)
+            ->assertJsonPath('data.phones', ['+218912345678']);
+
+        $passenger = SavedPassenger::query()->findOrFail($passengerId);
+
+        $this->assertNull($passenger->phone_2);
+        $this->assertNull($passenger->phone_3);
+    }
+
+    public function test_legacy_passenger_with_only_primary_phone_keeps_extra_phones_null(): void
+    {
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $passenger = SavedPassenger::factory()->for($customer)->create([
+            'phone' => '+966501234567',
+            'phone_2' => null,
+            'phone_3' => null,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->getJson("/api/v1/saved-passengers/{$passenger->id}")
+            ->assertOk()
+            ->assertJsonPath('data.phone', '+966501234567')
+            ->assertJsonPath('data.phone_2', null)
+            ->assertJsonPath('data.phone_3', null)
+            ->assertJsonPath('data.phones', ['+966501234567']);
+    }
+
     public function test_customer_cannot_create_duplicate_passport_for_same_account(): void
     {
         $customer = User::factory()->create([

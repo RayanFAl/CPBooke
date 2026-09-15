@@ -29,6 +29,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'passport_expiry',
     'email',
     'phone',
+    'phone_2',
+    'phone_3',
     'phone_hash',
     'seat_preference',
     'meal_preference',
@@ -77,10 +79,25 @@ class SavedPassenger extends Model
             'passport_number' => 'encrypted',
             'email' => 'encrypted',
             'phone' => 'encrypted',
+            'phone_2' => 'encrypted',
+            'phone_3' => 'encrypted',
             'is_default' => 'boolean',
             'passport_image_size' => 'integer',
             'passport_image_uploaded_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Primary + optional secondary phones for API clients.
+     *
+     * @return list<string>
+     */
+    public function phonesList(): array
+    {
+        return array_values(array_filter(
+            [$this->phone, $this->phone_2, $this->phone_3],
+            static fn (mixed $phone): bool => is_string($phone) && trim($phone) !== '',
+        ));
     }
 
     /**

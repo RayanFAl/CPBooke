@@ -35,7 +35,9 @@ class CustomerWalletService
         ?string $currency = null,
         bool $createIfMissing = true,
     ): CustomerWallet {
-        $currency = strtoupper($currency ?? (string) config('customer_wallets.default_currency', 'LYD'));
+        $currency = $this->normalizeCurrency(
+            $currency ?? (string) config('customer_wallets.default_currency', 'LYD')
+        );
 
         $wallet = CustomerWallet::query()
             ->where('user_id', $user->id)
@@ -59,6 +61,70 @@ class CustomerWalletService
             'balance' => 0,
             'status' => CustomerWallet::STATUS_ACTIVE,
         ]);
+    }
+
+    /**
+     * Ensure the customer has one wallet for every supported currency (LYD/USD/EUR).
+     *
+     * @return list<CustomerWallet>
+     */
+    public function ensureSupportedWallets(User $user): array
+    {
+        $wallets = [];
+
+        foreach ($this->supportedCurrencies() as $currency) {
+            $wallets[] = $this->resolveWallet($user, $currency, createIfMissing: true);
+        }
+
+        return $wallets;
+    }
+
+    /**
+     * @return list<CustomerWallet>
+     */
+    public function listWallets(User $user): array
+    {
+        $this->ensureSupportedWallets($user);
+
+        $order = array_flip($this->supportedCurrencies());
+
+        return CustomerWallet::query()
+            ->where('user_id', $user->id)
+            ->whereIn('currency', $this->supportedCurrencies())
+            ->get()
+            ->sortBy(fn (CustomerWallet $wallet): int => $order[$wallet->currency] ?? 99)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function supportedCurrencies(): array
+    {
+        $configured = config('customer_wallets.supported_currencies', ['LYD', 'USD', 'EUR']);
+
+        if (! is_array($configured) || $configured === []) {
+            return ['LYD', 'USD', 'EUR'];
+        }
+
+        return array_values(array_unique(array_map(
+            fn ($currency): string => strtoupper(trim((string) $currency)),
+            $configured,
+        )));
+    }
+
+    public function normalizeCurrency(string $currency): string
+    {
+        $normalized = strtoupper(trim($currency));
+
+        if (! in_array($normalized, $this->supportedCurrencies(), true)) {
+            throw ValidationException::withMessages([
+                'currency' => 'Unsupported wallet currency. Supported: '.implode(', ', $this->supportedCurrencies()).'.',
+            ]);
+        }
+
+        return $normalized;
     }
 
     /**
@@ -92,7 +158,9 @@ class CustomerWalletService
                     'source' => 'admin_credit',
                     'operation' => 'admin_topup',
                     'reason' => $reason,
-                    'reason_label' => CustomerWalletTransaction::adminCreditReasonLabel($reason),
+                    'reason_label' => $reason
+                        ? CustomerWalletTransaction::adminCreditReasonLabel($reason)
+                        : null,
                     'note' => $note !== '' ? $note : null,
                     'actor_name' => $actor?->full_name ?: $actor?->name,
                 ]),
@@ -168,7 +236,7 @@ class CustomerWalletService
         );
     }
 
-    public function testTopUp(User $user, string|float|int $amount): CustomerWalletTransaction
+    public function testTopUp(User $user, string|float|int $amount, ?string $currency = null): CustomerWalletTransaction
     {
         if (! config('customer_wallets.test_mode')) {
             throw ValidationException::withMessages([
@@ -179,6 +247,9 @@ class CustomerWalletService
         $amount = $this->normalizePositiveAmount($amount, 'amount');
         $max = (float) config('customer_wallets.test_top_up_max', 1000);
         $min = (float) config('customer_wallets.test_top_up_min', 1);
+        $currency = $this->normalizeCurrency(
+            $currency ?? (string) config('customer_wallets.default_currency', 'LYD')
+        );
 
         if ($amount < $min) {
             throw ValidationException::withMessages([
@@ -188,11 +259,11 @@ class CustomerWalletService
 
         if ($amount > $max) {
             throw ValidationException::withMessages([
-                'amount' => 'Test top-up cannot exceed '.$max.' '.config('customer_wallets.default_currency', 'LYD').'.',
+                'amount' => 'Test top-up cannot exceed '.$max.' '.$currency.'.',
             ]);
         }
 
-        $wallet = $this->resolveWallet($user);
+        $wallet = $this->resolveWallet($user, $currency);
 
         return $this->credit(
             $wallet,
@@ -655,12 +726,12 @@ class CustomerWalletService
         return $number;
     }
 
-    private function normalizeAdminCreditReason(mixed $reason): string
+    private function normalizeAdminCreditReason(mixed $reason): ?string
     {
         $reason = is_string($reason) ? trim($reason) : '';
 
         if ($reason === '') {
-            return CustomerWalletTransaction::REASON_OTHER;
+            return null;
         }
 
         if (! in_array($reason, CustomerWalletTransaction::adminCreditReasons(), true)) {
@@ -672,11 +743,13 @@ class CustomerWalletService
         return $reason;
     }
 
-    private function buildAdminCreditDescription(string $reason, string $note): string
+    private function buildAdminCreditDescription(?string $reason, string $note): string
     {
-        $parts = [
-            'Admin top-up — '.CustomerWalletTransaction::adminCreditReasonLabel($reason),
-        ];
+        $parts = ['Admin top-up'];
+
+        if ($reason) {
+            $parts[0] .= ' — '.CustomerWalletTransaction::adminCreditReasonLabel($reason);
+        }
 
         if ($note !== '') {
             $parts[] = $note;

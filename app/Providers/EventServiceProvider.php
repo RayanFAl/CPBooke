@@ -9,6 +9,7 @@ use App\Modules\Admin\Support\Events\SupportTicketCreated;
 use App\Modules\Admin\Support\Events\SupportTicketReplied;
 use App\Modules\Admin\Support\Events\SupportTicketStatusChanged;
 use App\Modules\Admin\Support\Listeners\SupportEventLoggerListener;
+use App\Modules\CustomerWallets\Listeners\InitializeCustomerWalletsOnRegistrationListener;
 use App\Modules\Loyalty\Events\LoyaltyTierChanged;
 use App\Modules\Loyalty\Listeners\InitializeUserLoyaltyOnRegistrationListener;
 use App\Modules\Loyalty\Listeners\RecalculateUserLoyaltyListener;
@@ -49,6 +50,7 @@ class EventServiceProvider extends ServiceProvider
     protected $listen = [
         Registered::class => [
             InitializeUserLoyaltyOnRegistrationListener::class,
+            InitializeCustomerWalletsOnRegistrationListener::class,
         ],
         SupportTicketCreated::class => [
             SupportEventLoggerListener::class,

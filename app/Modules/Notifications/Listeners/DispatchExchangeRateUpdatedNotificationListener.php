@@ -14,11 +14,13 @@ class DispatchExchangeRateUpdatedNotificationListener
     public function handle(ExchangeRateUpdated $event): void
     {
         $currencyCode = $event->currencyCode;
-        $oldRate = $event->oldRate;
-        $newRate = $event->newRate;
+        $oldBuy = $event->oldBuy;
+        $newBuy = $event->newBuy;
+        $oldSell = $event->oldSell;
+        $newSell = $event->newSell;
         $actorId = $event->actor?->id;
 
-        dispatch(function () use ($currencyCode, $oldRate, $newRate, $actorId): void {
+        dispatch(function () use ($currencyCode, $oldBuy, $newBuy, $oldSell, $newSell, $actorId): void {
             $actor = $actorId
                 ? \App\Models\User::query()->find($actorId)
                 : null;
@@ -26,8 +28,10 @@ class DispatchExchangeRateUpdatedNotificationListener
             app(NotificationService::class)->dispatchForEvent(
                 new ExchangeRateUpdated(
                     currencyCode: $currencyCode,
-                    oldRate: $oldRate,
-                    newRate: $newRate,
+                    oldBuy: $oldBuy,
+                    newBuy: $newBuy,
+                    oldSell: $oldSell,
+                    newSell: $newSell,
                     actor: $actor,
                 ),
             );

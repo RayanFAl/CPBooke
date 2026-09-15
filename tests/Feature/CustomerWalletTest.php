@@ -40,19 +40,86 @@ class CustomerWalletTest extends TestCase
 
         $this->getJson('/api/v1/wallet')
             ->assertOk()
-            ->assertJsonPath('data.currency', 'LYD')
-            ->assertJsonPath('data.balance', '0.00')
+            ->assertJsonPath('data.default_currency', 'LYD')
+            ->assertJsonPath('data.supported_currencies', ['LYD', 'USD', 'EUR'])
+            ->assertJsonPath('data.wallets.0.currency', 'LYD')
+            ->assertJsonPath('data.wallets.0.balance', '0.00')
+            ->assertJsonPath('data.wallets.1.currency', 'USD')
+            ->assertJsonPath('data.wallets.2.currency', 'EUR')
             ->assertJsonPath('data.test_mode_enabled', true);
+
+        $this->assertDatabaseCount('customer_wallets', 3);
 
         $this->postJson('/api/v1/wallet/test/top-up', ['amount' => 75])
             ->assertOk()
-            ->assertJsonPath('data.wallet.balance', '75.00');
+            ->assertJsonPath('data.wallet.balance', '75.00')
+            ->assertJsonPath('data.wallet.currency', 'LYD');
+
+        $this->postJson('/api/v1/wallet/test/top-up', [
+            'amount' => 20,
+            'currency' => 'USD',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.wallet.currency', 'USD')
+            ->assertJsonPath('data.wallet.balance', '20.00');
+
+        $this->getJson('/api/v1/wallet/USD')
+            ->assertOk()
+            ->assertJsonPath('data.currency', 'USD')
+            ->assertJsonPath('data.balance', '20.00');
 
         $this->getJson('/api/v1/wallet/transactions')
             ->assertOk()
             ->assertJsonPath('data.wallet.balance', '75.00')
-            ->assertJsonPath('data.transactions.data.0.type', CustomerWalletTransaction::TYPE_CREDIT)
-            ->assertJsonPath('data.transactions.data.0.amount', '75.00');
+            ->assertJsonPath('data.transactions.0.type', CustomerWalletTransaction::TYPE_CREDIT)
+            ->assertJsonPath('data.transactions.0.amount', '75.00')
+            ->assertJsonPath('data.customer_wallet_transactions.0.amount', '75.00')
+            ->assertJsonPath('data.current_page', 1)
+            ->assertJsonPath('meta.total', 1);
+
+        $this->getJson('/api/v1/wallet/transactions?currency=USD')
+            ->assertOk()
+            ->assertJsonPath('data.wallet.currency', 'USD')
+            ->assertJsonPath('data.transactions.0.amount', '20.00')
+            ->assertJsonPath('data.customer_wallet_transactions.0.currency', 'USD');
+    }
+
+    public function test_admin_credit_appears_in_customer_wallet_transactions_api(): void
+    {
+        $admin = $this->makeAdmin('super_admin');
+        $customer = $this->makeCustomer();
+
+        $wallet = app(CustomerWalletService::class)->resolveWallet($customer, 'LYD');
+
+        $this->actingAs($admin)
+            ->post("/admin/customer-wallets/{$wallet->id}/credit", [
+                'amount' => 50,
+                'reason' => CustomerWalletTransaction::REASON_CASH_RECEIVED,
+                'note' => 'Dashboard deposit',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('customer_wallet_transactions', [
+            'customer_wallet_id' => $wallet->id,
+            'type' => CustomerWalletTransaction::TYPE_ADMIN_CREDIT,
+            'amount' => '50.00',
+            'currency' => 'LYD',
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->getJson('/api/v1/wallet/transactions?currency=LYD&page=1&per_page=20')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.wallet.currency', 'LYD')
+            ->assertJsonPath('data.wallet.balance', '50.00')
+            ->assertJsonPath('data.customer_wallet_transactions.0.type', CustomerWalletTransaction::TYPE_ADMIN_CREDIT)
+            ->assertJsonPath('data.customer_wallet_transactions.0.amount', '50.00')
+            ->assertJsonPath('data.customer_wallet_transactions.0.currency', 'LYD')
+            ->assertJsonPath('data.transactions.0.type', CustomerWalletTransaction::TYPE_ADMIN_CREDIT)
+            ->assertJsonPath('data.current_page', 1)
+            ->assertJsonPath('data.last_page', 1)
+            ->assertJsonPath('data.total', 1);
     }
 
     public function test_admin_can_credit_customer_wallet_and_record_balance_before_after(): void
@@ -194,7 +261,7 @@ class CustomerWalletTest extends TestCase
             ->assertSee('WLT-000001-PRINT');
     }
 
-    public function test_admin_credit_requires_a_reason(): void
+    public function test_admin_credit_works_without_a_reason(): void
     {
         $admin = $this->makeAdmin('super_admin');
         $customer = $this->makeCustomer();
@@ -211,12 +278,19 @@ class CustomerWalletTest extends TestCase
             ->post("/admin/customer-wallets/{$wallet->id}/credit", [
                 'amount' => 100,
             ])
-            ->assertRedirect(route('admin.customer-wallets.show', $wallet))
-            ->assertSessionHasErrors('reason');
+            ->assertRedirect(route('admin.customer-wallets.show', [
+                'customerWallet' => $wallet,
+                'receipt' => CustomerWalletTransaction::query()
+                    ->where('customer_wallet_id', $wallet->id)
+                    ->value('id'),
+            ]));
 
-        $this->assertSame('0.00', (string) $wallet->fresh()->balance);
-        $this->assertDatabaseMissing('customer_wallet_transactions', [
+        $this->assertSame('100.00', (string) $wallet->fresh()->balance);
+        $this->assertDatabaseHas('customer_wallet_transactions', [
             'customer_wallet_id' => $wallet->id,
+            'type' => CustomerWalletTransaction::TYPE_ADMIN_CREDIT,
+            'amount' => '100.00',
+            'currency' => 'LYD',
         ]);
     }
 
@@ -229,19 +303,22 @@ class CustomerWalletTest extends TestCase
             ->post(route('admin.users.customer-wallet.add-money', $customer))
             ->assertRedirect();
 
-        $wallet = CustomerWallet::query()->where('user_id', $customer->id)->first();
+        $wallet = CustomerWallet::query()
+            ->where('user_id', $customer->id)
+            ->where('currency', 'LYD')
+            ->first();
 
         $this->assertNotNull($wallet);
         $this->assertSame('LYD', $wallet->currency);
         $this->assertSame('0.00', (string) $wallet->balance);
+        $this->assertSame(3, CustomerWallet::query()->where('user_id', $customer->id)->count());
 
         $this->actingAs($admin)
             ->get(route('admin.customer-wallets.show', ['customerWallet' => $wallet, 'action' => 'add-money']))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('admin/customer-wallets/pages/Show')
+                ->component('admin/customer-wallets/pages/Show', false)
                 ->where('open_add_money', true)
-                ->has('credit_reasons')
                 ->where('can_manage', true));
     }
 

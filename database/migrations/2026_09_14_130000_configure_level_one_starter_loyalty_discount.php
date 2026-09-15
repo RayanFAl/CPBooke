@@ -80,7 +80,7 @@ return new class extends Migration
                 'benefit_type' => LoyaltyBenefit::TYPE_DISCOUNT,
                 'value_type' => LoyaltyBenefit::VALUE_TYPE_PERCENTAGE,
                 'value' => 3,
-                'configuration' => json_encode(['applies_to' => ['flight', 'hotel', 'insurance']]),
+                'configuration' => json_encode(['applies_to' => ['flight', 'hotel', 'insurance', 'esim']]),
                 'display_order' => 1,
                 'is_highlighted' => true,
                 'is_active' => true,

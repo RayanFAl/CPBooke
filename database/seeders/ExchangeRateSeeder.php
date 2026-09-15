@@ -8,24 +8,35 @@ use Illuminate\Database\Seeder;
 class ExchangeRateSeeder extends Seeder
 {
     /**
-     * Seed the three supported currencies. LYD is fixed at 1;
-     * USD/EUR defaults match the product examples and are admin-editable.
+     * Seed LYD/USD/EUR with buy + sell rates (parallel-market style defaults).
      */
     public function run(): void
     {
-        // Approximate Libya parallel-market mid rates (cash), early/mid Sep 2026.
-        // Admins can change these anytime from Exchange Rates settings.
         $defaults = [
-            ExchangeRate::CURRENCY_LYD => '1.00000000',
-            ExchangeRate::CURRENCY_USD => '9.38500000',
-            ExchangeRate::CURRENCY_EUR => '10.89000000',
+            ExchangeRate::CURRENCY_LYD => [
+                'buy' => '1.00000000',
+                'sell' => '1.00000000',
+            ],
+            // Approx. parallel market with a small spread around recent mid levels.
+            ExchangeRate::CURRENCY_USD => [
+                'buy' => '9.35000000',
+                'sell' => '9.42000000',
+            ],
+            ExchangeRate::CURRENCY_EUR => [
+                'buy' => '10.85000000',
+                'sell' => '10.93000000',
+            ],
         ];
 
-        foreach ($defaults as $code => $rate) {
+        foreach ($defaults as $code => $pair) {
+            $mid = number_format(((float) $pair['buy'] + (float) $pair['sell']) / 2, 8, '.', '');
+
             ExchangeRate::query()->updateOrCreate(
                 ['currency_code' => $code],
                 [
-                    'rate_to_lyd' => $rate,
+                    'buy_rate_to_lyd' => $pair['buy'],
+                    'sell_rate_to_lyd' => $pair['sell'],
+                    'rate_to_lyd' => $mid,
                     'is_active' => true,
                 ],
             );

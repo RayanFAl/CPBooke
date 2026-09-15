@@ -17,33 +17,49 @@ class UpdateExchangeRatesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'usd_rate_to_lyd' => ['nullable', 'numeric', 'gt:0', 'max:999999999.99999999'],
-            'eur_rate_to_lyd' => ['nullable', 'numeric', 'gt:0', 'max:999999999.99999999'],
-        ];
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    public function messages(): array
-    {
-        return [
-            'usd_rate_to_lyd.gt' => 'The USD rate must be greater than zero.',
-            'eur_rate_to_lyd.gt' => 'The EUR rate must be greater than zero.',
+            'usd_buy_rate_to_lyd' => ['nullable', 'numeric', 'gt:0', 'max:999999999.99999999'],
+            'usd_sell_rate_to_lyd' => ['nullable', 'numeric', 'gt:0', 'max:999999999.99999999'],
+            'eur_buy_rate_to_lyd' => ['nullable', 'numeric', 'gt:0', 'max:999999999.99999999'],
+            'eur_sell_rate_to_lyd' => ['nullable', 'numeric', 'gt:0', 'max:999999999.99999999'],
         ];
     }
 
     public function withValidator($validator): void
     {
         $validator->after(function ($validator): void {
-            $usd = $this->input('usd_rate_to_lyd');
-            $eur = $this->input('eur_rate_to_lyd');
+            $fields = [
+                'usd_buy_rate_to_lyd',
+                'usd_sell_rate_to_lyd',
+                'eur_buy_rate_to_lyd',
+                'eur_sell_rate_to_lyd',
+            ];
 
-            if (($usd === null || $usd === '') && ($eur === null || $eur === '')) {
+            $hasAny = false;
+            foreach ($fields as $field) {
+                $value = $this->input($field);
+                if ($value !== null && $value !== '') {
+                    $hasAny = true;
+                    break;
+                }
+            }
+
+            if (! $hasAny) {
                 $validator->errors()->add(
-                    'usd_rate_to_lyd',
-                    'Provide at least one exchange rate to update (USD or EUR).'
+                    'usd_buy_rate_to_lyd',
+                    'Provide at least one buy/sell rate to update (USD or EUR).'
                 );
+            }
+
+            foreach (['usd', 'eur'] as $prefix) {
+                $buy = $this->input("{$prefix}_buy_rate_to_lyd");
+                $sell = $this->input("{$prefix}_sell_rate_to_lyd");
+
+                if ($buy !== null && $buy !== '' && $sell !== null && $sell !== '' && (float) $sell < (float) $buy) {
+                    $validator->errors()->add(
+                        "{$prefix}_sell_rate_to_lyd",
+                        strtoupper($prefix).' sell rate must be greater than or equal to buy rate.'
+                    );
+                }
             }
         });
     }

@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 
 #[Fillable([
     'currency_code',
+    'buy_rate_to_lyd',
+    'sell_rate_to_lyd',
     'rate_to_lyd',
     'is_active',
 ])]
@@ -21,9 +23,15 @@ class ExchangeRate extends Model
 
     public const BASE_CURRENCY = self::CURRENCY_LYD;
 
+    public const SIDE_BUY = 'buy';
+
+    public const SIDE_SELL = 'sell';
+
+    public const SIDE_MID = 'mid';
+
+    public const SIDE_AUTO = 'auto';
+
     /**
-     * Supported currencies for this phase (strict allow-list).
-     *
      * @var list<string>
      */
     public const SUPPORTED_CURRENCIES = [
@@ -33,8 +41,6 @@ class ExchangeRate extends Model
     ];
 
     /**
-     * Currencies that admins may edit (LYD is fixed at 1).
-     *
      * @var list<string>
      */
     public const EDITABLE_CURRENCIES = [
@@ -43,11 +49,23 @@ class ExchangeRate extends Model
     ];
 
     /**
+     * @var list<string>
+     */
+    public const CONVERSION_SIDES = [
+        self::SIDE_BUY,
+        self::SIDE_SELL,
+        self::SIDE_MID,
+        self::SIDE_AUTO,
+    ];
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
     {
         return [
+            'buy_rate_to_lyd' => 'decimal:8',
+            'sell_rate_to_lyd' => 'decimal:8',
             'rate_to_lyd' => 'decimal:8',
             'is_active' => 'boolean',
         ];
@@ -73,6 +91,19 @@ class ExchangeRate extends Model
         return $this->currency_code === self::BASE_CURRENCY;
     }
 
+    public function midRateToLyd(): string
+    {
+        $buy = (float) $this->buy_rate_to_lyd;
+        $sell = (float) $this->sell_rate_to_lyd;
+
+        return number_format(($buy + $sell) / 2, 8, '.', '');
+    }
+
+    public function syncMidRate(): void
+    {
+        $this->rate_to_lyd = $this->midRateToLyd();
+    }
+
     public static function normalizeCode(string $code): string
     {
         return strtoupper(trim($code));
@@ -86,5 +117,14 @@ class ExchangeRate extends Model
     public static function isEditableCode(string $code): bool
     {
         return in_array(self::normalizeCode($code), self::EDITABLE_CURRENCIES, true);
+    }
+
+    public static function normalizeSide(?string $side): string
+    {
+        $normalized = strtolower(trim((string) ($side ?: self::SIDE_MID)));
+
+        return in_array($normalized, self::CONVERSION_SIDES, true)
+            ? $normalized
+            : self::SIDE_MID;
     }
 }

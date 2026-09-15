@@ -30,7 +30,6 @@ class ExchangeRatesAdminService
             ->supported()
             ->get();
 
-        // Ensure all three exist even before seeder runs (dev safety).
         if ($rates->count() < count(ExchangeRate::SUPPORTED_CURRENCIES)) {
             $existing = $rates->pluck('currency_code')->all();
 
@@ -39,9 +38,13 @@ class ExchangeRatesAdminService
                     continue;
                 }
 
+                $one = $code === ExchangeRate::BASE_CURRENCY ? '1.00000000' : '0.00000000';
+
                 ExchangeRate::query()->create([
                     'currency_code' => $code,
-                    'rate_to_lyd' => $code === ExchangeRate::BASE_CURRENCY ? '1.00000000' : '0.00000000',
+                    'buy_rate_to_lyd' => $one,
+                    'sell_rate_to_lyd' => $one,
+                    'rate_to_lyd' => $one,
                     'is_active' => true,
                 ]);
             }
@@ -59,59 +62,73 @@ class ExchangeRatesAdminService
     }
 
     /**
-     * @param  array{usd_rate_to_lyd?: mixed, eur_rate_to_lyd?: mixed}  $payload
+     * @param  array<string, mixed>  $payload
      * @return Collection<int, ExchangeRate>
      */
     public function updateRates(User $actor, array $payload): Collection
     {
         $updates = [];
 
-        if (array_key_exists('usd_rate_to_lyd', $payload) && $payload['usd_rate_to_lyd'] !== null && $payload['usd_rate_to_lyd'] !== '') {
-            $updates[ExchangeRate::CURRENCY_USD] = $this->normalizeRate($payload['usd_rate_to_lyd'], ExchangeRate::CURRENCY_USD);
-        }
+        foreach ([ExchangeRate::CURRENCY_USD, ExchangeRate::CURRENCY_EUR] as $code) {
+            $prefix = strtolower($code);
+            $buyKey = "{$prefix}_buy_rate_to_lyd";
+            $sellKey = "{$prefix}_sell_rate_to_lyd";
 
-        if (array_key_exists('eur_rate_to_lyd', $payload) && $payload['eur_rate_to_lyd'] !== null && $payload['eur_rate_to_lyd'] !== '') {
-            $updates[ExchangeRate::CURRENCY_EUR] = $this->normalizeRate($payload['eur_rate_to_lyd'], ExchangeRate::CURRENCY_EUR);
+            $hasBuy = array_key_exists($buyKey, $payload) && $payload[$buyKey] !== null && $payload[$buyKey] !== '';
+            $hasSell = array_key_exists($sellKey, $payload) && $payload[$sellKey] !== null && $payload[$sellKey] !== '';
+
+            if (! $hasBuy && ! $hasSell) {
+                continue;
+            }
+
+            $existing = ExchangeRate::query()->where('currency_code', $code)->first();
+            $buy = $hasBuy
+                ? $this->normalizeRate($payload[$buyKey], $buyKey, $code)
+                : $this->formatRate((string) ($existing?->buy_rate_to_lyd ?? $existing?->rate_to_lyd ?? '0'));
+            $sell = $hasSell
+                ? $this->normalizeRate($payload[$sellKey], $sellKey, $code)
+                : $this->formatRate((string) ($existing?->sell_rate_to_lyd ?? $existing?->rate_to_lyd ?? '0'));
+
+            if ((float) $sell < (float) $buy) {
+                throw ValidationException::withMessages([
+                    $sellKey => "The {$code} sell rate must be greater than or equal to the buy rate.",
+                ]);
+            }
+
+            $updates[$code] = [
+                'buy' => $buy,
+                'sell' => $sell,
+            ];
         }
 
         if ($updates === []) {
             throw ValidationException::withMessages([
-                'usd_rate_to_lyd' => 'Provide at least one exchange rate to update (USD or EUR).',
+                'usd_buy_rate_to_lyd' => 'Provide at least one buy/sell rate to update (USD or EUR).',
             ]);
         }
 
-        $changed = [];
-
-        foreach ($updates as $code => $newRate) {
+        foreach ($updates as $code => $pair) {
             $rate = ExchangeRate::query()->where('currency_code', $code)->first();
+            $oldBuy = $rate ? $this->formatRate((string) ($rate->buy_rate_to_lyd ?? $rate->rate_to_lyd)) : $pair['buy'];
+            $oldSell = $rate ? $this->formatRate((string) ($rate->sell_rate_to_lyd ?? $rate->rate_to_lyd)) : $pair['sell'];
 
             if ($rate === null) {
-                $rate = ExchangeRate::query()->create([
+                $rate = new ExchangeRate([
                     'currency_code' => $code,
-                    'rate_to_lyd' => $newRate,
                     'is_active' => true,
                 ]);
-                $oldRate = null;
-            } else {
-                $oldRate = $this->formatRate((string) $rate->rate_to_lyd);
-
-                if ($oldRate === $newRate) {
-                    continue;
-                }
-
-                $rate->rate_to_lyd = $newRate;
-                $rate->save();
+            } elseif ($oldBuy === $pair['buy'] && $oldSell === $pair['sell']) {
+                continue;
             }
 
-            $formattedOld = $oldRate ?? $newRate;
-            $formattedNew = $this->formatRate((string) $rate->rate_to_lyd);
+            $rate->buy_rate_to_lyd = $pair['buy'];
+            $rate->sell_rate_to_lyd = $pair['sell'];
+            $rate->syncMidRate();
+            $rate->is_active = true;
+            $rate->save();
 
-            $changed[] = [
-                'currency_code' => $code,
-                'old_rate' => $formattedOld,
-                'new_rate' => $formattedNew,
-                'id' => $rate->id,
-            ];
+            $newBuy = $this->formatRate((string) $rate->buy_rate_to_lyd);
+            $newSell = $this->formatRate((string) $rate->sell_rate_to_lyd);
 
             $this->rbacAuditLogger->log(
                 'exchange_rates.updated',
@@ -121,52 +138,51 @@ class ExchangeRatesAdminService
                 $rate->id,
                 [
                     'currency_code' => $code,
-                    'before' => ['rate_to_lyd' => $formattedOld],
-                    'after' => ['rate_to_lyd' => $formattedNew],
+                    'before' => ['buy_rate_to_lyd' => $oldBuy, 'sell_rate_to_lyd' => $oldSell],
+                    'after' => ['buy_rate_to_lyd' => $newBuy, 'sell_rate_to_lyd' => $newSell],
                 ],
             );
 
             $this->auditRecorder->success(
                 AuditLog::MODULE_EXCHANGE_RATES,
                 'exchange_rate.updated',
-                "{$code} rate changed: {$formattedOld} LYD → {$formattedNew} LYD",
+                "{$code} buy {$oldBuy}→{$newBuy}, sell {$oldSell}→{$newSell} LYD",
                 AuditLog::ENTITY_EXCHANGE_RATE,
                 $rate->id,
                 $actor,
-                ['currency_code' => $code, 'rate_to_lyd' => $formattedOld],
-                ['currency_code' => $code, 'rate_to_lyd' => $formattedNew],
-                [
-                    'source' => 'admin.exchange_rates',
-                ],
+                ['currency_code' => $code, 'buy_rate_to_lyd' => $oldBuy, 'sell_rate_to_lyd' => $oldSell],
+                ['currency_code' => $code, 'buy_rate_to_lyd' => $newBuy, 'sell_rate_to_lyd' => $newSell],
+                ['source' => 'admin.exchange_rates'],
             );
 
             event(new ExchangeRateUpdated(
                 currencyCode: $code,
-                oldRate: $formattedOld,
-                newRate: $formattedNew,
+                oldBuy: $oldBuy,
+                newBuy: $newBuy,
+                oldSell: $oldSell,
+                newSell: $newSell,
                 actor: $actor,
             ));
         }
 
-        // Always keep LYD pinned at 1.
         ExchangeRate::query()
             ->where('currency_code', ExchangeRate::BASE_CURRENCY)
-            ->update(['rate_to_lyd' => '1.00000000']);
+            ->update([
+                'buy_rate_to_lyd' => '1.00000000',
+                'sell_rate_to_lyd' => '1.00000000',
+                'rate_to_lyd' => '1.00000000',
+            ]);
 
         $this->exchangeRateService->forgetCache();
-
-        if ($changed === []) {
-            return $this->listRates();
-        }
 
         return $this->listRates();
     }
 
-    private function normalizeRate(mixed $value, string $code): string
+    private function normalizeRate(mixed $value, string $field, string $code): string
     {
         if (! is_numeric($value)) {
             throw ValidationException::withMessages([
-                strtolower($code).'_rate_to_lyd' => "The {$code} rate must be a number.",
+                $field => "The {$code} rate must be a number.",
             ]);
         }
 
@@ -174,13 +190,13 @@ class ExchangeRatesAdminService
 
         if ($rate <= 0) {
             throw ValidationException::withMessages([
-                strtolower($code).'_rate_to_lyd' => "The {$code} rate must be greater than zero.",
+                $field => "The {$code} rate must be greater than zero.",
             ]);
         }
 
         if ($rate > 999999999.99999999) {
             throw ValidationException::withMessages([
-                strtolower($code).'_rate_to_lyd' => "The {$code} rate is too large.",
+                $field => "The {$code} rate is too large.",
             ]);
         }
 

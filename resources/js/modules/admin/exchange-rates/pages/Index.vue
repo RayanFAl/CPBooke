@@ -2,7 +2,7 @@
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 import { useForm, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     rates: { type: Array, default: () => [] },
@@ -13,6 +13,12 @@ const props = defineProps({
 
 const { t } = useAdminLocale();
 const page = usePage();
+const activeTab = ref('buy');
+
+const tabs = [
+    { id: 'buy', label: 'Buy' },
+    { id: 'sell', label: 'Sell' },
+];
 
 const flashSuccess = computed(() => page.props.flash?.success ?? '');
 const canManage = computed(() => {
@@ -22,21 +28,25 @@ const canManage = computed(() => {
 });
 
 const rateForm = useForm({
-    usd_rate_to_lyd: props.form.usd_rate_to_lyd ?? '',
-    eur_rate_to_lyd: props.form.eur_rate_to_lyd ?? '',
+    usd_buy_rate_to_lyd: props.form.usd_buy_rate_to_lyd ?? '',
+    usd_sell_rate_to_lyd: props.form.usd_sell_rate_to_lyd ?? '',
+    eur_buy_rate_to_lyd: props.form.eur_buy_rate_to_lyd ?? '',
+    eur_sell_rate_to_lyd: props.form.eur_sell_rate_to_lyd ?? '',
 });
 
-const usdRate = computed(() => {
-    const value = Number(rateForm.usd_rate_to_lyd);
+const parseRate = (value) => {
+    const number = Number(value);
 
-    return Number.isFinite(value) && value > 0 ? value : null;
-});
+    return Number.isFinite(number) && number > 0 ? number : null;
+};
 
-const eurRate = computed(() => {
-    const value = Number(rateForm.eur_rate_to_lyd);
+const usdBuy = computed(() => parseRate(rateForm.usd_buy_rate_to_lyd));
+const usdSell = computed(() => parseRate(rateForm.usd_sell_rate_to_lyd));
+const eurBuy = computed(() => parseRate(rateForm.eur_buy_rate_to_lyd));
+const eurSell = computed(() => parseRate(rateForm.eur_sell_rate_to_lyd));
 
-    return Number.isFinite(value) && value > 0 ? value : null;
-});
+const usdMid = computed(() => (usdBuy.value && usdSell.value ? (usdBuy.value + usdSell.value) / 2 : null));
+const eurMid = computed(() => (eurBuy.value && eurSell.value ? (eurBuy.value + eurSell.value) / 2 : null));
 
 const formatAmount = (value) => {
     if (value === null || !Number.isFinite(value)) {
@@ -49,22 +59,23 @@ const formatAmount = (value) => {
     });
 };
 
-const exampleUsdToLyd = computed(() => (usdRate.value === null ? null : 100 * usdRate.value));
-const exampleEurToLyd = computed(() => (eurRate.value === null ? null : 100 * eurRate.value));
-const exampleEurToUsd = computed(() => {
-    if (usdRate.value === null || eurRate.value === null) {
-        return null;
-    }
+const exampleUsdToLyd = computed(() => {
+    const rate = activeTab.value === 'buy' ? usdBuy.value : usdSell.value;
 
-    return (100 * eurRate.value) / usdRate.value;
+    return rate === null ? null : 100 * rate;
 });
-const exampleUsdToEur = computed(() => {
-    if (usdRate.value === null || eurRate.value === null) {
-        return null;
-    }
 
-    return (100 * usdRate.value) / eurRate.value;
+const exampleEurToLyd = computed(() => {
+    const rate = activeTab.value === 'buy' ? eurBuy.value : eurSell.value;
+
+    return rate === null ? null : 100 * rate;
 });
+
+const tabHint = computed(() => (
+    activeTab.value === 'buy'
+        ? t('The rate when buying the foreign currency from the customer.')
+        : t('The rate when selling the foreign currency to the customer.')
+));
 
 const submit = () => {
     if (!canManage.value) {
@@ -72,8 +83,10 @@ const submit = () => {
     }
 
     rateForm.transform((data) => ({
-        usd_rate_to_lyd: data.usd_rate_to_lyd === '' ? null : Number(data.usd_rate_to_lyd),
-        eur_rate_to_lyd: data.eur_rate_to_lyd === '' ? null : Number(data.eur_rate_to_lyd),
+        usd_buy_rate_to_lyd: data.usd_buy_rate_to_lyd === '' ? null : Number(data.usd_buy_rate_to_lyd),
+        usd_sell_rate_to_lyd: data.usd_sell_rate_to_lyd === '' ? null : Number(data.usd_sell_rate_to_lyd),
+        eur_buy_rate_to_lyd: data.eur_buy_rate_to_lyd === '' ? null : Number(data.eur_buy_rate_to_lyd),
+        eur_sell_rate_to_lyd: data.eur_sell_rate_to_lyd === '' ? null : Number(data.eur_sell_rate_to_lyd),
     })).put(props.update_url, {
         preserveScroll: true,
     });
@@ -83,109 +96,169 @@ const submit = () => {
 <template>
     <AdminLayout
         :title="t('Exchange Rates')"
-        :description="t('Enter how many Libyan Dinars equal 1 US Dollar and 1 Euro.')"
+        :description="t('Set buy and sell rates for USD and EUR against LYD.')"
     >
         <section class="space-y-6">
-            <!-- What is this page? -->
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Settings') }}</p>
                 <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Exchange Rates') }}</h2>
                 <p class="mt-3 max-w-3xl text-base leading-7 text-slate-700">
-                    {{ t('This page has one job only: tell the system the price of USD and EUR in Libyan Dinars (LYD).') }}
+                    {{ t('Enter buy and sell prices in Libyan Dinars for 1 USD and 1 EUR. LYD stays fixed at 1.') }}
                 </p>
-
-                <div class="mt-5 grid gap-3 md:grid-cols-3">
-                    <div class="rounded-2xl bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
-                        <p class="font-semibold">{{ t('1) Base currency') }}</p>
-                        <p class="mt-1">{{ t('LYD (Libyan Dinar) is always 1. You never change it.') }}</p>
-                    </div>
-                    <div class="rounded-2xl bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-900">
-                        <p class="font-semibold">{{ t('2) What you edit') }}</p>
-                        <p class="mt-1">{{ t('Only two numbers: how many LYD for 1 USD, and how many LYD for 1 EUR.') }}</p>
-                    </div>
-                    <div class="rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
-                        <p class="font-semibold">{{ t('3) Auto conversion') }}</p>
-                        <p class="mt-1">{{ t('EUR ↔ USD is calculated automatically through LYD. You do not enter a separate EUR/USD rate.') }}</p>
-                    </div>
-                </div>
-
                 <p v-if="flashSuccess" class="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                     {{ flashSuccess }}
                 </p>
             </div>
 
-            <!-- Edit form first (most important action) -->
+            <div class="flex flex-wrap gap-2">
+                <button
+                    v-for="tab in tabs"
+                    :key="tab.id"
+                    type="button"
+                    class="rounded-2xl px-4 py-2 text-sm font-medium transition"
+                    :class="activeTab === tab.id ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                    @click="activeTab = tab.id"
+                >
+                    {{ t(tab.label) }}
+                </button>
+            </div>
+
             <form
                 v-if="canManage"
                 class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
                 @submit.prevent="submit"
             >
-                <h3 class="text-lg font-semibold text-slate-950">{{ t('Set the rates here') }}</h3>
-                <p class="mt-1 text-sm text-slate-600">
-                    {{ t('Type the LYD value for each currency, then press Save.') }}
-                </p>
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-950">
+                            {{ activeTab === 'buy' ? t('Buy rates') : t('Sell rates') }}
+                        </h3>
+                        <p class="mt-1 text-sm text-slate-600">{{ tabHint }}</p>
+                    </div>
+                    <p class="rounded-2xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                        {{ t('Sell must be greater than or equal to buy.') }}
+                    </p>
+                </div>
 
-                <div class="mt-6 grid gap-5 lg:grid-cols-2">
-                    <div class="rounded-3xl border border-sky-100 bg-sky-50/60 p-5">
-                        <p class="text-sm font-semibold text-sky-900">{{ t('US Dollar (USD)') }}</p>
-                        <p class="mt-1 text-sm text-sky-800">{{ t('How many Libyan Dinars is 1 US Dollar worth?') }}</p>
-
+                <!-- BUY TAB -->
+                <div v-show="activeTab === 'buy'" class="mt-6 grid gap-5 lg:grid-cols-2">
+                    <div class="rounded-3xl border border-emerald-100 bg-emerald-50/50 p-5">
+                        <p class="text-sm font-semibold text-emerald-900">{{ t('US Dollar (USD)') }}</p>
                         <label class="mt-4 block text-sm">
                             <span class="mb-2 flex flex-wrap items-center gap-2 font-medium text-slate-800">
                                 <span class="rounded-full bg-white px-3 py-1 text-slate-900 shadow-sm">1 USD</span>
                                 <span>=</span>
-                                <span class="text-slate-600">{{ t('LYD amount') }}</span>
+                                <span class="text-slate-600">{{ t('Buy') }} LYD</span>
                             </span>
                             <div class="flex items-center gap-2">
                                 <input
-                                    v-model="rateForm.usd_rate_to_lyd"
+                                    v-model="rateForm.usd_buy_rate_to_lyd"
                                     type="number"
                                     min="0"
                                     step="0.00000001"
                                     class="w-full rounded-2xl border-slate-200 text-lg"
                                     :disabled="rateForm.processing"
-                                    placeholder="9.385"
+                                    placeholder="9.350"
                                 />
                                 <span class="shrink-0 text-sm font-semibold text-slate-700">LYD</span>
                             </div>
-                            <p v-if="rateForm.errors.usd_rate_to_lyd" class="mt-2 text-xs text-rose-600">
-                                {{ rateForm.errors.usd_rate_to_lyd }}
-                            </p>
-                            <p v-else class="mt-2 text-xs text-slate-500">
-                                {{ t('Example: write 9.385 if one dollar equals about nine dinars and thirty-eight.') }}
+                            <p v-if="rateForm.errors.usd_buy_rate_to_lyd" class="mt-2 text-xs text-rose-600">
+                                {{ rateForm.errors.usd_buy_rate_to_lyd }}
                             </p>
                         </label>
+                        <p class="mt-3 text-xs text-slate-500">
+                            {{ t('Current sell') }}: {{ formatAmount(usdSell) }} LYD · {{ t('Mid') }}: {{ formatAmount(usdMid) }} LYD
+                        </p>
                     </div>
 
-                    <div class="rounded-3xl border border-violet-100 bg-violet-50/60 p-5">
-                        <p class="text-sm font-semibold text-violet-900">{{ t('Euro (EUR)') }}</p>
-                        <p class="mt-1 text-sm text-violet-800">{{ t('How many Libyan Dinars is 1 Euro worth?') }}</p>
-
+                    <div class="rounded-3xl border border-emerald-100 bg-emerald-50/50 p-5">
+                        <p class="text-sm font-semibold text-emerald-900">{{ t('Euro (EUR)') }}</p>
                         <label class="mt-4 block text-sm">
                             <span class="mb-2 flex flex-wrap items-center gap-2 font-medium text-slate-800">
                                 <span class="rounded-full bg-white px-3 py-1 text-slate-900 shadow-sm">1 EUR</span>
                                 <span>=</span>
-                                <span class="text-slate-600">{{ t('LYD amount') }}</span>
+                                <span class="text-slate-600">{{ t('Buy') }} LYD</span>
                             </span>
                             <div class="flex items-center gap-2">
                                 <input
-                                    v-model="rateForm.eur_rate_to_lyd"
+                                    v-model="rateForm.eur_buy_rate_to_lyd"
                                     type="number"
                                     min="0"
                                     step="0.00000001"
                                     class="w-full rounded-2xl border-slate-200 text-lg"
                                     :disabled="rateForm.processing"
-                                    placeholder="10.890"
+                                    placeholder="10.850"
                                 />
                                 <span class="shrink-0 text-sm font-semibold text-slate-700">LYD</span>
                             </div>
-                            <p v-if="rateForm.errors.eur_rate_to_lyd" class="mt-2 text-xs text-rose-600">
-                                {{ rateForm.errors.eur_rate_to_lyd }}
-                            </p>
-                            <p v-else class="mt-2 text-xs text-slate-500">
-                                {{ t('Example: write 10.890 if one euro equals about ten dinars and eighty-nine.') }}
+                            <p v-if="rateForm.errors.eur_buy_rate_to_lyd" class="mt-2 text-xs text-rose-600">
+                                {{ rateForm.errors.eur_buy_rate_to_lyd }}
                             </p>
                         </label>
+                        <p class="mt-3 text-xs text-slate-500">
+                            {{ t('Current sell') }}: {{ formatAmount(eurSell) }} LYD · {{ t('Mid') }}: {{ formatAmount(eurMid) }} LYD
+                        </p>
+                    </div>
+                </div>
+
+                <!-- SELL TAB -->
+                <div v-show="activeTab === 'sell'" class="mt-6 grid gap-5 lg:grid-cols-2">
+                    <div class="rounded-3xl border border-sky-100 bg-sky-50/50 p-5">
+                        <p class="text-sm font-semibold text-sky-900">{{ t('US Dollar (USD)') }}</p>
+                        <label class="mt-4 block text-sm">
+                            <span class="mb-2 flex flex-wrap items-center gap-2 font-medium text-slate-800">
+                                <span class="rounded-full bg-white px-3 py-1 text-slate-900 shadow-sm">1 USD</span>
+                                <span>=</span>
+                                <span class="text-slate-600">{{ t('Sell') }} LYD</span>
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <input
+                                    v-model="rateForm.usd_sell_rate_to_lyd"
+                                    type="number"
+                                    min="0"
+                                    step="0.00000001"
+                                    class="w-full rounded-2xl border-slate-200 text-lg"
+                                    :disabled="rateForm.processing"
+                                    placeholder="9.420"
+                                />
+                                <span class="shrink-0 text-sm font-semibold text-slate-700">LYD</span>
+                            </div>
+                            <p v-if="rateForm.errors.usd_sell_rate_to_lyd" class="mt-2 text-xs text-rose-600">
+                                {{ rateForm.errors.usd_sell_rate_to_lyd }}
+                            </p>
+                        </label>
+                        <p class="mt-3 text-xs text-slate-500">
+                            {{ t('Current buy') }}: {{ formatAmount(usdBuy) }} LYD · {{ t('Mid') }}: {{ formatAmount(usdMid) }} LYD
+                        </p>
+                    </div>
+
+                    <div class="rounded-3xl border border-sky-100 bg-sky-50/50 p-5">
+                        <p class="text-sm font-semibold text-sky-900">{{ t('Euro (EUR)') }}</p>
+                        <label class="mt-4 block text-sm">
+                            <span class="mb-2 flex flex-wrap items-center gap-2 font-medium text-slate-800">
+                                <span class="rounded-full bg-white px-3 py-1 text-slate-900 shadow-sm">1 EUR</span>
+                                <span>=</span>
+                                <span class="text-slate-600">{{ t('Sell') }} LYD</span>
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <input
+                                    v-model="rateForm.eur_sell_rate_to_lyd"
+                                    type="number"
+                                    min="0"
+                                    step="0.00000001"
+                                    class="w-full rounded-2xl border-slate-200 text-lg"
+                                    :disabled="rateForm.processing"
+                                    placeholder="10.930"
+                                />
+                                <span class="shrink-0 text-sm font-semibold text-slate-700">LYD</span>
+                            </div>
+                            <p v-if="rateForm.errors.eur_sell_rate_to_lyd" class="mt-2 text-xs text-rose-600">
+                                {{ rateForm.errors.eur_sell_rate_to_lyd }}
+                            </p>
+                        </label>
+                        <p class="mt-3 text-xs text-slate-500">
+                            {{ t('Current buy') }}: {{ formatAmount(eurBuy) }} LYD · {{ t('Mid') }}: {{ formatAmount(eurMid) }} LYD
+                        </p>
                     </div>
                 </div>
 
@@ -194,31 +267,18 @@ const submit = () => {
                     {{ t('Always fixed at 1 LYD = 1 LYD. Not editable.') }}
                 </div>
 
-                <!-- Live preview -->
-                <div class="mt-6 rounded-3xl border border-slate-200 bg-white p-5">
-                    <h4 class="text-sm font-semibold text-slate-950">{{ t('Live preview (before save)') }}</h4>
-                    <p class="mt-1 text-xs text-slate-500">
-                        {{ t('These numbers update as you type. They show what the system will calculate.') }}
-                    </p>
-
+                <div class="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                    <h4 class="text-sm font-semibold text-slate-950">
+                        {{ t('Live preview (before save)') }} — {{ activeTab === 'buy' ? t('Buy') : t('Sell') }}
+                    </h4>
                     <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                        <div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                        <div class="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
                             <p class="font-medium text-slate-900">100 USD → LYD</p>
                             <p class="mt-1 text-lg font-semibold text-slate-950">{{ formatAmount(exampleUsdToLyd) }} LYD</p>
                         </div>
-                        <div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                        <div class="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
                             <p class="font-medium text-slate-900">100 EUR → LYD</p>
                             <p class="mt-1 text-lg font-semibold text-slate-950">{{ formatAmount(exampleEurToLyd) }} LYD</p>
-                        </div>
-                        <div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                            <p class="font-medium text-slate-900">100 EUR → USD</p>
-                            <p class="mt-1 text-lg font-semibold text-slate-950">{{ formatAmount(exampleEurToUsd) }} USD</p>
-                            <p class="mt-1 text-xs text-slate-500">{{ t('Calculated through LYD automatically') }}</p>
-                        </div>
-                        <div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                            <p class="font-medium text-slate-900">100 USD → EUR</p>
-                            <p class="mt-1 text-lg font-semibold text-slate-950">{{ formatAmount(exampleUsdToEur) }} EUR</p>
-                            <p class="mt-1 text-xs text-slate-500">{{ t('Calculated through LYD automatically') }}</p>
                         </div>
                     </div>
                 </div>
@@ -241,11 +301,8 @@ const submit = () => {
                 {{ t('You can view the current rates, but you do not have permission to change them.') }}
             </div>
 
-            <!-- Current saved rates -->
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h3 class="text-lg font-semibold text-slate-950">{{ t('Currently saved rates') }}</h3>
-                <p class="mt-1 text-sm text-slate-600">{{ t('These are the rates stored in the database right now.') }}</p>
-
                 <div class="mt-5 grid gap-4 md:grid-cols-3">
                     <div
                         v-for="rate in rates"
@@ -261,19 +318,23 @@ const submit = () => {
                             <template v-else-if="rate.currency_code === 'EUR'">{{ t('Euro') }}</template>
                             <template v-else>{{ rate.currency_code }}</template>
                         </p>
-                        <p class="mt-3 text-2xl font-semibold text-slate-900">
-                            <template v-if="rate.currency_code === 'LYD'">1</template>
-                            <template v-else>{{ rate.rate_to_lyd }}</template>
-                            <span class="text-sm font-medium text-slate-500">LYD</span>
-                        </p>
-                        <p class="mt-2 text-sm text-slate-600">
-                            <template v-if="rate.currency_code === 'LYD'">
-                                {{ t('Fixed. Always equals itself.') }}
-                            </template>
-                            <template v-else>
-                                1 {{ rate.currency_code }} = {{ rate.rate_to_lyd }} LYD
-                            </template>
-                        </p>
+                        <template v-if="rate.currency_code === 'LYD'">
+                            <p class="mt-3 text-2xl font-semibold text-slate-900">
+                                1 <span class="text-sm font-medium text-slate-500">LYD</span>
+                            </p>
+                            <p class="mt-2 text-sm text-slate-600">{{ t('Fixed. Always equals itself.') }}</p>
+                        </template>
+                        <template v-else>
+                            <p class="mt-3 text-sm text-slate-700">
+                                <span class="font-medium">{{ t('Buy') }}:</span> {{ rate.buy_rate_to_lyd }} LYD
+                            </p>
+                            <p class="mt-1 text-sm text-slate-700">
+                                <span class="font-medium">{{ t('Sell') }}:</span> {{ rate.sell_rate_to_lyd }} LYD
+                            </p>
+                            <p class="mt-1 text-sm text-slate-700">
+                                <span class="font-medium">{{ t('Mid') }}:</span> {{ rate.mid_rate_to_lyd }} LYD
+                            </p>
+                        </template>
                         <p v-if="rate.updated_at" class="mt-3 text-xs text-slate-400">
                             {{ t('Last updated') }}: {{ rate.updated_at }}
                         </p>

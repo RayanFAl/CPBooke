@@ -1,7 +1,7 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
-import { useForm, usePage } from '@inertiajs/vue3';
+import { Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -9,6 +9,7 @@ const props = defineProps({
     form: { type: Object, required: true },
     base_currency: { type: String, default: 'LYD' },
     update_url: { type: String, required: true },
+    daily_report_url: { type: String, default: '' },
 });
 
 const { t } = useAdminLocale();
@@ -108,6 +109,14 @@ const submit = () => {
                 <p v-if="flashSuccess" class="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                     {{ flashSuccess }}
                 </p>
+                <div v-if="daily_report_url" class="mt-5">
+                    <Link
+                        :href="daily_report_url"
+                        class="inline-flex rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-100"
+                    >
+                        {{ t('Daily FX buy + sales report') }}
+                    </Link>
+                </div>
             </div>
 
             <div class="flex flex-wrap gap-2">

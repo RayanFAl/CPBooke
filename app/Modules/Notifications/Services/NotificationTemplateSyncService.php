@@ -70,6 +70,17 @@ class NotificationTemplateSyncService
                 $translationsSeeded++;
             }
 
+            if ($this->shouldRefreshExchangeRateCopy($template, $definition)) {
+                $updates['subject'] = $definition['subject'] ?? $template->subject;
+                $updates['body'] = $definition['body'];
+                $updates['variables'] = $definition['variables'] ?? $template->variables;
+                $currentTranslations = array_replace_recursive(
+                    $currentTranslations,
+                    $definition['translations'] ?? [],
+                );
+                $translationsSeeded++;
+            }
+
             $merged = $this->withStaffArabicName($currentTranslations, $staffNameAr);
 
             if ($merged !== ($template->translations ?? [])) {
@@ -104,6 +115,28 @@ class NotificationTemplateSyncService
         $existingArabic = data_get($template->translations, 'ar.body');
 
         return ! is_string($existingArabic) || trim($existingArabic) === '';
+    }
+
+    /**
+     * Refresh outdated exchange-rate copy that still injects English "buy/sell" via {old_rate}.
+     *
+     * @param  array<string, mixed>  $definition
+     */
+    private function shouldRefreshExchangeRateCopy(NotificationTemplate $template, array $definition): bool
+    {
+        if (($definition['code'] ?? null) !== 'EXCHANGE_RATE_UPDATED') {
+            return false;
+        }
+
+        $body = (string) $template->body;
+        $arabicBody = (string) data_get($template->translations, 'ar.body', '');
+
+        return str_contains($body, '{old_buy}')
+            || str_contains($body, '{old_rate}')
+            || str_contains($arabicBody, '{old_buy}')
+            || str_contains($arabicBody, '{old_rate}')
+            || ! str_contains($arabicBody, 'تم تحديث أسعار الشراء والبيع')
+            || $body !== (string) ($definition['body'] ?? '');
     }
 
     /**

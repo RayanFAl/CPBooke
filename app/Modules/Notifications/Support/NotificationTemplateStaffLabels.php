@@ -151,6 +151,7 @@ final class NotificationTemplateStaffLabels
             'ACCOUNT_SECURITY_ALERT' => ['en' => 'Account security alert', 'ar' => 'تنبيه أمني على الحساب'],
             'APP_UPDATE_AVAILABLE' => ['en' => 'Mobile app update available', 'ar' => 'تحديث تطبيق الجوال متاح'],
             'EXCHANGE_RATE_UPDATED' => ['en' => 'Exchange rate updated', 'ar' => 'تم تحديث سعر الصرف'],
+            'EXCHANGE_RATE_DAILY_BUY_REPORT' => ['en' => 'Daily FX buy + sales report', 'ar' => 'تقرير يومي لأسعار الشراء والمبيعات'],
         ];
     }
 

@@ -54,6 +54,13 @@ class CustomerCrmActivityService
         $devices = $this->devices($user);
         $tickets = $this->supportTickets($user);
         $wallets = $this->wallets($user);
+        $walletService = app(CustomerWalletService::class);
+        $supportedCurrencies = $user->isCustomerAccount()
+            ? $walletService->supportedCurrencies()
+            : [];
+        $availableCurrencies = $user->isCustomerAccount()
+            ? $walletService->availableCurrencies($user)
+            : [];
         $passengers = $this->savedPassengers($user);
         $addresses = $this->savedAddresses($user);
         $vehicles = $this->savedVehicles($user);
@@ -89,6 +96,8 @@ class CustomerCrmActivityService
             'latest_app_release' => $this->latestAppReleaseSummary(),
             'support_tickets' => $tickets,
             'wallets' => $wallets,
+            'supported_currencies' => $supportedCurrencies,
+            'available_currencies' => $availableCurrencies,
             'saved_passengers' => $passengers,
             'saved_addresses' => $addresses,
             'saved_vehicles' => $vehicles,
@@ -616,10 +625,6 @@ class CustomerCrmActivityService
     {
         if (! Schema::hasTable('customer_wallets')) {
             return [];
-        }
-
-        if ($user->isCustomerAccount()) {
-            app(CustomerWalletService::class)->ensureSupportedWallets($user);
         }
 
         $supported = app(CustomerWalletService::class)->supportedCurrencies();

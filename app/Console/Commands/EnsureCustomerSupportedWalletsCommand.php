@@ -10,7 +10,7 @@ class EnsureCustomerSupportedWalletsCommand extends Command
 {
     protected $signature = 'customer-wallets:ensure-supported {--chunk=200 : Customers per chunk}';
 
-    protected $description = 'Ensure every active customer has LYD, USD, and EUR wallets';
+    protected $description = 'Backfill LYD/USD/EUR wallets for active customers (admin/ops only)';
 
     public function handle(CustomerWalletService $walletService): int
     {

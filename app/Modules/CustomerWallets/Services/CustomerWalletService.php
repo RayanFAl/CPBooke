@@ -64,7 +64,101 @@ class CustomerWalletService
     }
 
     /**
+     * Create a wallet for one currency (admin/backfill only).
+     * Mobile customers open wallets via deposit/top-up.
+     */
+    public function createWallet(User $user, string $currency): CustomerWallet
+    {
+        $currency = $this->normalizeCurrency($currency);
+
+        $existing = CustomerWallet::query()
+            ->where('user_id', $user->id)
+            ->where('currency', $currency)
+            ->first();
+
+        if ($existing) {
+            throw ValidationException::withMessages([
+                'currency' => 'A wallet for this currency already exists.',
+            ]);
+        }
+
+        return CustomerWallet::query()->create([
+            'user_id' => $user->id,
+            'wallet_number' => $this->generateWalletNumber($user),
+            'currency' => $currency,
+            'balance' => 0,
+            'status' => CustomerWallet::STATUS_ACTIVE,
+        ]);
+    }
+
+    /**
+     * Credit a customer wallet, creating it in the same DB transaction when missing.
+     *
+     * @param  array{description?: string|null, metadata?: array<string, mixed>|null, reference_type?: string|null}  $options
+     */
+    public function deposit(
+        User $user,
+        string|float|int $amount,
+        ?string $currency = null,
+        ?string $paymentMethod = null,
+        array $options = [],
+    ): CustomerWalletTransaction {
+        $amount = $this->normalizePositiveAmount($amount, 'amount');
+        $currency = $this->normalizeCurrency(
+            $currency ?? (string) config('customer_wallets.default_currency', 'LYD')
+        );
+        $referenceType = (string) ($options['reference_type'] ?? CustomerWalletTransaction::REFERENCE_DEPOSIT);
+        $paymentMethod = is_string($paymentMethod) && trim($paymentMethod) !== ''
+            ? trim($paymentMethod)
+            : null;
+
+        return DB::transaction(function () use ($user, $amount, $currency, $paymentMethod, $options, $referenceType): CustomerWalletTransaction {
+            $wallet = CustomerWallet::query()
+                ->where('user_id', $user->id)
+                ->where('currency', $currency)
+                ->lockForUpdate()
+                ->first();
+
+            $created = false;
+
+            if (! $wallet) {
+                $wallet = CustomerWallet::query()->create([
+                    'user_id' => $user->id,
+                    'wallet_number' => $this->generateWalletNumber($user),
+                    'currency' => $currency,
+                    'balance' => 0,
+                    'status' => CustomerWallet::STATUS_ACTIVE,
+                ]);
+                $created = true;
+            }
+
+            $metadata = array_merge($options['metadata'] ?? [], [
+                'source' => ($options['metadata']['source'] ?? null) ?: 'customer_deposit',
+                'wallet_created' => $created,
+            ]);
+
+            if ($paymentMethod !== null) {
+                $metadata['payment_method'] = $paymentMethod;
+            }
+
+            return $this->credit(
+                $wallet,
+                $amount,
+                CustomerWalletTransaction::TYPE_CREDIT,
+                $referenceType,
+                (string) Str::ulid(),
+                [
+                    'actor' => $user,
+                    'description' => $options['description'] ?? 'Wallet deposit',
+                    'metadata' => $metadata,
+                ],
+            );
+        });
+    }
+
+    /**
      * Ensure the customer has one wallet for every supported currency (LYD/USD/EUR).
+     * Admin/backfill only — mobile never auto-creates empty wallets.
      *
      * @return list<CustomerWallet>
      */
@@ -84,8 +178,6 @@ class CustomerWalletService
      */
     public function listWallets(User $user): array
     {
-        $this->ensureSupportedWallets($user);
-
         $order = array_flip($this->supportedCurrencies());
 
         return CustomerWallet::query()
@@ -95,6 +187,23 @@ class CustomerWalletService
             ->sortBy(fn (CustomerWallet $wallet): int => $order[$wallet->currency] ?? 99)
             ->values()
             ->all();
+    }
+
+    /**
+     * Supported currencies the customer has not opened yet.
+     *
+     * @return list<string>
+     */
+    public function availableCurrencies(User $user): array
+    {
+        $existing = CustomerWallet::query()
+            ->where('user_id', $user->id)
+            ->whereIn('currency', $this->supportedCurrencies())
+            ->pluck('currency')
+            ->map(fn ($currency): string => strtoupper((string) $currency))
+            ->all();
+
+        return array_values(array_diff($this->supportedCurrencies(), $existing));
     }
 
     /**
@@ -263,16 +372,13 @@ class CustomerWalletService
             ]);
         }
 
-        $wallet = $this->resolveWallet($user, $currency);
-
-        return $this->credit(
-            $wallet,
+        return $this->deposit(
+            $user,
             $amount,
-            CustomerWalletTransaction::TYPE_CREDIT,
-            CustomerWalletTransaction::REFERENCE_TEST_TOP_UP,
-            (string) Str::ulid(),
-            [
-                'actor' => $user,
+            $currency,
+            paymentMethod: 'test',
+            options: [
+                'reference_type' => CustomerWalletTransaction::REFERENCE_TEST_TOP_UP,
                 'description' => 'Test wallet top-up',
                 'metadata' => ['source' => 'test_top_up'],
             ],
@@ -316,7 +422,7 @@ class CustomerWalletService
             ]);
         }
 
-        $wallet = $this->resolveWallet($user, $order->currency);
+        $wallet = $this->resolveWallet($user, $order->currency, createIfMissing: false);
 
         if ($wallet->currency !== strtoupper($order->currency)) {
             throw ValidationException::withMessages([

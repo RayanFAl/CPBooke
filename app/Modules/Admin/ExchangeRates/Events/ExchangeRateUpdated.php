@@ -11,26 +11,34 @@ class ExchangeRateUpdated
     use Dispatchable;
     use SerializesModels;
 
+    /**
+     * @param  list<array{
+     *     currency_code: string,
+     *     old_buy: string,
+     *     new_buy: string,
+     *     old_sell: string,
+     *     new_sell: string
+     * }>  $changes
+     */
     public function __construct(
-        public readonly string $currencyCode,
-        public readonly string $oldBuy,
-        public readonly string $newBuy,
-        public readonly string $oldSell,
-        public readonly string $newSell,
+        public readonly array $changes,
         public readonly ?User $actor = null,
     ) {
     }
 
     /**
-     * Backward-compatible summary for templates that still expect old_rate/new_rate.
+     * @return list<string>
      */
-    public function oldRateSummary(): string
+    public function currencyCodes(): array
     {
-        return "buy {$this->oldBuy} / sell {$this->oldSell}";
+        return array_values(array_map(
+            static fn (array $change): string => (string) ($change['currency_code'] ?? ''),
+            $this->changes,
+        ));
     }
 
-    public function newRateSummary(): string
+    public function currencyCodesLabel(): string
     {
-        return "buy {$this->newBuy} / sell {$this->newSell}";
+        return implode(', ', array_values(array_filter($this->currencyCodes())));
     }
 }

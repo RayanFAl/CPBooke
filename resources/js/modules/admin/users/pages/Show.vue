@@ -1,10 +1,14 @@
 <script setup>
 import AccountTypeBadge from '../components/AccountTypeBadge.vue';
+import AdminButton from '../../components/AdminButton.vue';
+import AdminInput from '../../components/AdminInput.vue';
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import AdminModal from '../../components/AdminModal.vue';
+import AdminTextarea from '../../components/AdminTextarea.vue';
 import RoleBadge from '../components/RoleBadge.vue';
 import SystemTimeline from '../../components/SystemTimeline.vue';
 import UserStatusBadge from '../components/UserStatusBadge.vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 import { usePlatformCurrency } from '../../composables/usePlatformCurrency';
@@ -62,6 +66,8 @@ const crm = computed(() => props.user.crm ?? {
     latest_app_release: null,
     support_tickets: [],
     wallets: [],
+    supported_currencies: ['LYD', 'USD', 'EUR'],
+    available_currencies: ['LYD', 'USD', 'EUR'],
     saved_passengers: [],
     saved_addresses: [],
     saved_vehicles: [],
@@ -119,6 +125,23 @@ const primaryWallet = computed(() => {
 });
 
 const selectedWalletCurrency = ref('LYD');
+const showDepositModal = ref(false);
+const depositCurrency = ref(String(defaultCurrency.value || 'LYD').toUpperCase());
+const depositForm = useForm({
+    amount: '',
+    note: '',
+    currency: String(defaultCurrency.value || 'LYD').toUpperCase(),
+});
+
+const supportedDepositCurrencies = computed(() => {
+    const fromCrm = crm.value.supported_currencies ?? [];
+
+    if (Array.isArray(fromCrm) && fromCrm.length) {
+        return fromCrm.map((code) => String(code).toUpperCase());
+    }
+
+    return ['LYD', 'USD', 'EUR'];
+});
 
 const selectedWallet = computed(() => {
     const wallets = crm.value.wallets ?? [];
@@ -249,25 +272,57 @@ const walletBalanceLabel = computed(() => {
     }).format(Number(balance));
 });
 
-const startAddMoney = (walletId = null) => {
+const startAddMoney = (walletId = null, currency = null) => {
+    const chosenCurrency = String(
+        currency
+        || selectedWallet.value?.currency
+        || depositCurrency.value
+        || defaultCurrency.value
+        || 'LYD',
+    ).toUpperCase();
+
     if (walletId) {
         router.visit(`${route('admin.customer-wallets.show', walletId)}?action=add-money`);
 
         return;
     }
 
-    const existingWalletId = selectedWallet.value?.id
-        ?? primaryWallet.value?.id
-        ?? crm.value.wallets?.[0]?.id
-        ?? null;
+    const existingWallet = (crm.value.wallets ?? []).find(
+        (wallet) => String(wallet.currency).toUpperCase() === chosenCurrency,
+    );
 
-    if (existingWalletId) {
-        router.visit(`${route('admin.customer-wallets.show', existingWalletId)}?action=add-money`);
+    if (existingWallet?.id) {
+        router.visit(`${route('admin.customer-wallets.show', existingWallet.id)}?action=add-money`);
 
         return;
     }
 
-    router.post(route('admin.users.customer-wallet.add-money', props.user.id));
+    depositCurrency.value = chosenCurrency;
+    depositForm.currency = chosenCurrency;
+    depositForm.amount = '';
+    depositForm.note = '';
+    showDepositModal.value = true;
+};
+
+const closeDepositModal = () => {
+    showDepositModal.value = false;
+};
+
+const submitFirstDeposit = async () => {
+    const amount = Number(depositForm.amount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+        return;
+    }
+
+    depositForm.currency = depositCurrency.value;
+    depositForm.post(route('admin.users.customer-wallet.deposit', props.user.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showDepositModal.value = false;
+            depositForm.reset();
+        },
+    });
 };
 
 const formatDateTime = (value) => {
@@ -397,6 +452,20 @@ onMounted(() => {
 
     if (typeof window !== 'undefined') {
         window.addEventListener('hashchange', syncTabFromHash);
+
+        const params = new URLSearchParams(window.location.search);
+        const action = params.get('action');
+        const currency = String(params.get('currency') || defaultCurrency.value || 'LYD').toUpperCase();
+
+        if (params.get('tab') === 'finance' || action === 'deposit') {
+            activeTab.value = 'finance';
+        }
+
+        if (action === 'deposit' && canManageCustomerWallets.value) {
+            depositCurrency.value = currency;
+            depositForm.currency = currency;
+            showDepositModal.value = true;
+        }
     }
 });
 
@@ -850,14 +919,28 @@ onBeforeUnmount(() => {
                     <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">{{ t('Wallet') }}</p>
                     <p class="mt-3 text-lg font-semibold text-slate-950">{{ t('No wallet yet') }}</p>
                     <p class="mt-2 max-w-md text-sm text-slate-600">
-                        {{ t('Deposit to create this customer wallet and record the first top-up.') }}
+                        {{ t('Choose a currency, then deposit to create only that wallet.') }}
                     </p>
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <button
+                            v-for="code in supportedDepositCurrencies"
+                            :key="`deposit-currency-${code}`"
+                            type="button"
+                            class="rounded-2xl px-3 py-1.5 text-xs font-semibold transition"
+                            :class="depositCurrency === code
+                                ? 'bg-slate-950 text-white'
+                                : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'"
+                            @click="depositCurrency = code"
+                        >
+                            {{ code }}
+                        </button>
+                    </div>
                     <button
                         type="button"
                         class="mt-5 inline-flex items-center justify-center rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
-                        @click="startAddMoney()"
+                        @click="startAddMoney(null, depositCurrency)"
                     >
-                        {{ t('Deposit') }}
+                        {{ t('Deposit') }} ({{ depositCurrency }})
                     </button>
                 </div>
 
@@ -1415,5 +1498,65 @@ onBeforeUnmount(() => {
                 </div>
             </div>
         </section>
+
+        <AdminModal
+            :show="showDepositModal"
+            :title="t('Deposit')"
+            :description="t('Choose a currency, then deposit to create only that wallet.')"
+            max-width="lg"
+            @close="closeDepositModal"
+        >
+            <form class="space-y-4" @submit.prevent="submitFirstDeposit">
+                <div>
+                    <p class="mb-2 text-sm font-medium text-slate-800">{{ t('Currency') }}</p>
+                    <div class="flex flex-wrap gap-2">
+                        <button
+                            v-for="code in supportedDepositCurrencies"
+                            :key="`modal-currency-${code}`"
+                            type="button"
+                            class="rounded-2xl px-4 py-2 text-sm font-medium transition"
+                            :class="depositCurrency === code
+                                ? 'bg-slate-950 text-white'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                            @click="depositCurrency = code; depositForm.currency = code"
+                        >
+                            {{ code }}
+                        </button>
+                    </div>
+                    <p class="mt-2 text-xs text-slate-500">{{ t('Created on deposit') }}</p>
+                </div>
+
+                <AdminInput
+                    v-model="depositForm.amount"
+                    :label="t('Amount')"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    required
+                    :error="depositForm.errors.amount"
+                />
+
+                <AdminTextarea
+                    v-model="depositForm.note"
+                    :label="t('Note')"
+                    :rows="3"
+                    :placeholder="t('Optional context for this top-up')"
+                    :error="depositForm.errors.note"
+                />
+            </form>
+
+            <template #footer>
+                <AdminButton variant="secondary" @click="closeDepositModal">
+                    {{ t('Cancel') }}
+                </AdminButton>
+                <AdminButton
+                    variant="success"
+                    :processing="depositForm.processing"
+                    @click="submitFirstDeposit"
+                >
+                    {{ t('Record top-up') }}
+                </AdminButton>
+            </template>
+        </AdminModal>
     </AdminLayout>
 </template>

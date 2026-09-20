@@ -13,7 +13,8 @@ return [
     | Supported wallet currencies (strict allow-list)
     |--------------------------------------------------------------------------
     |
-    | Every customer gets one wallet per currency in this list.
+    | Customers may open at most one wallet per currency in this list.
+    | Wallets are created only when the customer (or admin) explicitly requests them.
     |
     */
     'supported_currencies' => ['LYD', 'USD', 'EUR'],

@@ -68,4 +68,41 @@ class NotificationTemplateI18nTest extends TestCase
 
         $this->assertSame('ar', app(NotificationLocaleResolver::class)->forUser($user));
     }
+
+    public function test_sync_refreshes_outdated_exchange_rate_arabic_copy(): void
+    {
+        NotificationTemplate::query()->create([
+            'code' => 'EXCHANGE_RATE_UPDATED',
+            'name' => 'Exchange Rate Updated',
+            'category' => 'general',
+            'subject' => 'Exchange Rate Updated',
+            'body' => "{currency_code} rates changed:\nBuy: {old_buy} → {new_buy} LYD\nSell: {old_sell} → {new_sell} LYD",
+            'translations' => [
+                'ar' => [
+                    'subject' => 'تم تحديث سعر الصرف',
+                    'body' => "تغيرت أسعار {currency_code}:\nشراء: {old_buy} ← {new_buy} د.ل\nبيع: {old_sell} ← {new_sell} د.ل",
+                ],
+            ],
+            'channels' => ['push', 'in_app'],
+            'variables' => ['currency_code', 'old_buy', 'new_buy', 'old_sell', 'new_sell'],
+            'is_active' => true,
+        ]);
+
+        app(NotificationTemplateSyncService::class)->syncMissing();
+
+        $template = NotificationTemplate::query()->where('code', 'EXCHANGE_RATE_UPDATED')->firstOrFail();
+
+        $this->assertSame(
+            'Buy and sell rates were updated. Open the app to view the latest prices.',
+            (string) $template->body,
+        );
+        $this->assertSame(
+            'تم تحديث أسعار الشراء والبيع. افتح التطبيق لعرض آخر الأسعار.',
+            (string) data_get($template->translations, 'ar.body'),
+        );
+        $this->assertSame(
+            'تم تحديث أسعار الصرف',
+            $template->localizedSubject(NotificationLocales::AR),
+        );
+    }
 }

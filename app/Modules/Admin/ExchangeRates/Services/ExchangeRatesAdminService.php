@@ -107,6 +107,8 @@ class ExchangeRatesAdminService
             ]);
         }
 
+        $changes = [];
+
         foreach ($updates as $code => $pair) {
             $rate = ExchangeRate::query()->where('currency_code', $code)->first();
             $oldBuy = $rate ? $this->formatRate((string) ($rate->buy_rate_to_lyd ?? $rate->rate_to_lyd)) : $pair['buy'];
@@ -155,14 +157,13 @@ class ExchangeRatesAdminService
                 ['source' => 'admin.exchange_rates'],
             );
 
-            event(new ExchangeRateUpdated(
-                currencyCode: $code,
-                oldBuy: $oldBuy,
-                newBuy: $newBuy,
-                oldSell: $oldSell,
-                newSell: $newSell,
-                actor: $actor,
-            ));
+            $changes[] = [
+                'currency_code' => $code,
+                'old_buy' => $oldBuy,
+                'new_buy' => $newBuy,
+                'old_sell' => $oldSell,
+                'new_sell' => $newSell,
+            ];
         }
 
         ExchangeRate::query()
@@ -174,6 +175,14 @@ class ExchangeRatesAdminService
             ]);
 
         $this->exchangeRateService->forgetCache();
+
+        if ($changes !== []) {
+            // One customer notification for the whole save — not one push per currency.
+            event(new ExchangeRateUpdated(
+                changes: $changes,
+                actor: $actor,
+            ));
+        }
 
         return $this->listRates();
     }

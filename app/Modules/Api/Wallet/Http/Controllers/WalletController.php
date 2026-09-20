@@ -8,6 +8,8 @@ use App\Models\CustomerWallet;
 use App\Models\CustomerWalletTransaction;
 use App\Models\Order;
 use App\Modules\Api\Support\Http\Responses\ApiResponse;
+use App\Modules\Api\Wallet\Http\Requests\CreateWalletRequest;
+use App\Modules\Api\Wallet\Http\Requests\DepositWalletRequest;
 use App\Modules\Api\Wallet\Http\Requests\PayOrderWithWalletRequest;
 use App\Modules\Api\Wallet\Http\Requests\TestTopUpRequest;
 use App\Modules\CustomerWallets\Services\CustomerWalletService;
@@ -31,20 +33,69 @@ class WalletController extends Controller
         return ApiResponse::success([
             'default_currency' => $defaultCurrency,
             'supported_currencies' => $this->walletService->supportedCurrencies(),
+            'available_currencies' => $this->walletService->availableCurrencies($user),
             'wallets' => array_map(fn (CustomerWallet $wallet): array => $this->serializeWallet($wallet), $wallets),
             'test_mode_enabled' => (bool) config('customer_wallets.test_mode'),
         ]);
+    }
+
+    public function store(CreateWalletRequest $request): JsonResponse
+    {
+        return ApiResponse::error(
+            'Wallet is created on first successful deposit.',
+            [
+                'wallet' => ['Wallet is created on first successful deposit.'],
+            ],
+            'wallet_requires_deposit',
+            422,
+        );
+    }
+
+    public function deposit(DepositWalletRequest $request): JsonResponse
+    {
+        try {
+            $validated = $request->validated();
+            $transaction = $this->walletService->deposit(
+                $request->user(),
+                $validated['amount'],
+                $validated['currency'] ?? null,
+                $validated['payment_method'] ?? $validated['method'] ?? null,
+            );
+
+            $wallet = $transaction->wallet->refresh();
+            $created = (bool) data_get($transaction->metadata, 'wallet_created', false);
+
+            return ApiResponse::success(
+                [
+                    'wallet' => $this->serializeWallet($wallet),
+                    'transaction' => $this->serializeDepositTransaction($transaction),
+                    'wallet_created' => $created,
+                ],
+                $created ? 'Wallet created and funded.' : 'Deposit completed.',
+                status: $created ? 201 : 200,
+            );
+        } catch (ValidationException $exception) {
+            return $this->walletValidationResponse($exception);
+        }
+    }
+
+    public function topUp(DepositWalletRequest $request): JsonResponse
+    {
+        return $this->deposit($request);
     }
 
     public function show(Request $request, string $currency): JsonResponse
     {
         try {
             $currency = $this->walletService->normalizeCurrency($currency);
+            $wallet = $this->walletService->resolveWallet(
+                $request->user(),
+                $currency,
+                createIfMissing: false,
+            );
         } catch (ValidationException $exception) {
-            return ApiResponse::validation($exception->errors());
+            return $this->walletValidationResponse($exception);
         }
-
-        $wallet = $this->walletService->resolveWallet($request->user(), $currency);
 
         return ApiResponse::success($this->serializeWallet($wallet));
     }
@@ -58,10 +109,9 @@ class WalletController extends Controller
                 (string) $request->query('currency', config('customer_wallets.default_currency', 'LYD'))
             );
 
-            $this->walletService->ensureSupportedWallets($user);
             $wallet = $this->walletService->resolveWallet($user, $currency, createIfMissing: false);
         } catch (ValidationException $exception) {
-            return ApiResponse::validation($exception->errors());
+            return $this->walletValidationResponse($exception);
         }
 
         $perPage = (int) min(max($request->integer('per_page', 20), 1), 100);
@@ -113,20 +163,19 @@ class WalletController extends Controller
             );
 
             $wallet = $transaction->wallet->refresh();
+            $created = (bool) data_get($transaction->metadata, 'wallet_created', false);
 
-            return ApiResponse::success([
-                'wallet' => $this->serializeWallet($wallet),
-                'transaction' => [
-                    'id' => $transaction->id,
-                    'type' => $transaction->type,
-                    'amount' => $transaction->amount,
-                    'balance_before' => $transaction->balance_before,
-                    'balance_after' => $transaction->balance_after,
-                    'currency' => $transaction->currency,
+            return ApiResponse::success(
+                [
+                    'wallet' => $this->serializeWallet($wallet),
+                    'transaction' => $this->serializeDepositTransaction($transaction),
+                    'wallet_created' => $created,
                 ],
-            ], 'Test top-up completed.');
+                $created ? 'Wallet created and funded.' : 'Test top-up completed.',
+                status: $created ? 201 : 200,
+            );
         } catch (ValidationException $exception) {
-            return ApiResponse::validation($exception->errors());
+            return $this->walletValidationResponse($exception);
         }
     }
 
@@ -135,7 +184,6 @@ class WalletController extends Controller
         $order = Order::query()->findOrFail($request->validated('order_id'));
 
         try {
-            $this->walletService->ensureSupportedWallets($request->user());
             $transaction = $this->walletService->payForOrder($order, $request->user());
             $wallet = $transaction->wallet->refresh();
 
@@ -167,8 +215,25 @@ class WalletController extends Controller
                 422,
             );
         } catch (ValidationException $exception) {
-            return ApiResponse::validation($exception->errors());
+            return $this->walletValidationResponse($exception);
         }
+    }
+
+    private function walletValidationResponse(ValidationException $exception): JsonResponse
+    {
+        $walletErrors = $exception->errors()['wallet'] ?? [];
+        $firstWalletError = is_array($walletErrors) ? (string) ($walletErrors[0] ?? '') : '';
+
+        if (str_contains($firstWalletError, 'No wallet exists')) {
+            return ApiResponse::error(
+                'Wallet not found for this currency. Top up to create it.',
+                $exception->errors(),
+                'wallet_not_found',
+                404,
+            );
+        }
+
+        return ApiResponse::validation($exception->errors());
     }
 
     /**
@@ -184,6 +249,23 @@ class WalletController extends Controller
             'status' => $wallet->status,
             'is_frozen' => $wallet->isFrozen(),
             'test_mode_enabled' => (bool) config('customer_wallets.test_mode'),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeDepositTransaction(CustomerWalletTransaction $transaction): array
+    {
+        return [
+            'id' => $transaction->id,
+            'type' => $transaction->type,
+            'amount' => $transaction->amount,
+            'balance_before' => $transaction->balance_before,
+            'balance_after' => $transaction->balance_after,
+            'currency' => $transaction->currency,
+            'reference_type' => $transaction->reference_type,
+            'payment_method' => data_get($transaction->metadata, 'payment_method'),
         ];
     }
 

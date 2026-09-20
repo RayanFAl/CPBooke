@@ -42,3 +42,7 @@ Route::post('/users/{user}/customer-wallet', [CustomerWalletController::class, '
 Route::post('/users/{user}/customer-wallet/add-money', [CustomerWalletController::class, 'addMoney'])
     ->middleware('permission:customer-wallets.manage')
     ->name('users.customer-wallet.add-money');
+
+Route::post('/users/{user}/customer-wallet/deposit', [CustomerWalletController::class, 'depositForUser'])
+    ->middleware('permission:customer-wallets.manage')
+    ->name('users.customer-wallet.deposit');

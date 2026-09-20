@@ -74,6 +74,7 @@ final class NotificationInboxContract
                 'HOTEL_BOOKING_CANCELLED', 'BOOKING_CANCELLED', 'DOCUMENT_REQUIRED',
                 'DOCUMENT_VERIFICATION_REQUIRED', 'VISA_DOCUMENT_MISSING',                 'APP_UPDATE_AVAILABLE',
                 'EXCHANGE_RATE_UPDATED',
+                'EXCHANGE_RATE_DAILY_BUY_REPORT',
                 'ACCOUNT_WELCOME_LOYALTY',
             ], true) => self::FAMILY_OPERATIONAL,
             default => self::FAMILY_TRANSACTIONAL,
@@ -116,7 +117,8 @@ final class NotificationInboxContract
             $code === 'OFFER_ESIM' || $code === 'OFFER_ESIM_FOR_TRIP' => self::CATEGORY_ESIM,
             in_array($code, ['LOGIN_ALERT', 'NEW_DEVICE_LOGIN', 'PASSWORD_CHANGED', 'EMAIL_CHANGED', 'PHONE_CHANGED', 'ACCOUNT_SECURITY_ALERT'], true) => self::CATEGORY_SECURITY,
             $code === 'APP_UPDATE_AVAILABLE' => self::CATEGORY_OFFERS,
-            $code === 'EXCHANGE_RATE_UPDATED' => self::CATEGORY_PAYMENTS,
+            $code === 'EXCHANGE_RATE_UPDATED',
+            $code === 'EXCHANGE_RATE_DAILY_BUY_REPORT' => self::CATEGORY_PAYMENTS,
             str_starts_with($code, 'OFFER_'),
             str_starts_with($code, 'POINTS_'),
             in_array($code, ['POST_TRIP_NEXT', 'LOYALTY_NEAR_REWARD', 'POST_TRIP_THANKS', 'LOYALTY_TIER_CHANGED', 'LOYALTY_BENEFIT_UNLOCKED', 'ACCOUNT_WELCOME_LOYALTY', 'REWARD_AVAILABLE', 'TIER_UPGRADED'], true) => self::CATEGORY_OFFERS,
@@ -278,6 +280,16 @@ final class NotificationInboxContract
                             : '/app'),
                 ),
                 self::action('open_download_page', 'Open download page', 'فتح صفحة التحميل', '/app'),
+            ],
+            'EXCHANGE_RATE_DAILY_BUY_REPORT' => [
+                self::action(
+                    'open_daily_fx_report',
+                    'Open daily FX report',
+                    'فتح تقرير الصرف اليومي',
+                    is_string($payload['deep_link'] ?? null) && $payload['deep_link'] !== ''
+                        ? (string) $payload['deep_link']
+                        : '/admin/exchange-rates/daily-report',
+                ),
             ],
             default => [
                 self::action('open', 'Open', 'فتح', $orderLink),

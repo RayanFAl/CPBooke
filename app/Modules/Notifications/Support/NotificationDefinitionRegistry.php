@@ -7,6 +7,7 @@ use App\Models\LoyaltyBenefit;
 use App\Models\LoyaltyHistory;
 use App\Models\Order;
 use App\Models\User;
+use App\Modules\Admin\ExchangeRates\Events\DailyFxSalesReportDue;
 use App\Modules\Admin\ExchangeRates\Events\ExchangeRateUpdated;
 use App\Modules\Admin\Finance\Events\CriticalFinanceAnomaliesDetected;
 use App\Modules\Admin\MobileApp\Events\MobileAppReleasePublished;
@@ -60,6 +61,7 @@ class NotificationDefinitionRegistry
             $event instanceof LoyaltyTierChanged => $this->loyaltyTierChangedDefinitions($event),
             $event instanceof CriticalFinanceAnomaliesDetected => $this->criticalFinanceAnomalyDefinitions($event),
             $event instanceof ExchangeRateUpdated => [$this->exchangeRateUpdatedDefinition($event)],
+            $event instanceof DailyFxSalesReportDue => [$this->dailyFxSalesReportDefinition($event)],
             $event instanceof AbandonedFlightSearchDue => [$this->abandonedFlightSearchDefinition($event)],
             $event instanceof PriceAlertHit => [$this->priceAlertHitDefinition($event)],
             $event instanceof SeatAlertAvailable => [$this->seatAlertAvailableDefinition($event)],
@@ -1193,25 +1195,78 @@ class NotificationDefinitionRegistry
         return [
             'code' => 'EXCHANGE_RATE_UPDATED',
             'name' => 'Exchange Rate Updated',
-            'subject' => 'Exchange Rate Updated',
-            'body' => "{currency_code} rates changed:\nBuy: {old_buy} → {new_buy} LYD\nSell: {old_sell} → {new_sell} LYD",
+            'subject' => 'Exchange rates updated',
+            'body' => 'Buy and sell rates were updated. Open the app to view the latest prices.',
+            'translations' => [
+                'ar' => [
+                    'subject' => 'تم تحديث أسعار الصرف',
+                    'body' => 'تم تحديث أسعار الشراء والبيع. افتح التطبيق لعرض آخر الأسعار.',
+                ],
+            ],
             'channels' => [NotificationChannels::PUSH, NotificationChannels::IN_APP],
-            'variables' => ['currency_code', 'old_buy', 'new_buy', 'old_sell', 'new_sell', 'old_rate', 'new_rate', 'deep_link'],
+            'variables' => ['currency_codes', 'deep_link'],
             'notification_type' => 'system',
             'topic' => null,
             'related_type' => 'exchange_rate',
             'related_id' => null,
             'users' => $customers,
             'payload' => [
-                'currency_code' => $event->currencyCode,
-                'old_buy' => $event->oldBuy,
-                'new_buy' => $event->newBuy,
-                'old_sell' => $event->oldSell,
-                'new_sell' => $event->newSell,
-                'old_rate' => $event->oldRateSummary(),
-                'new_rate' => $event->newRateSummary(),
+                'currency_codes' => $event->currencyCodesLabel(),
                 'deep_link' => '/currency',
-                'idempotency_key' => 'exchange_rate|'.$event->currencyCode.'|'.$event->newBuy.'|'.$event->newSell.'|'.now()->timestamp,
+                'idempotency_key' => 'exchange_rates|'.md5($event->currencyCodesLabel()).'|'.now()->timestamp,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function dailyFxSalesReportDefinition(DailyFxSalesReportDue $event): array
+    {
+        $admins = User::query()
+            ->where('account_type', User::ACCOUNT_TYPE_ADMIN)
+            ->where('is_active', true)
+            ->whereNull('account_deleted_at')
+            ->get()
+            ->all();
+
+        $reportUrl = route('admin.exchange-rates.daily-report', [
+            'date' => $event->reportDate(),
+        ]);
+
+        return [
+            'code' => 'EXCHANGE_RATE_DAILY_BUY_REPORT',
+            'name' => 'Daily FX Buy + Sales Report',
+            'subject' => 'Daily FX report {report_date}',
+            'body' => 'USD buy {usd_buy_rate} LYD · EUR buy {eur_buy_rate} LYD. Sales: {sales_summary}. Open the admin report for PDF.',
+            'translations' => [
+                'ar' => [
+                    'subject' => 'تقرير الصرف اليومي {report_date}',
+                    'body' => 'شراء الدولار {usd_buy_rate} د.ل · شراء اليورو {eur_buy_rate} د.ل. المبيعات: {sales_summary}. افتح تقرير الأدمن للـ PDF.',
+                ],
+            ],
+            'channels' => [NotificationChannels::EMAIL, NotificationChannels::IN_APP],
+            'variables' => [
+                'report_date',
+                'usd_buy_rate',
+                'eur_buy_rate',
+                'sales_summary',
+                'orders_count',
+                'deep_link',
+            ],
+            'notification_type' => 'system',
+            'topic' => null,
+            'related_type' => 'exchange_rate_daily_report',
+            'related_id' => null,
+            'users' => $admins,
+            'payload' => [
+                'report_date' => $event->reportDate(),
+                'usd_buy_rate' => $event->usdBuyRate(),
+                'eur_buy_rate' => $event->eurBuyRate(),
+                'sales_summary' => $event->salesSummary(),
+                'orders_count' => (string) $event->ordersCount(),
+                'deep_link' => $reportUrl,
+                'idempotency_key' => 'fx_daily_report|'.$event->reportDate(),
             ],
         ];
     }

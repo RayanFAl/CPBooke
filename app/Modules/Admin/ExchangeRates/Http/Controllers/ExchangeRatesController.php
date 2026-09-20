@@ -5,8 +5,12 @@ namespace App\Modules\Admin\ExchangeRates\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\ExchangeRate;
 use App\Modules\Admin\ExchangeRates\Http\Requests\UpdateExchangeRatesRequest;
+use App\Modules\Admin\ExchangeRates\Services\DailyFxSalesReportService;
 use App\Modules\Admin\ExchangeRates\Services\ExchangeRatesAdminService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\View\View;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -14,6 +18,7 @@ class ExchangeRatesController extends Controller
 {
     public function __construct(
         private readonly ExchangeRatesAdminService $adminService,
+        private readonly DailyFxSalesReportService $dailyReportService,
     ) {
     }
 
@@ -58,6 +63,36 @@ class ExchangeRatesController extends Controller
             ],
             'base_currency' => ExchangeRate::BASE_CURRENCY,
             'update_url' => route('admin.exchange-rates.update', absolute: false),
+            'daily_report_url' => route('admin.exchange-rates.daily-report', absolute: false),
+        ]);
+    }
+
+    public function dailyReport(Request $request): Response
+    {
+        $date = $this->resolveRequestedDate($request->query('date'));
+        $report = $this->dailyReportService->build($date);
+
+        return Inertia::render('admin/exchange-rates/pages/DailyReport', [
+            'report' => $report,
+            'filters' => [
+                'date' => $report['report_date'],
+            ],
+            'print_url' => route('admin.exchange-rates.daily-report.print', [
+                'date' => $report['report_date'],
+            ], absolute: false),
+            'index_url' => route('admin.exchange-rates.index', absolute: false),
+        ]);
+    }
+
+    public function dailyReportPrint(Request $request): View
+    {
+        $date = $this->resolveRequestedDate($request->query('date'));
+        $report = $this->dailyReportService->build($date);
+
+        return view('admin.exchange-rates.daily-report-print', [
+            'report' => $report,
+            'company' => config('app.name', 'CPBooke'),
+            'generated_at' => now()->timezone(DailyFxSalesReportService::REPORT_TIMEZONE)->format('Y-m-d H:i'),
         ]);
     }
 
@@ -68,5 +103,18 @@ class ExchangeRatesController extends Controller
         return redirect()
             ->route('admin.exchange-rates.index')
             ->with('success', 'Exchange rates saved successfully.');
+    }
+
+    private function resolveRequestedDate(mixed $raw): ?Carbon
+    {
+        if (! is_string($raw) || trim($raw) === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($raw, DailyFxSalesReportService::REPORT_TIMEZONE);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

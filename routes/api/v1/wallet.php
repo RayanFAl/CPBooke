@@ -9,6 +9,15 @@ Route::prefix('wallet')
     ->controller(WalletController::class)
     ->group(function (): void {
         Route::get('/', 'index')->name('index');
+        Route::post('/', 'store')
+            ->middleware('throttle:30,1')
+            ->name('store');
+        Route::post('/deposit', 'deposit')
+            ->middleware('throttle:30,1')
+            ->name('deposit');
+        Route::post('/top-up', 'topUp')
+            ->middleware('throttle:30,1')
+            ->name('top-up');
         Route::get('/transactions', 'transactions')->name('transactions');
         Route::post('/test/top-up', 'testTopUp')
             ->middleware('throttle:20,1')

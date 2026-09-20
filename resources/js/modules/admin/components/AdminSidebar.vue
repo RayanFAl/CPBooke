@@ -46,9 +46,15 @@ const userInitials = computed(() => {
     return name.slice(0, 2).toUpperCase();
 });
 
-const isActive = (item) =>
-    page.url === item.startsWith || page.url.startsWith(`${item.startsWith}/`);
+const isActive = (item) => {
+    const url = page.url.split('?')[0];
 
+    if (item.matchExact) {
+        return url === item.startsWith;
+    }
+
+    return url === item.startsWith || url.startsWith(`${item.startsWith}/`);
+};
 const canAccessItem = (item) => {
     if (item.permission && !permissions.value.includes(item.permission)) {
         return false;

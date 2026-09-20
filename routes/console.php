@@ -8,6 +8,7 @@ use App\Jobs\RemindOpenSettlementsJob;
 use App\Jobs\RetryFailedNotificationsJob;
 use App\Jobs\RunSystemHealthProbesJob;
 use App\Jobs\SendBookingReminderNotificationsJob;
+use App\Jobs\SendDailyFxSalesReportJob;
 use App\Modules\Notifications\Services\TravelMarketingService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -20,6 +21,7 @@ Artisan::command('inspire', function () {
 Schedule::job(new RunSystemHealthProbesJob)->everyFiveMinutes();
 Schedule::job(new CheckProviderWalletsJob)->everyFifteenMinutes();
 Schedule::job(new RemindOpenSettlementsJob)->dailyAt('08:00');
+Schedule::job(new SendDailyFxSalesReportJob)->dailyAt('07:00');
 Schedule::job(new ExpirePendingApprovalsJob)->hourly();
 Schedule::job(new RetryFailedNotificationsJob)->everyThirtyMinutes();
 Schedule::job(new SendBookingReminderNotificationsJob)->everyFifteenMinutes();

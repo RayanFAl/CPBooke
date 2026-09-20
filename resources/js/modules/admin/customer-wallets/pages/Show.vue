@@ -18,6 +18,14 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    supported_currencies: {
+        type: Array,
+        default: () => ['LYD', 'USD', 'EUR'],
+    },
+    deposit_url: {
+        type: String,
+        default: '',
+    },
     transactions: {
         type: Object,
         required: true,
@@ -43,6 +51,7 @@ const props = defineProps({
 const { locale, t, backArrow } = useAdminLocale();
 const { confirm } = useAdminConfirm();
 const page = usePage();
+const selectedDepositCurrency = ref(props.wallet.currency);
 const flashSuccess = computed(() => page.props.flash?.success ?? null);
 const receiptTransaction = computed(() => {
     if (!props.receipt_id) {
@@ -74,12 +83,25 @@ const creditForm = useForm({
     note: '',
 });
 
+const depositForm = useForm({
+    amount: '',
+    note: '',
+    currency: props.wallet.currency,
+});
+
 const debitForm = useForm({
     amount: '',
     note: '',
 });
 
 const showAddMoney = ref(false);
+
+const selectedDepositTab = computed(() =>
+    props.currency_tabs.find((tab) => tab.currency === selectedDepositCurrency.value)
+    ?? { id: props.wallet.id, currency: props.wallet.currency, balance: props.wallet.balance, exists: true },
+);
+
+const depositTargetExists = computed(() => Boolean(selectedDepositTab.value?.exists && selectedDepositTab.value?.id));
 
 const currencyLabel = (code) => {
     const labels = {
@@ -129,7 +151,9 @@ const creditAmount = computed(() => {
 });
 
 const creditPreview = computed(() => {
-    const before = Number(props.wallet.balance ?? 0);
+    const before = depositTargetExists.value
+        ? Number(selectedDepositTab.value?.balance ?? props.wallet.balance ?? 0)
+        : 0;
     const added = creditAmount.value;
 
     return {
@@ -146,6 +170,8 @@ const openAddMoney = () => {
         return;
     }
 
+    selectedDepositCurrency.value = props.wallet.currency;
+    depositForm.currency = props.wallet.currency;
     showAddMoney.value = true;
 };
 
@@ -154,7 +180,23 @@ const closeAddMoney = () => {
 };
 
 const switchCurrencyTab = (tab, { keepAddMoney = false } = {}) => {
-    if (!tab || Number(tab.id) === Number(props.wallet.id)) {
+    if (!tab) {
+        return;
+    }
+
+    if (!tab.exists || !tab.id) {
+        selectedDepositCurrency.value = tab.currency;
+        depositForm.currency = tab.currency;
+        creditForm.amount = depositForm.amount;
+        showAddMoney.value = true;
+
+        return;
+    }
+
+    if (Number(tab.id) === Number(props.wallet.id)) {
+        selectedDepositCurrency.value = tab.currency;
+        depositForm.currency = tab.currency;
+
         return;
     }
 
@@ -172,31 +214,47 @@ const submitCredit = async () => {
         return;
     }
 
+    const currency = selectedDepositCurrency.value || props.wallet.currency;
     const accepted = await confirm({
         title: 'Confirm wallet top-up',
         message: [
             t(':admin will add :amount to this customer wallet as a recorded transaction.', {
                 admin: page.props.auth?.user?.full_name || page.props.auth?.user?.name || t('Admin'),
-                amount: formatMoney(creditPreview.value.added, props.wallet.currency),
+                amount: formatMoney(creditPreview.value.added, currency),
             }),
-            `${t('Wallet')}: ${props.wallet.currency}`,
-            `${t('Before')}: ${formatMoney(creditPreview.value.before, props.wallet.currency)}`,
-            `${t('Added')}: +${formatMoney(creditPreview.value.added, props.wallet.currency)}`,
-            `${t('After')}: ${formatMoney(creditPreview.value.after, props.wallet.currency)}`,
-        ].join('\n'),
-        confirmLabel: 'Record top-up',
-        cancelLabel: 'Cancel',
-        variant: 'primary',
+            `${t('Wallet')}: ${currency}`,
+            `${t('Before')}: ${formatMoney(creditPreview.value.before, currency)}`,
+            `${t('Added')}: +${formatMoney(creditPreview.value.added, currency)}`,
+            `${t('After')}: ${formatMoney(creditPreview.value.after, currency)}`,
+            !depositTargetExists.value
+                ? t('This will create the wallet for this currency on first deposit.')
+                : null,
+        ].filter(Boolean),
+        confirmLabel: t('Record top-up'),
+        cancelLabel: t('Cancel'),
     });
 
     if (!accepted) {
         return;
     }
 
-    creditForm.post(route('admin.customer-wallets.credit', props.wallet.id), {
+    if (!depositTargetExists.value) {
+        depositForm.amount = creditForm.amount;
+        depositForm.note = creditForm.note;
+        depositForm.currency = currency;
+        depositForm.post(props.deposit_url, {
+            preserveScroll: true,
+            onSuccess: () => {
+                showAddMoney.value = false;
+            },
+        });
+
+        return;
+    }
+
+    creditForm.post(route('admin.customer-wallets.credit', selectedDepositTab.value.id || props.wallet.id), {
         preserveScroll: true,
         onSuccess: () => {
-            creditForm.reset();
             showAddMoney.value = false;
         },
     });
@@ -311,16 +369,18 @@ watch(
                     <div class="flex flex-wrap gap-2">
                         <button
                             v-for="tab in currency_tabs"
-                            :key="tab.id"
+                            :key="tab.currency"
                             type="button"
                             class="rounded-2xl px-4 py-2 text-sm font-medium transition"
-                            :class="Number(tab.id) === Number(wallet.id)
+                            :class="tab.exists && Number(tab.id) === Number(wallet.id)
                                 ? 'bg-slate-950 text-white'
                                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
                             @click="switchCurrencyTab(tab)"
                         >
                             <span>{{ tab.currency }}</span>
-                            <span class="ms-2 opacity-80">{{ formatMoney(tab.balance, tab.currency) }}</span>
+                            <span class="ms-2 opacity-80">
+                                {{ tab.exists ? formatMoney(tab.balance, tab.currency) : t('new') }}
+                            </span>
                         </button>
                     </div>
                     <p class="mt-2 text-xs text-slate-500">
@@ -516,19 +576,22 @@ watch(
                     <div class="flex flex-wrap gap-2">
                         <button
                             v-for="tab in currency_tabs"
-                            :key="`modal-${tab.id}`"
+                            :key="`modal-${tab.currency}`"
                             type="button"
                             class="rounded-2xl px-4 py-2 text-sm font-medium transition"
-                            :class="Number(tab.id) === Number(wallet.id)
+                            :class="tab.currency === selectedDepositCurrency
                                 ? 'bg-slate-950 text-white'
                                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
                             @click="switchCurrencyTab(tab, { keepAddMoney: true })"
                         >
                             {{ tab.currency }}
+                            <span v-if="!tab.exists" class="ms-1 opacity-70">{{ t('new') }}</span>
                         </button>
                     </div>
                     <p class="mt-2 text-xs text-slate-500">
-                        {{ t('Selected') }}: {{ wallet.currency }} · {{ formatMoney(wallet.balance, wallet.currency) }}
+                        {{ t('Selected') }}: {{ selectedDepositCurrency }}
+                        · {{ formatMoney(creditPreview.before, selectedDepositCurrency) }}
+                        <span v-if="!depositTargetExists"> · {{ t('Created on deposit') }}</span>
                     </p>
                 </div>
 
@@ -540,10 +603,10 @@ watch(
                         min="0.01"
                         step="0.01"
                         required
-                        :error="creditForm.errors.amount"
+                        :error="creditForm.errors.amount || depositForm.errors.amount"
                     />
                     <AdminInput
-                        :model-value="wallet.currency"
+                        :model-value="selectedDepositCurrency"
                         :label="t('Currency')"
                         disabled
                     />
@@ -562,15 +625,15 @@ watch(
                     <dl class="mt-3 grid gap-2 sm:grid-cols-3">
                         <div>
                             <dt class="text-xs uppercase tracking-wide text-slate-500">{{ t('Before') }}</dt>
-                            <dd class="mt-1 text-slate-800">{{ formatMoney(creditPreview.before, wallet.currency) }}</dd>
+                            <dd class="mt-1 text-slate-800">{{ formatMoney(creditPreview.before, selectedDepositCurrency) }}</dd>
                         </div>
                         <div>
                             <dt class="text-xs uppercase tracking-wide text-slate-500">{{ t('Added') }}</dt>
-                            <dd class="mt-1 font-medium text-emerald-700">+{{ formatMoney(creditPreview.added, wallet.currency) }}</dd>
+                            <dd class="mt-1 font-medium text-emerald-700">+{{ formatMoney(creditPreview.added, selectedDepositCurrency) }}</dd>
                         </div>
                         <div>
                             <dt class="text-xs uppercase tracking-wide text-slate-500">{{ t('After') }}</dt>
-                            <dd class="mt-1 font-semibold text-slate-950">{{ formatMoney(creditPreview.after, wallet.currency) }}</dd>
+                            <dd class="mt-1 font-semibold text-slate-950">{{ formatMoney(creditPreview.after, selectedDepositCurrency) }}</dd>
                         </div>
                     </dl>
                 </div>

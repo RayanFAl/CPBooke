@@ -101,14 +101,16 @@ final class NotificationTemplateSamples
                 'deep_link' => '/app',
             ]),
             'EXCHANGE_RATE_UPDATED' => array_merge($samples, [
-                'currency_code' => 'USD',
-                'old_buy' => '9.35000000',
-                'new_buy' => '9.30000000',
-                'old_sell' => '9.42000000',
-                'new_sell' => '9.50000000',
-                'old_rate' => 'buy 9.35000000 / sell 9.42000000',
-                'new_rate' => 'buy 9.30000000 / sell 9.50000000',
+                'currency_codes' => 'USD, EUR',
                 'deep_link' => '/currency',
+            ]),
+            'EXCHANGE_RATE_DAILY_BUY_REPORT' => array_merge($samples, [
+                'report_date' => '2026-09-19',
+                'usd_buy_rate' => '9.35000000',
+                'eur_buy_rate' => '10.85000000',
+                'sales_summary' => 'LYD: 1500.00 (3) · USD: 200.00 (1)',
+                'orders_count' => '4',
+                'deep_link' => '/admin/exchange-rates/daily-report?date=2026-09-19',
             ]),
             default => $samples,
         };

@@ -47,6 +47,8 @@ class CustomerWalletTransaction extends Model
 
     public const REFERENCE_TEST_TOP_UP = 'test_top_up';
 
+    public const REFERENCE_DEPOSIT = 'deposit';
+
     public const REASON_CASH_RECEIVED = 'cash_received';
 
     public const REASON_BANK_TRANSFER = 'bank_transfer';

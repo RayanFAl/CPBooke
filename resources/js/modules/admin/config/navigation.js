@@ -210,6 +210,14 @@ export const navigationItems = [
                 startsWith: '/admin/exchange-rates',
                 permission: 'exchange-rates.view',
                 icon: 'settings',
+                matchExact: true,
+            },
+            {
+                label: 'Daily FX report',
+                route: 'admin.exchange-rates.daily-report',
+                startsWith: '/admin/exchange-rates/daily-report',
+                permission: 'exchange-rates.view',
+                icon: 'finance',
             },
             {
                 label: 'Mobile App',

@@ -42,46 +42,109 @@ class CustomerWalletTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.default_currency', 'LYD')
             ->assertJsonPath('data.supported_currencies', ['LYD', 'USD', 'EUR'])
-            ->assertJsonPath('data.wallets.0.currency', 'LYD')
-            ->assertJsonPath('data.wallets.0.balance', '0.00')
-            ->assertJsonPath('data.wallets.1.currency', 'USD')
-            ->assertJsonPath('data.wallets.2.currency', 'EUR')
+            ->assertJsonPath('data.available_currencies', ['LYD', 'USD', 'EUR'])
+            ->assertJsonPath('data.wallets', [])
             ->assertJsonPath('data.test_mode_enabled', true);
 
-        $this->assertDatabaseCount('customer_wallets', 3);
+        $this->assertDatabaseCount('customer_wallets', 0);
 
-        $this->postJson('/api/v1/wallet/test/top-up', ['amount' => 75])
-            ->assertOk()
-            ->assertJsonPath('data.wallet.balance', '75.00')
-            ->assertJsonPath('data.wallet.currency', 'LYD');
-
-        $this->postJson('/api/v1/wallet/test/top-up', [
-            'amount' => 20,
-            'currency' => 'USD',
+        $this->postJson('/api/v1/wallet/deposit', [
+            'currency' => 'LYD',
+            'amount' => 75,
+            'method' => 'card',
         ])
-            ->assertOk()
+            ->assertCreated()
+            ->assertJsonPath('data.wallet.currency', 'LYD')
+            ->assertJsonPath('data.wallet.balance', '75.00')
+            ->assertJsonPath('data.wallet_created', true)
+            ->assertJsonPath('data.transaction.amount', '75.00');
+
+        $this->postJson('/api/v1/wallet/top-up', [
+            'currency' => 'USD',
+            'amount' => 20,
+            'payment_method' => 'bank',
+        ])
+            ->assertCreated()
             ->assertJsonPath('data.wallet.currency', 'USD')
-            ->assertJsonPath('data.wallet.balance', '20.00');
+            ->assertJsonPath('data.wallet.balance', '20.00')
+            ->assertJsonPath('data.wallet_created', true);
+
+        $this->getJson('/api/v1/wallet')
+            ->assertOk()
+            ->assertJsonPath('data.wallets.0.currency', 'LYD')
+            ->assertJsonPath('data.wallets.1.currency', 'USD')
+            ->assertJsonPath('data.available_currencies', ['EUR']);
+
+        $this->assertDatabaseCount('customer_wallets', 2);
+
+        $this->postJson('/api/v1/wallet/test/top-up', ['amount' => 25])
+            ->assertOk()
+            ->assertJsonPath('data.wallet.balance', '100.00')
+            ->assertJsonPath('data.wallet.currency', 'LYD')
+            ->assertJsonPath('data.wallet_created', false);
 
         $this->getJson('/api/v1/wallet/USD')
             ->assertOk()
             ->assertJsonPath('data.currency', 'USD')
             ->assertJsonPath('data.balance', '20.00');
 
+        $this->getJson('/api/v1/wallet/EUR')
+            ->assertNotFound()
+            ->assertJsonPath('code', 'wallet_not_found');
+
         $this->getJson('/api/v1/wallet/transactions')
             ->assertOk()
-            ->assertJsonPath('data.wallet.balance', '75.00')
+            ->assertJsonPath('data.wallet.balance', '100.00')
             ->assertJsonPath('data.transactions.0.type', CustomerWalletTransaction::TYPE_CREDIT)
-            ->assertJsonPath('data.transactions.0.amount', '75.00')
-            ->assertJsonPath('data.customer_wallet_transactions.0.amount', '75.00')
             ->assertJsonPath('data.current_page', 1)
-            ->assertJsonPath('meta.total', 1);
+            ->assertJsonPath('meta.total', 2);
 
         $this->getJson('/api/v1/wallet/transactions?currency=USD')
             ->assertOk()
             ->assertJsonPath('data.wallet.currency', 'USD')
             ->assertJsonPath('data.transactions.0.amount', '20.00')
             ->assertJsonPath('data.customer_wallet_transactions.0.currency', 'USD');
+    }
+
+    public function test_customer_cannot_create_empty_wallet_without_deposit(): void
+    {
+        $customer = $this->makeCustomer();
+        Sanctum::actingAs($customer);
+
+        $this->postJson('/api/v1/wallet', ['currency' => 'LYD'])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'wallet_requires_deposit')
+            ->assertJsonPath('message', 'Wallet is created on first successful deposit.');
+
+        $this->assertDatabaseCount('customer_wallets', 0);
+    }
+
+    public function test_deposit_creates_wallet_when_missing_and_credits_when_existing(): void
+    {
+        $customer = $this->makeCustomer();
+        Sanctum::actingAs($customer);
+
+        $this->postJson('/api/v1/wallet/deposit', [
+            'currency' => 'LYD',
+            'amount' => '50.00',
+            'method' => 'card',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.wallet.balance', '50.00')
+            ->assertJsonPath('data.wallet_created', true)
+            ->assertJsonPath('data.transaction.payment_method', 'card')
+            ->assertJsonPath('data.transaction.reference_type', CustomerWalletTransaction::REFERENCE_DEPOSIT);
+
+        $this->postJson('/api/v1/wallet/deposit', [
+            'currency' => 'LYD',
+            'amount' => 25,
+            'payment_method' => 'cash',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.wallet.balance', '75.00')
+            ->assertJsonPath('data.wallet_created', false);
+
+        $this->assertSame(1, CustomerWallet::query()->where('user_id', $customer->id)->count());
     }
 
     public function test_admin_credit_appears_in_customer_wallet_transactions_api(): void
@@ -300,26 +363,42 @@ class CustomerWalletTest extends TestCase
         $customer = $this->makeCustomer();
 
         $this->actingAs($admin)
-            ->post(route('admin.users.customer-wallet.add-money', $customer))
+            ->post(route('admin.users.customer-wallet.add-money', $customer), [
+                'currency' => 'USD',
+            ])
+            ->assertRedirect(route('admin.users.show', [
+                'user' => $customer,
+                'tab' => 'finance',
+                'action' => 'deposit',
+                'currency' => 'USD',
+            ]));
+
+        $this->assertDatabaseCount('customer_wallets', 0);
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.customer-wallet.deposit', $customer), [
+                'currency' => 'USD',
+                'amount' => 50,
+                'note' => 'First USD deposit',
+            ])
             ->assertRedirect();
 
         $wallet = CustomerWallet::query()
             ->where('user_id', $customer->id)
-            ->where('currency', 'LYD')
+            ->where('currency', 'USD')
             ->first();
 
         $this->assertNotNull($wallet);
-        $this->assertSame('LYD', $wallet->currency);
-        $this->assertSame('0.00', (string) $wallet->balance);
-        $this->assertSame(3, CustomerWallet::query()->where('user_id', $customer->id)->count());
-
-        $this->actingAs($admin)
-            ->get(route('admin.customer-wallets.show', ['customerWallet' => $wallet, 'action' => 'add-money']))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('admin/customer-wallets/pages/Show', false)
-                ->where('open_add_money', true)
-                ->where('can_manage', true));
+        $this->assertSame('50.00', (string) $wallet->balance);
+        $this->assertSame(1, CustomerWallet::query()->where('user_id', $customer->id)->count());
+        $this->assertDatabaseMissing('customer_wallets', [
+            'user_id' => $customer->id,
+            'currency' => 'LYD',
+        ]);
+        $this->assertDatabaseMissing('customer_wallets', [
+            'user_id' => $customer->id,
+            'currency' => 'EUR',
+        ]);
     }
 
     public function test_wallet_payment_and_refund_restore_balance(): void
@@ -515,11 +594,34 @@ class CustomerWalletTest extends TestCase
 
         $this->postJson('/api/v1/wallet/test/top-up', [
             'amount' => 100,
-        ])->assertOk()
-            ->assertJsonPath('data.wallet.balance', '100.00');
+        ])->assertCreated()
+            ->assertJsonPath('data.wallet.balance', '100.00')
+            ->assertJsonPath('data.wallet_created', true);
 
         $this->assertDatabaseHas('customer_wallets', [
             'user_id' => $customer->id,
+            'balance' => '100.00',
+        ]);
+    }
+
+    public function test_test_top_up_creates_wallet_when_missing(): void
+    {
+        $customer = $this->makeCustomer();
+        Sanctum::actingAs($customer);
+
+        $this->assertDatabaseCount('customer_wallets', 0);
+
+        $this->postJson('/api/v1/wallet/test/top-up', [
+            'amount' => 100,
+            'currency' => 'EUR',
+        ])->assertCreated()
+            ->assertJsonPath('data.wallet.currency', 'EUR')
+            ->assertJsonPath('data.wallet.balance', '100.00')
+            ->assertJsonPath('data.wallet_created', true);
+
+        $this->assertDatabaseHas('customer_wallets', [
+            'user_id' => $customer->id,
+            'currency' => 'EUR',
             'balance' => '100.00',
         ]);
     }
@@ -531,7 +633,7 @@ class CustomerWalletTest extends TestCase
 
         $this->postJson('/api/v1/wallet/test/top-up', [
             'amount' => 1000,
-        ])->assertOk();
+        ])->assertCreated();
 
         $this->postJson('/api/v1/wallet/test/top-up', [
             'amount' => 1001,

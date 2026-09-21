@@ -76,6 +76,7 @@ final class NotificationInboxContract
                 'EXCHANGE_RATE_UPDATED',
                 'EXCHANGE_RATE_DAILY_BUY_REPORT',
                 'ACCOUNT_WELCOME_LOYALTY',
+                'LOYALTY_DISCOUNT_CAMPAIGN',
             ], true) => self::FAMILY_OPERATIONAL,
             default => self::FAMILY_TRANSACTIONAL,
         };
@@ -121,7 +122,7 @@ final class NotificationInboxContract
             $code === 'EXCHANGE_RATE_DAILY_BUY_REPORT' => self::CATEGORY_PAYMENTS,
             str_starts_with($code, 'OFFER_'),
             str_starts_with($code, 'POINTS_'),
-            in_array($code, ['POST_TRIP_NEXT', 'LOYALTY_NEAR_REWARD', 'POST_TRIP_THANKS', 'LOYALTY_TIER_CHANGED', 'LOYALTY_BENEFIT_UNLOCKED', 'ACCOUNT_WELCOME_LOYALTY', 'REWARD_AVAILABLE', 'TIER_UPGRADED'], true) => self::CATEGORY_OFFERS,
+            in_array($code, ['POST_TRIP_NEXT', 'LOYALTY_NEAR_REWARD', 'POST_TRIP_THANKS', 'LOYALTY_TIER_CHANGED', 'LOYALTY_BENEFIT_UNLOCKED', 'ACCOUNT_WELCOME_LOYALTY', 'LOYALTY_DISCOUNT_CAMPAIGN', 'REWARD_AVAILABLE', 'TIER_UPGRADED'], true) => self::CATEGORY_OFFERS,
             default => match (true) {
                 str_contains(strtolower($code), 'hotel') => self::CATEGORY_HOTELS,
                 default => self::CATEGORY_PAYMENTS,

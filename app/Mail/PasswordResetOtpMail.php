@@ -17,8 +17,7 @@ class PasswordResetOtpMail extends Mailable
         private readonly int $expiresInMinutes,
         private readonly string $recipientName,
         private readonly ?string $mailLocale = null,
-    ) {
-    }
+    ) {}
 
     public function build(): self
     {
@@ -44,7 +43,7 @@ class PasswordResetOtpMail extends Mailable
 
         $support = trim((string) config('mail.addresses.support', ''));
         if ($support !== '') {
-            $mail->replyTo($support, (string) config('mail.from.name'));
+            $mail->replyTo($support, (string) config('mail.names.support', 'Booke Support'));
         }
 
         return $mail;

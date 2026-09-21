@@ -111,17 +111,26 @@ return [
     */
 
     'from' => [
+        // Automated transactional mail only (OTP, bookings, tickets, payments, security).
         'address' => env('MAIL_FROM_ADDRESS', 'no-reply@booke.ly'),
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Booke')),
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Booke mailbox roles
+    | Booke mailbox roles (role-based addresses)
     |--------------------------------------------------------------------------
     |
-    | Sending uses MAIL_FROM_ADDRESS (no-reply). Support is Reply-To / contact.
-    | Info and feedback are inbound mailboxes — the app does not send from them.
+    | noreply  — system automation From: Booke <no-reply@booke.ly>
+    | support  — customer help Reply-To / contact: Booke Support <support@booke.ly>
+    | feedback — product feedback inbox (inbound; app does not send as this)
+    | info     — general / official inquiries (inbound; app does not send as this)
+    |
+    | Do not use noreply for human conversations. Always surface support@ in
+    | transactional footers so customers know where to get help.
+    |
+    | Ops: create mailboxes/aliases on booke.ly and configure SPF + DKIM + DMARC
+    | before relying on these addresses in production.
     |
     */
 
@@ -130,6 +139,13 @@ return [
         'support' => env('MAIL_SUPPORT_ADDRESS', 'support@booke.ly'),
         'info' => env('MAIL_INFO_ADDRESS', 'info@booke.ly'),
         'feedback' => env('MAIL_FEEDBACK_ADDRESS', 'feedback@booke.ly'),
+    ],
+
+    'names' => [
+        'noreply' => env('MAIL_FROM_NAME', env('APP_NAME', 'Booke')),
+        'support' => env('MAIL_SUPPORT_NAME', 'Booke Support'),
+        'feedback' => env('MAIL_FEEDBACK_NAME', 'Booke Feedback'),
+        'info' => env('MAIL_INFO_NAME', env('APP_NAME', 'Booke')),
     ],
 
 ];

@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\User;
 use App\Models\UserLoyaltyProfile;
 use App\Modules\Loyalty\Pricing\LoyaltyDiscountableFareResolver;
+use App\Modules\Loyalty\Support\LoyaltyResultsPromo;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
@@ -20,6 +21,10 @@ use Illuminate\Support\Facades\Schema;
 class LoyaltyService
 {
     private ?bool $loyaltySchemaAvailable = null;
+
+    public function __construct(
+        private readonly LoyaltyCompanyRateResolver $companyRateResolver,
+    ) {}
 
     /**
      * Determine the user's current tier from the dynamic rule set.
@@ -52,6 +57,12 @@ class LoyaltyService
             $fromTier = $profile->currentTier;
             $toTier = $evaluation['effective_tier'];
 
+            $welcomeConsumedAt = $profile->metadata['welcome_consumed_at'] ?? null;
+
+            if ($welcomeConsumedAt === null && (int) ($evaluation['metrics']['completed_orders_count'] ?? 0) >= 1) {
+                $welcomeConsumedAt = now()->toIso8601String();
+            }
+
             $profile->forceFill([
                 'current_tier_id' => $toTier?->id,
                 'next_tier_id' => $evaluation['next_tier']?->id,
@@ -67,7 +78,8 @@ class LoyaltyService
                 'metadata' => array_merge($profile->metadata ?? [], array_filter([
                     'entitlements' => $evaluation['entitlements'] ?? ($profile->metadata['entitlements'] ?? []),
                     'evaluation_mode' => ($evaluation['entitlements'] ?? null) !== null ? 'spend_duration' : ($profile->metadata['evaluation_mode'] ?? null),
-                ])),
+                    'welcome_consumed_at' => $welcomeConsumedAt,
+                ], static fn (mixed $value): bool => $value !== null)),
             ])->save();
 
             if ($fromTier?->id !== $toTier?->id) {
@@ -129,6 +141,45 @@ class LoyaltyService
             ];
         }
 
+        // Welcome / Level 1 discount ends after the first completed order.
+        if (
+            filled($profile->metadata['welcome_consumed_at'] ?? null)
+            || (int) $profile->completed_orders_count >= 1
+        ) {
+            $entitlement = $profile->metadata['entitlements'][(string) $profile->current_tier_id] ?? null;
+            $isWelcomeTier = (bool) $profile->currentTier->is_default
+                || (
+                    is_array($entitlement)
+                    && (
+                        ($entitlement['grant_reason'] ?? null) === 'welcome'
+                        || (bool) ($entitlement['ends_after_first_order'] ?? false)
+                    )
+                );
+
+            if ($isWelcomeTier) {
+                $totalAmount = (float) $order->total_amount;
+                $taxAmount = $order->tax_amount !== null ? (float) $order->tax_amount : null;
+                $fareAmount = LoyaltyDiscountableFareResolver::resolve(
+                    $totalAmount,
+                    $taxAmount,
+                    $order->base_amount !== null ? (float) $order->base_amount : null,
+                );
+
+                return [
+                    'tier' => null,
+                    'benefits' => [],
+                    'pricing' => [
+                        'base_total' => number_format($totalAmount, 2, '.', ''),
+                        'fare_amount' => number_format($fareAmount, 2, '.', ''),
+                        'tax_amount' => $taxAmount !== null ? number_format($taxAmount, 2, '.', '') : null,
+                        'discount_amount' => '0.00',
+                        'final_total' => number_format(LoyaltyDiscountableFareResolver::finalTotal($fareAmount, 0.0, $taxAmount), 2, '.', ''),
+                    ],
+                    'service_flags' => [],
+                ];
+            }
+        }
+
         $benefits = $profile->currentTier->benefits->where('is_active', true)->values();
 
         $totalAmount = (float) $order->total_amount;
@@ -138,7 +189,13 @@ class LoyaltyService
             $taxAmount,
             $order->base_amount !== null ? (float) $order->base_amount : null,
         );
-        $discountAmount = $this->calculateDiscountAmount($fareAmount, $benefits);
+        $discountAmount = $this->calculateDiscountAmount(
+            $fareAmount,
+            $benefits,
+            $profile->currentTier,
+            (string) $order->service_type,
+            is_array($order->details) ? $order->details : [],
+        );
         $finalTotal = LoyaltyDiscountableFareResolver::finalTotal($fareAmount, $discountAmount, $taxAmount);
         $serviceFlags = $this->serviceFlags($benefits);
 
@@ -215,6 +272,7 @@ class LoyaltyService
             ->get();
 
         $programTiers = $this->programTiersCatalog();
+        $monthSpend = round((float) ($profile?->period_spend ?? 0), 2);
 
         return [
             'program' => $this->programSettingsPayload(),
@@ -223,9 +281,12 @@ class LoyaltyService
             'current_tier' => $profile?->currentTier ? $this->tierMobilePayload($profile->currentTier) : null,
             'next_tier' => $profile?->nextTier ? $this->tierMobilePayload($profile->nextTier) : null,
             'membership' => $this->membershipPayload($profile),
+            'welcome_active' => $this->isWelcomeActive($profile),
             'show_welcome_message' => $this->shouldShowWelcomeMessage($profile),
             'welcome_message' => $this->welcomeMessage($profile),
             'progress_to_next_level' => $this->progressToNextLevelPayload($profile),
+            'monthly_spend' => $monthSpend,
+            'total_savings' => $this->totalSavingsForProfile($profile),
             'entitlement' => $this->entitlementPayload($profile),
             'benefits_unlocked' => $profile !== null ? $this->getUserBenefits($user) : [],
             'history' => $history->map(fn (LoyaltyHistory $entry): array => [
@@ -250,15 +311,25 @@ class LoyaltyService
                 'enabled' => false,
                 'visible_in_mobile_app' => false,
                 'default_currency' => 'LYD',
+                'welcome_ends_after_first_order' => true,
+                'rules' => [
+                    'welcome_tier_code' => 'welcome',
+                    'welcome_ends_after_first_completed_order' => true,
+                    'higher_tiers_unlock_by_monthly_spend' => true,
+                ],
+                'results_promo' => LoyaltyResultsPromo::defaults(),
             ],
             'tiers' => [],
             'current_level' => 0,
             'current_tier' => null,
             'next_tier' => null,
             'membership' => null,
+            'welcome_active' => false,
             'show_welcome_message' => false,
             'welcome_message' => null,
             'progress_to_next_level' => $this->progressToNextLevelPayload(null),
+            'monthly_spend' => 0.0,
+            'total_savings' => 0.0,
             'entitlement' => null,
             'benefits_unlocked' => [],
             'history' => [],
@@ -272,11 +343,22 @@ class LoyaltyService
     private function programSettingsPayload(): array
     {
         $settings = LoyaltySetting::current();
+        $metadata = is_array($settings->metadata) ? $settings->metadata : [];
 
         return [
             'enabled' => (bool) $settings->loyalty_enabled,
             'visible_in_mobile_app' => (bool) $settings->visible_in_mobile_app,
             'default_currency' => (string) ($settings->default_currency ?: 'LYD'),
+            // Booke+: Welcome (Level 1) is stage one and ends on the first completed order.
+            'welcome_ends_after_first_order' => true,
+            'rules' => [
+                'welcome_tier_code' => 'welcome',
+                'welcome_ends_after_first_completed_order' => true,
+                'higher_tiers_unlock_by_monthly_spend' => true,
+            ],
+            'results_promo' => LoyaltyResultsPromo::resolve(
+                is_array($metadata['results_promo'] ?? null) ? $metadata['results_promo'] : null,
+            ),
         ];
     }
 
@@ -308,13 +390,15 @@ class LoyaltyService
      */
     private function progressToNextLevelPayload(?UserLoyaltyProfile $profile): array
     {
+        $monthSpend = round((float) ($profile?->period_spend ?? 0), 2);
+
         return [
             'percentage' => (int) ($profile?->progress_percentage ?? 0),
             'current_metrics' => [
                 'lifetime_orders_count' => (int) ($profile?->lifetime_orders_count ?? 0),
                 'completed_orders_count' => (int) ($profile?->completed_orders_count ?? 0),
                 'lifetime_spend' => number_format((float) ($profile?->lifetime_spend ?? 0), 2, '.', ''),
-                'month_spend' => number_format((float) ($profile?->period_spend ?? 0), 2, '.', ''),
+                'month_spend' => $monthSpend,
                 'period_orders_count' => (int) ($profile?->period_orders_count ?? 0),
                 'period_spend' => number_format((float) ($profile?->period_spend ?? 0), 2, '.', ''),
             ],
@@ -344,11 +428,11 @@ class LoyaltyService
         }
 
         $requiredTables = [
-            (new LoyaltyTier())->getTable(),
-            (new LoyaltyRule())->getTable(),
-            (new LoyaltyBenefit())->getTable(),
-            (new UserLoyaltyProfile())->getTable(),
-            (new LoyaltyHistory())->getTable(),
+            (new LoyaltyTier)->getTable(),
+            (new LoyaltyRule)->getTable(),
+            (new LoyaltyBenefit)->getTable(),
+            (new UserLoyaltyProfile)->getTable(),
+            (new LoyaltyHistory)->getTable(),
         ];
 
         foreach ($requiredTables as $table) {
@@ -440,10 +524,21 @@ class LoyaltyService
 
             $threshold = (float) $rule->min_period_spend;
             $durationMonths = (int) ($rule->metadata['benefit_duration_months'] ?? 0);
+            $durationDays = (int) ($rule->metadata['benefit_duration_days'] ?? 0);
+            $durationUnit = (string) ($rule->metadata['benefit_duration_unit'] ?? '');
             $isStarterTier = (bool) $tier->is_default || $threshold <= 0;
 
-            // Phase-one starter: every registered/logged-in customer gets Level 1 permanently.
+            // Welcome / Level 1: active from registration until the first completed order.
             if ($isStarterTier) {
+                $welcomeConsumed = filled($profile?->metadata['welcome_consumed_at'] ?? null)
+                    || (int) $metrics['completed_orders_count'] >= 1;
+
+                if ($welcomeConsumed) {
+                    unset($entitlements[(string) $tier->id]);
+
+                    continue;
+                }
+
                 $existing = $entitlements[(string) $tier->id] ?? [];
                 $entitlements[(string) $tier->id] = [
                     'tier_id' => $tier->id,
@@ -454,25 +549,47 @@ class LoyaltyService
                     'qualification_spend' => 0,
                     'threshold' => 0,
                     'duration_months' => null,
-                    'grant_reason' => 'registration',
+                    'duration_days' => null,
+                    'duration_unit' => null,
+                    'grant_reason' => 'welcome',
+                    'welcome_active' => true,
+                    'ends_after_first_order' => true,
                 ];
 
                 continue;
             }
 
-            if ($durationMonths <= 0 || $monthSpend < $threshold) {
+            $resolvedDuration = $this->resolveBenefitDuration(
+                $durationUnit,
+                $durationDays,
+                $durationMonths,
+            );
+
+            if ($resolvedDuration === null || $monthSpend < $threshold) {
                 continue;
             }
+
+            $existing = $entitlements[(string) $tier->id] ?? [];
+            $existingExpires = isset($existing['expires_at']) && is_string($existing['expires_at'])
+                ? Carbon::parse($existing['expires_at'])
+                : null;
+            $stillActive = $existingExpires !== null && $existingExpires->greaterThan($now);
 
             $entitlements[(string) $tier->id] = [
                 'tier_id' => $tier->id,
                 'tier_code' => $tier->code,
                 'tier_level' => $tier->level,
-                'qualified_at' => $now->toIso8601String(),
-                'expires_at' => $now->copy()->addMonths($durationMonths)->toIso8601String(),
+                'qualified_at' => $stillActive
+                    ? ($existing['qualified_at'] ?? $now->toIso8601String())
+                    : $now->toIso8601String(),
+                'expires_at' => $stillActive
+                    ? $existingExpires->toIso8601String()
+                    : $resolvedDuration['expires_at']->toIso8601String(),
                 'qualification_spend' => $monthSpend,
                 'threshold' => $threshold,
-                'duration_months' => $durationMonths,
+                'duration_months' => $resolvedDuration['unit'] === 'months' ? $resolvedDuration['value'] : null,
+                'duration_days' => $resolvedDuration['unit'] === 'days' ? $resolvedDuration['value'] : null,
+                'duration_unit' => $resolvedDuration['unit'],
             ];
         }
 
@@ -505,8 +622,13 @@ class LoyaltyService
         $nextTier = $tiers
             ->sortBy('level')
             ->first(function (LoyaltyTier $tier) use ($effectiveTier, $activeTierIds): bool {
+                $rule = $tier->rules->firstWhere('rule_type', LoyaltyRule::TYPE_UPGRADE);
+                $isStarterTier = (bool) $tier->is_default
+                    || (float) ($rule?->min_period_spend ?? 1) <= 0;
+
+                // After welcome ends, progress points at the first earnable (non-welcome) level.
                 if ($effectiveTier === null) {
-                    return true;
+                    return ! $isStarterTier;
                 }
 
                 if ($tier->level <= $effectiveTier->level) {
@@ -676,14 +798,31 @@ class LoyaltyService
 
     /**
      * @param  Collection<int, LoyaltyBenefit>  $benefits
+     * @param  array<string, mixed>  $attributes
      */
-    private function calculateDiscountAmount(float $fareAmount, Collection $benefits): float
-    {
+    private function calculateDiscountAmount(
+        float $fareAmount,
+        Collection $benefits,
+        LoyaltyTier $tier,
+        string $serviceType,
+        array $attributes = [],
+    ): float {
         return round($benefits
             ->filter(fn (LoyaltyBenefit $benefit): bool => $benefit->benefit_type === LoyaltyBenefit::TYPE_DISCOUNT)
-            ->sum(function (LoyaltyBenefit $benefit) use ($fareAmount): float {
+            ->sum(function (LoyaltyBenefit $benefit) use ($fareAmount, $tier, $serviceType, $attributes): float {
                 if ($benefit->value_type === LoyaltyBenefit::VALUE_TYPE_PERCENTAGE) {
-                    return $fareAmount * (((float) $benefit->value) / 100);
+                    $percentage = $this->companyRateResolver->resolvePercentage(
+                        $tier,
+                        $serviceType,
+                        $attributes,
+                        $benefit,
+                    );
+
+                    if ($percentage === null) {
+                        return 0.0;
+                    }
+
+                    return $fareAmount * ($percentage / 100);
                 }
 
                 if ($benefit->value_type === LoyaltyBenefit::VALUE_TYPE_FIXED) {
@@ -781,7 +920,7 @@ class LoyaltyService
     }
 
     /**
-     * Tier snapshot for mobile clients, including discount and qualification fields.
+     * Tier snapshot for mobile clients (Booke+), including discount, localization, and benefits.
      *
      * @return array<string, mixed>
      */
@@ -794,30 +933,177 @@ class LoyaltyService
                 ->where('rule_type', LoyaltyRule::TYPE_UPGRADE)
                 ->first();
 
-        $monthlySpendRequired = null;
+        $monthlySpendRequired = $rule instanceof LoyaltyRule
+            ? round((float) $rule->min_period_spend, 2)
+            : 0.0;
+
+        $durationMonths = null;
+        $durationDays = null;
+        $durationUnit = null;
 
         if ($rule instanceof LoyaltyRule) {
-            $spend = (float) $rule->min_period_spend;
+            $resolved = $this->resolveBenefitDuration(
+                (string) ($rule->metadata['benefit_duration_unit'] ?? ''),
+                (int) ($rule->metadata['benefit_duration_days'] ?? 0),
+                (int) ($rule->metadata['benefit_duration_months'] ?? 0),
+            );
 
-            if ($spend > 0) {
-                $monthlySpendRequired = number_format($spend, 2, '.', '');
+            if ($resolved !== null) {
+                $durationUnit = $resolved['unit'];
+                $durationMonths = $resolved['unit'] === 'months' ? $resolved['value'] : null;
+                $durationDays = $resolved['unit'] === 'days' ? $resolved['value'] : null;
             }
         }
 
-        $durationMonths = null;
-
-        if ($rule instanceof LoyaltyRule) {
-            $duration = (int) ($rule->metadata['benefit_duration_months'] ?? 0);
-            $durationMonths = $duration > 0 ? $duration : null;
-        }
-
         $discountPercentage = $this->primaryDiscountPercentageForTier($tier);
+        $mobileCode = $this->mobileTierCode($tier);
+        [$nameEn, $nameAr] = $this->tierLocalizedNames($tier, $mobileCode);
 
-        return array_merge($this->tierPayload($tier), [
+        return [
+            'id' => $tier->id,
+            'level' => $tier->level,
+            'code' => $mobileCode,
+            'source_code' => $tier->code,
+            'name' => $nameEn,
+            'name_en' => $nameEn,
+            'name_ar' => $nameAr,
+            'description' => $tier->description,
+            'badge_label' => $tier->badge_label,
+            'color_token' => $tier->color_token,
             'discount_percentage' => $discountPercentage,
             'monthly_spend_required' => $monthlySpendRequired,
             'active_for_months' => $durationMonths,
-        ]);
+            'active_for_days' => $durationDays,
+            'duration_unit' => $durationUnit,
+            'ends_after_first_order' => $mobileCode === 'welcome' || (bool) $tier->is_default,
+            'benefits' => $this->tierMobileBenefits($tier, $discountPercentage),
+        ];
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function tierLocalizedNames(LoyaltyTier $tier, string $mobileCode): array
+    {
+        $defaults = match ($mobileCode) {
+            'welcome' => ['Welcome', 'مرحباً'],
+            'explorer' => ['Explorer', 'مستكشف'],
+            'gold' => ['Gold', 'ذهبي'],
+            'platinum' => ['Platinum', 'بلاتيني'],
+            default => [$tier->name, $tier->name],
+        };
+
+        $nameEn = trim((string) ($tier->metadata['name_en'] ?? '')) ?: $defaults[0];
+        $nameAr = trim((string) ($tier->metadata['name_ar'] ?? '')) ?: $defaults[1];
+
+        return [$nameEn, $nameAr];
+    }
+
+    private function mobileTierCode(LoyaltyTier $tier): string
+    {
+        $fromMeta = trim((string) ($tier->metadata['mobile_code'] ?? ''));
+
+        if ($fromMeta !== '') {
+            return $fromMeta;
+        }
+
+        return match ($tier->code) {
+            'level_1', 'welcome' => 'welcome',
+            'level_2', 'explorer' => 'explorer',
+            'level_3', 'gold' => 'gold',
+            'vip', 'platinum', 'elite' => 'platinum',
+            default => $tier->code,
+        };
+    }
+
+    /**
+     * @return array<int, array{label_ar: string, label_en: string, code?: string, benefit_type?: string}>
+     */
+    private function tierMobileBenefits(LoyaltyTier $tier, ?float $discountPercentage): array
+    {
+        $benefits = $tier->relationLoaded('benefits')
+            ? $tier->benefits->where('is_active', true)->values()
+            : $tier->benefits()->where('is_active', true)->orderBy('display_order')->orderBy('id')->get();
+
+        $items = [];
+
+        foreach ($benefits as $benefit) {
+            if (! $benefit instanceof LoyaltyBenefit) {
+                continue;
+            }
+
+            $labelEn = trim((string) ($benefit->metadata['label_en'] ?? ''));
+            $labelAr = trim((string) ($benefit->metadata['label_ar'] ?? ''));
+
+            if ($labelEn === '' || $labelAr === '') {
+                if (
+                    $benefit->benefit_type === LoyaltyBenefit::TYPE_DISCOUNT
+                    && $benefit->value_type === LoyaltyBenefit::VALUE_TYPE_PERCENTAGE
+                    && $benefit->value !== null
+                ) {
+                    $formatted = rtrim(rtrim(number_format((float) $benefit->value, 2, '.', ''), '0'), '.');
+                    $labelEn = $labelEn !== '' ? $labelEn : sprintf('%s%% off bookings', $formatted);
+                    $labelAr = $labelAr !== '' ? $labelAr : sprintf('خصم %s%% على الحجوزات', $formatted);
+                } else {
+                    $labelEn = $labelEn !== '' ? $labelEn : (string) $benefit->name;
+                    $labelAr = $labelAr !== '' ? $labelAr : (string) ($benefit->description ?: $benefit->name);
+                }
+            }
+
+            $items[] = [
+                'code' => $benefit->code,
+                'label_ar' => $labelAr,
+                'label_en' => $labelEn,
+                'benefit_type' => $benefit->benefit_type,
+            ];
+        }
+
+        if ($items === [] && $discountPercentage !== null) {
+            $formatted = rtrim(rtrim(number_format($discountPercentage, 2, '.', ''), '0'), '.');
+            $items[] = [
+                'label_ar' => sprintf('خصم %s%% على الحجوزات', $formatted),
+                'label_en' => sprintf('%s%% off bookings', $formatted),
+            ];
+        }
+
+        $extra = $tier->metadata['mobile_benefits'] ?? null;
+
+        if (is_array($extra)) {
+            foreach ($extra as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+
+                $labelEn = trim((string) ($row['label_en'] ?? ''));
+                $labelAr = trim((string) ($row['label_ar'] ?? ''));
+
+                if ($labelEn === '' && $labelAr === '') {
+                    continue;
+                }
+
+                $items[] = [
+                    'label_ar' => $labelAr !== '' ? $labelAr : $labelEn,
+                    'label_en' => $labelEn !== '' ? $labelEn : $labelAr,
+                ];
+            }
+        }
+
+        return array_values($items);
+    }
+
+    private function totalSavingsForProfile(?UserLoyaltyProfile $profile): float
+    {
+        if ($profile === null) {
+            return 0.0;
+        }
+
+        $fromMeta = $profile->metadata['total_savings'] ?? null;
+
+        if (is_numeric($fromMeta)) {
+            return round((float) $fromMeta, 2);
+        }
+
+        return 0.0;
     }
 
     /**
@@ -835,6 +1121,8 @@ class LoyaltyService
             'value' => $benefit->value !== null ? number_format((float) $benefit->value, 2, '.', '') : null,
             'configuration' => $benefit->configuration ?? [],
             'is_highlighted' => (bool) $benefit->is_highlighted,
+            'label_ar' => trim((string) ($benefit->metadata['label_ar'] ?? '')) ?: null,
+            'label_en' => trim((string) ($benefit->metadata['label_en'] ?? '')) ?: null,
         ];
     }
 
@@ -872,18 +1160,21 @@ class LoyaltyService
             return null;
         }
 
-        $formattedPercentage = rtrim(rtrim(number_format($discountPercentage, 2, '.', ''), '0'), '.');
+        $mobileCode = $this->mobileTierCode($profile->currentTier);
+        [$nameEn] = $this->tierLocalizedNames($profile->currentTier, $mobileCode);
 
         return [
             'discount_percentage' => $discountPercentage,
-            'checkout_label' => sprintf('%s discount (%s%%)', $profile->currentTier->name, $formattedPercentage),
+            'checkout_label' => sprintf('Booke+ %s', $nameEn),
             'expires_at' => $this->activeEntitlementForProfile($profile)['expires_at'] ?? null,
+            'welcome_active' => $this->isWelcomeActive($profile),
+            'ends_after_first_order' => $this->isWelcomeActive($profile),
         ];
     }
 
     private function shouldShowWelcomeMessage(?UserLoyaltyProfile $profile): bool
     {
-        return false;
+        return $this->isWelcomeActive($profile);
     }
 
     /**
@@ -895,10 +1186,41 @@ class LoyaltyService
             return null;
         }
 
+        $percentage = $this->primaryDiscountPercentage($profile);
+        $formatted = $percentage !== null
+            ? rtrim(rtrim(number_format($percentage, 2, '.', ''), '0'), '.')
+            : '3';
+
         return [
-            'en' => 'Welcome! You now have a permanent 2% discount on your bookings.',
-            'ar' => 'مرحباً بك! حصلت على خصم دائم 2% على حجوزاتك.',
+            'en' => sprintf('Welcome! You have a %s%% Booke+ discount until your first completed order.', $formatted),
+            'ar' => sprintf('مرحباً بك! لديك خصم Booke+ بنسبة %s%% حتى أول طلب مكتمل.', $formatted),
         ];
+    }
+
+    public function isWelcomeActive(?UserLoyaltyProfile $profile): bool
+    {
+        if ($profile === null || $profile->currentTier === null) {
+            return false;
+        }
+
+        if (filled($profile->metadata['welcome_consumed_at'] ?? null)) {
+            return false;
+        }
+
+        if ((int) $profile->completed_orders_count >= 1) {
+            return false;
+        }
+
+        $entitlement = $this->activeEntitlementForProfile($profile);
+
+        if (! is_array($entitlement)) {
+            return false;
+        }
+
+        return ($entitlement['grant_reason'] ?? null) === 'welcome'
+            || (bool) ($entitlement['welcome_active'] ?? false)
+            || (bool) ($entitlement['ends_after_first_order'] ?? false)
+            || (bool) $profile->currentTier->is_default;
     }
 
     private function primaryDiscountPercentage(?UserLoyaltyProfile $profile): ?float
@@ -955,6 +1277,14 @@ class LoyaltyService
             'duration_months' => isset($active['duration_months'])
                 ? (int) $active['duration_months']
                 : null,
+            'duration_days' => isset($active['duration_days'])
+                ? (int) $active['duration_days']
+                : null,
+            'duration_unit' => $active['duration_unit'] ?? (
+                isset($active['duration_days']) && (int) $active['duration_days'] > 0
+                    ? 'days'
+                    : (isset($active['duration_months']) && (int) $active['duration_months'] > 0 ? 'months' : null)
+            ),
             'qualification_spend' => isset($active['qualification_spend'])
                 ? number_format((float) $active['qualification_spend'], 2, '.', '')
                 : null,
@@ -1007,5 +1337,37 @@ class LoyaltyService
         }
 
         return number_format((float) $rule->min_period_spend, 2, '.', '');
+    }
+
+    /**
+     * @return array{unit: string, value: int, expires_at: \Carbon\Carbon}|null
+     */
+    private function resolveBenefitDuration(string $unit, int $days, int $months): ?array
+    {
+        $normalizedUnit = in_array($unit, ['days', 'months'], true)
+            ? $unit
+            : ($days > 0 && $months <= 0 ? 'days' : 'months');
+
+        if ($normalizedUnit === 'days') {
+            if ($days <= 0) {
+                return null;
+            }
+
+            return [
+                'unit' => 'days',
+                'value' => $days,
+                'expires_at' => now()->copy()->addDays($days),
+            ];
+        }
+
+        if ($months <= 0) {
+            return null;
+        }
+
+        return [
+            'unit' => 'months',
+            'value' => $months,
+            'expires_at' => now()->copy()->addMonths($months),
+        ];
     }
 }

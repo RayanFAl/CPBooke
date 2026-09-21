@@ -157,6 +157,13 @@ export const navigationItems = [
                 icon: 'loyalty',
             },
             {
+                label: 'Promo card',
+                route: 'admin.promo.index',
+                startsWith: '/admin/promo',
+                permission: 'loyalty.view',
+                icon: 'content',
+            },
+            {
                 label: 'Notifications',
                 route: 'admin.notifications.index',
                 startsWith: '/admin/notifications',

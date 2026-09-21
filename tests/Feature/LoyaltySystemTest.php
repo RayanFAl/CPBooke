@@ -63,11 +63,115 @@ class LoyaltySystemTest extends TestCase
         $this->assertSame('485.00', $application['pricing']['final_total']);
         $this->assertNotEmpty($profile->metadata['entitlements'] ?? []);
         $this->assertNull($profile->metadata['entitlements'][(string) $profile->current_tier_id]['expires_at']);
+        $this->assertSame('welcome', $profile->metadata['entitlements'][(string) $profile->current_tier_id]['grant_reason'] ?? null);
         $this->assertDatabaseHas('loyalty_history', [
             'user_id' => $customer->id,
             'action' => LoyaltyHistory::ACTION_UPGRADED,
             'to_tier_id' => $profile->current_tier_id,
         ]);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_welcome_level_one_discount_ends_after_first_completed_order(): void
+    {
+        Carbon::setTestNow('2026-06-15 12:00:00');
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $service = app(LoyaltyService::class);
+        $profile = $service->upgradeUserIfEligible($customer);
+
+        $this->assertSame('level_1', $profile->currentTier?->code);
+        $this->assertTrue($service->isWelcomeActive($profile));
+
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'provider_name' => 'Welcome End Provider',
+            'booking_reference' => 'BK-WELCOME-END',
+            'status' => Order::STATUS_COMPLETED,
+            'payment_status' => Order::PAYMENT_STATUS_PAID,
+            'service_type' => Order::SERVICE_TYPE_HOTEL,
+            'details' => ['hotel_name' => 'Welcome Suites'],
+            'currency' => 'LYD',
+            'total_amount' => 200.00,
+            'base_amount' => 200.00,
+            'tax_amount' => 0,
+            'request_payload' => [],
+        ]);
+
+        $updated = $service->upgradeUserIfEligible($customer, new OrderCompleted($order));
+
+        $this->assertNotNull($updated->metadata['welcome_consumed_at'] ?? null);
+        $this->assertFalse($service->isWelcomeActive($updated));
+        $this->assertNull($updated->current_tier_id);
+
+        $payload = $service->profilePayload($customer, initializeIfMissing: false);
+        $this->assertFalse($payload['welcome_active']);
+        $this->assertFalse($payload['show_welcome_message']);
+        $this->assertNull($payload['membership']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_spend_duration_level_can_expire_after_configured_days(): void
+    {
+        Carbon::setTestNow('2026-06-10 12:00:00');
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        $level2 = LoyaltyTier::query()->where('code', 'level_2')->firstOrFail();
+        $rule = LoyaltyRule::query()
+            ->where('tier_id', $level2->id)
+            ->where('rule_type', LoyaltyRule::TYPE_UPGRADE)
+            ->firstOrFail();
+
+        $rule->forceFill([
+            'min_period_spend' => 1000,
+            'metadata' => array_merge($rule->metadata ?? [], [
+                'benefit_duration_unit' => 'days',
+                'benefit_duration_days' => 3,
+                'benefit_duration_months' => null,
+                'evaluation_mode' => 'spend_duration',
+            ]),
+        ])->save();
+
+        $this->createQualifiedOrder($customer, 1200.00, Carbon::parse('2026-06-08 10:00:00'));
+
+        $service = app(LoyaltyService::class);
+        $profile = $service->upgradeUserIfEligible($customer);
+
+        $this->assertSame('level_2', $profile->currentTier?->code);
+        $entitlement = $profile->metadata['entitlements'][(string) $level2->id] ?? [];
+        $this->assertSame('days', $entitlement['duration_unit'] ?? null);
+        $this->assertSame(3, $entitlement['duration_days'] ?? null);
+        $this->assertSame(
+            Carbon::parse('2026-06-13 12:00:00')->toIso8601String(),
+            $entitlement['expires_at'] ?? null,
+        );
+
+        // Same month and still above spend: expired window renews for another 3 days.
+        Carbon::setTestNow('2026-06-14 12:00:00');
+        $renewed = $service->upgradeUserIfEligible($customer);
+        $this->assertSame('level_2', $renewed->currentTier?->code);
+        $renewedEntitlement = $renewed->metadata['entitlements'][(string) $level2->id] ?? [];
+        $this->assertSame(
+            Carbon::parse('2026-06-17 12:00:00')->toIso8601String(),
+            $renewedEntitlement['expires_at'] ?? null,
+        );
+
+        // Next calendar month with no spend: entitlement ends.
+        Carbon::setTestNow('2026-07-01 12:00:00');
+        $expired = $service->upgradeUserIfEligible($customer);
+
+        $this->assertNull($expired->current_tier_id);
+        $this->assertArrayNotHasKey((string) $level2->id, $expired->metadata['entitlements'] ?? []);
 
         Carbon::setTestNow();
     }
@@ -130,7 +234,7 @@ class LoyaltySystemTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_profile_api_exposes_monthly_spend_progress_and_entitlement(): void
+    public function test_profile_api_exposes_monthly_spend_progress_after_welcome_ends(): void
     {
         Carbon::setTestNow('2026-06-18 12:00:00');
 
@@ -148,17 +252,15 @@ class LoyaltySystemTest extends TestCase
         $this->getJson('/api/v1/users/profile')
             ->assertOk()
             ->assertJsonPath('data.user.loyalty.program.enabled', true)
-            ->assertJsonPath('data.user.loyalty.current_tier.code', 'level_1')
-            ->assertJsonPath('data.user.loyalty.current_tier.discount_percentage', 3)
-            ->assertJsonPath('data.user.loyalty.current_level', 1)
-            ->assertJsonPath('data.user.loyalty.next_tier.code', 'level_2')
+            ->assertJsonPath('data.user.loyalty.current_tier', null)
+            ->assertJsonPath('data.user.loyalty.current_level', 0)
+            ->assertJsonPath('data.user.loyalty.welcome_active', false)
+            ->assertJsonPath('data.user.loyalty.next_tier.code', 'explorer')
             ->assertJsonPath('data.user.loyalty.next_tier.discount_percentage', 8)
-            ->assertJsonPath('data.user.loyalty.progress_to_next_level.current_metrics.month_spend', '1000.00')
+            ->assertJsonPath('data.user.loyalty.progress_to_next_level.current_metrics.month_spend', 1000)
             ->assertJsonPath('data.user.loyalty.progress_to_next_level.next_threshold', '5000.00')
             ->assertJsonPath('data.user.loyalty.progress_to_next_level.amount_remaining', '4000.00')
-            ->assertJsonPath('data.user.loyalty.benefits_unlocked.0.code', 'level_1_discount')
-            ->assertJsonPath('data.user.loyalty.membership.discount_percentage', 3)
-            ->assertJsonPath('data.user.loyalty.membership.expires_at', null)
+            ->assertJsonPath('data.user.loyalty.membership', null)
             ->assertJsonStructure([
                 'data' => [
                     'user' => [
@@ -172,11 +274,6 @@ class LoyaltySystemTest extends TestCase
                                     'active_for_months',
                                 ],
                             ],
-                            'entitlement' => [
-                                'expires_at',
-                                'days_remaining',
-                                'duration_months',
-                            ],
                         ],
                     ],
                 ],
@@ -184,7 +281,7 @@ class LoyaltySystemTest extends TestCase
 
         $this->getJson('/api/v1/auth/me')
             ->assertOk()
-            ->assertJsonPath('data.user.loyalty.tiers.0.code', 'level_1')
+            ->assertJsonPath('data.user.loyalty.tiers.0.code', 'welcome')
             ->assertJsonPath('data.user.loyalty.next_tier.discount_percentage', 8);
 
         Carbon::setTestNow();
@@ -204,8 +301,7 @@ class LoyaltySystemTest extends TestCase
             'is_admin' => false,
         ]);
 
-        $this->createQualifiedOrder($customer, 1200.00, Carbon::parse('2026-06-05 10:00:00'));
-
+        // Welcome Level 1 (no completed orders yet) should appear in the dashboard.
         app(LoyaltyService::class)->upgradeUserIfEligible($customer);
 
         $this->seed(RolesAndPermissionsSeeder::class);
@@ -224,6 +320,15 @@ class LoyaltySystemTest extends TestCase
                 ->where('dashboard.metrics.profiles', 1)
                 ->where('dashboard.tiers.1.code', 'level_1')
                 ->where('dashboard.users_per_tier.1.users.0.user.id', $customer->id)
+            );
+
+        $this->actingAs($admin)
+            ->get(route('admin.promo.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/promo/pages/Index', false)
+                ->has('settings.results_promo')
+                ->where('can_manage_settings', true)
             );
 
         $this->actingAs($admin)
@@ -320,7 +425,7 @@ class LoyaltySystemTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_registration_assigns_permanent_level_one_discount(): void
+    public function test_registration_assigns_welcome_level_one_discount_until_first_order(): void
     {
         $customer = User::factory()->create([
             'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
@@ -338,13 +443,15 @@ class LoyaltySystemTest extends TestCase
 
         $payload = app(LoyaltyService::class)->profilePayload($customer, initializeIfMissing: false);
 
-        $this->assertFalse($payload['show_welcome_message']);
-        $this->assertSame('level_1', $payload['current_tier']['code'] ?? null);
+        $this->assertTrue($payload['show_welcome_message']);
+        $this->assertTrue($payload['welcome_active']);
+        $this->assertSame('welcome', $payload['current_tier']['code'] ?? null);
         $this->assertSame(3.0, $payload['membership']['discount_percentage'] ?? null);
+        $this->assertTrue($payload['membership']['ends_after_first_order'] ?? false);
         $this->assertArrayHasKey('expires_at', $payload['membership'] ?? []);
         $this->assertNull($payload['membership']['expires_at']);
         $this->assertNotEmpty($payload['tiers']);
-        $this->assertSame('level_2', $payload['next_tier']['code'] ?? null);
+        $this->assertSame('explorer', $payload['next_tier']['code'] ?? null);
         $this->assertSame('5000.00', $payload['progress_to_next_level']['amount_remaining']);
 
         $this->assertDatabaseHas('user_notifications', [
@@ -386,7 +493,7 @@ class LoyaltySystemTest extends TestCase
         ]);
     }
 
-    public function test_login_assigns_permanent_level_one_discount_for_existing_customers(): void
+    public function test_login_assigns_welcome_level_one_discount_for_existing_customers(): void
     {
         $customer = User::factory()->create([
             'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
@@ -408,7 +515,10 @@ class LoyaltySystemTest extends TestCase
 
         $this->assertNotNull($profile);
         $this->assertSame('level_1', $profile->currentTier?->code);
-        $this->assertSame(3.0, app(LoyaltyService::class)->profilePayload($customer, false)['membership']['discount_percentage'] ?? null);
+        $payload = app(LoyaltyService::class)->profilePayload($customer, false);
+        $this->assertSame(3.0, $payload['membership']['discount_percentage'] ?? null);
+        $this->assertTrue($payload['welcome_active'] ?? false);
+        $this->assertTrue($payload['membership']['ends_after_first_order'] ?? false);
     }
 
     public function test_registered_event_is_listened_for_loyalty_initialization(): void

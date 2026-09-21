@@ -7,6 +7,7 @@ use App\Models\LoyaltySetting;
 use App\Models\User;
 use App\Modules\Admin\Loyalty\Http\Requests\UpdateLoyaltySettingsRequest;
 use App\Modules\Audit\Services\AuditRecorder;
+use App\Modules\Loyalty\Support\LoyaltyResultsPromo;
 use App\Support\Rbac\RbacAuditLogger;
 
 class LoyaltySettingsAdminService
@@ -14,8 +15,7 @@ class LoyaltySettingsAdminService
     public function __construct(
         private readonly RbacAuditLogger $rbacAuditLogger,
         private readonly AuditRecorder $auditRecorder,
-    ) {
-    }
+    ) {}
 
     public function getSettings(): LoyaltySetting
     {
@@ -27,7 +27,17 @@ class LoyaltySettingsAdminService
         $settings = LoyaltySetting::current();
         $before = $this->settingsSnapshot($settings);
 
-        $settings->forceFill($request->validated());
+        $validated = $request->validated();
+        $resultsPromo = $validated['results_promo'] ?? null;
+        unset($validated['results_promo']);
+
+        if (is_array($resultsPromo)) {
+            $metadata = is_array($settings->metadata) ? $settings->metadata : [];
+            $metadata['results_promo'] = LoyaltyResultsPromo::resolve($resultsPromo);
+            $validated['metadata'] = $metadata;
+        }
+
+        $settings->forceFill($validated);
         $settings->settings_version = max(1, (int) ($settings->settings_version ?? 1)) + 1;
         $settings->updated_by_user_id = $admin->id;
         $settings->save();
@@ -72,23 +82,36 @@ class LoyaltySettingsAdminService
     /**
      * @return array<string, mixed>
      */
-    private function settingsSnapshot(LoyaltySetting $settings): array
+    public function settingsPayload(LoyaltySetting $settings): array
     {
+        $metadata = is_array($settings->metadata) ? $settings->metadata : [];
+
         return [
             'loyalty_enabled' => (bool) $settings->loyalty_enabled,
             'auto_upgrade_enabled' => (bool) $settings->auto_upgrade_enabled,
             'auto_downgrade_enabled' => (bool) $settings->auto_downgrade_enabled,
             'visible_in_mobile_app' => (bool) $settings->visible_in_mobile_app,
             'allow_discount_stacking' => (bool) $settings->allow_discount_stacking,
-            'max_global_discount_amount' => $settings->max_global_discount_amount !== null
-                ? number_format((float) $settings->max_global_discount_amount, 2, '.', '')
-                : null,
-            'minimum_discountable_order_amount' => $settings->minimum_discountable_order_amount !== null
-                ? number_format((float) $settings->minimum_discountable_order_amount, 2, '.', '')
-                : null,
-            'default_currency' => $settings->default_currency,
-            'settings_version' => (int) ($settings->settings_version ?? 1),
+            'default_currency' => (string) ($settings->default_currency ?: 'LYD'),
+            'max_global_discount_amount' => $settings->max_global_discount_amount,
+            'minimum_discountable_order_amount' => $settings->minimum_discountable_order_amount,
+            'settings_version' => (int) $settings->settings_version,
+            'updated_at' => $settings->updated_at?->toIso8601String(),
+            'results_promo' => LoyaltyResultsPromo::resolve(
+                is_array($metadata['results_promo'] ?? null) ? $metadata['results_promo'] : null,
+            ),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function settingsSnapshot(LoyaltySetting $settings): array
+    {
+        $payload = $this->settingsPayload($settings);
+        unset($payload['updated_at']);
+
+        return $payload;
     }
 
     /**
@@ -103,6 +126,17 @@ class LoyaltySettingsAdminService
 
         foreach ($after as $key => $value) {
             $previous = $before[$key] ?? null;
+
+            if ($key === 'results_promo') {
+                if (json_encode($previous) === json_encode($value)) {
+                    continue;
+                }
+
+                $oldValues[$key] = $previous;
+                $newValues[$key] = $value;
+
+                continue;
+            }
 
             if (is_bool($previous) || is_bool($value)) {
                 if ((bool) $previous === (bool) $value) {

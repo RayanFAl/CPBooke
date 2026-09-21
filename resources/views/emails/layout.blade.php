@@ -28,10 +28,24 @@
                                 <td style="height:4px;background-color:{{ $colors['accent'] }};font-size:0;line-height:0;">&nbsp;</td>
                             </tr>
                             <tr>
-                                <td style="padding:28px 32px 24px;text-align:{{ ($rtl ?? false) ? 'right' : 'left' }};">
-                                    <p style="margin:0;font-size:22px;font-weight:700;line-height:1.3;color:#FFFFFF;letter-spacing:0.02em;">
-                                        {{ $brandName ?? 'Booke' }}
-                                    </p>
+                                <td style="padding:22px 32px 20px;text-align:{{ $align ?? (($rtl ?? false) ? 'right' : 'left') }};">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                                        <tr>
+                                            <td style="vertical-align:middle;padding-{{ ($rtl ?? false) ? 'left' : 'right' }}:12px;">
+                                                <img src="{{ $logoUrl }}" alt="{{ $brandName ?? 'Booke' }}" width="40" height="40" style="display:block;border:0;border-radius:10px;background-color:#FFFFFF;">
+                                            </td>
+                                            <td style="vertical-align:middle;">
+                                                <p style="margin:0;font-size:20px;font-weight:700;line-height:1.3;color:#FFFFFF;letter-spacing:0.02em;">
+                                                    {{ $brandName ?? 'Booke' }}
+                                                </p>
+                                                @isset($headerEyebrow)
+                                                    <p style="margin:4px 0 0;font-size:12px;line-height:1.4;color:rgba(255,255,255,0.85);">
+                                                        {{ $headerEyebrow }}
+                                                    </p>
+                                                @endisset
+                                            </td>
+                                        </tr>
+                                    </table>
                                 </td>
                             </tr>
                         </table>
@@ -40,14 +54,14 @@
 
                 {{-- Body --}}
                 <tr>
-                    <td style="padding:32px;background-color:{{ $colors['cardBackground'] }};color:{{ $colors['textPrimary'] }};font-size:15px;line-height:1.7;text-align:{{ ($rtl ?? false) ? 'right' : 'left' }};">
+                    <td style="padding:32px;background-color:{{ $colors['cardBackground'] }};color:{{ $colors['textPrimary'] }};font-size:15px;line-height:1.7;text-align:{{ $align ?? (($rtl ?? false) ? 'right' : 'left') }};">
                         @yield('content')
                     </td>
                 </tr>
 
                 {{-- Footer --}}
                 <tr>
-                    <td style="padding:24px 32px;background-color:{{ $colors['background'] }};border-top:1px solid {{ $colors['border'] }};text-align:{{ ($rtl ?? false) ? 'right' : 'left' }};">
+                    <td style="padding:24px 32px;background-color:{{ $colors['background'] }};border-top:1px solid {{ $colors['border'] }};text-align:{{ $align ?? (($rtl ?? false) ? 'right' : 'left') }};">
                         @if(!empty($supportEmail))
                             <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:{{ $colors['textSecondary'] }};">
                                 {{ $footerHelp ?? 'Need help? Contact us at' }}

@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\ContentPage;
 use App\Modules\Content\Support\ContentPageCatalog;
+use App\Modules\Content\Support\ContentPageCopy;
+use Database\Seeders\ContentPageSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -198,6 +200,47 @@ class ContentPagesApiTest extends TestCase
             ->assertJsonPath('data.products.hotel.slug', 'hotel-policy')
             ->assertJsonMissingPath('data.products.insurance')
             ->assertHeader('ETag');
+    }
+
+    public function test_seeded_privacy_policy_includes_account_deletion_copy(): void
+    {
+        $this->seed(ContentPageSeeder::class);
+
+        $english = $this->getJson('/api/v1/pages/privacy-policy?locale=en')
+            ->assertOk()
+            ->json('data.body');
+        $arabic = $this->getJson('/api/v1/pages/privacy-policy?locale=ar')
+            ->assertOk()
+            ->json('data.body');
+
+        $this->assertStringContainsString(ContentPageCopy::ACCOUNT_DELETION_NOTICE_MARKER_EN, $english);
+        $this->assertStringContainsString('<strong>one year</strong>', $english);
+        $this->assertStringContainsString(ContentPageCopy::ACCOUNT_DELETION_NOTICE_MARKER_AR, $arabic);
+        $this->assertStringContainsString('<strong>سنة واحدة</strong>', $arabic);
+    }
+
+    public function test_privacy_policy_migration_appends_account_deletion_notice_to_existing_copy(): void
+    {
+        $page = ContentPage::query()->create([
+            'slug' => ContentPageCatalog::SLUG_PRIVACY_POLICY,
+            'category' => ContentPageCatalog::CATEGORY_LEGAL,
+            'title_en' => 'Privacy Policy',
+            'title_ar' => 'سياسة الخصوصية',
+            'body_en' => '<p>Custom privacy copy</p>',
+            'body_ar' => '<p>نص خصوصية مخصص</p>',
+            'sort_order' => 1,
+            'is_active' => true,
+        ]);
+
+        $migration = require base_path('database/migrations/2026_09_21_180000_seed_privacy_policy_account_deletion_copy.php');
+        $migration->up();
+
+        $page->refresh();
+
+        $this->assertStringContainsString('Custom privacy copy', $page->body_en);
+        $this->assertStringContainsString(ContentPageCopy::ACCOUNT_DELETION_NOTICE_MARKER_EN, $page->body_en);
+        $this->assertStringContainsString('نص خصوصية مخصص', $page->body_ar);
+        $this->assertStringContainsString(ContentPageCopy::ACCOUNT_DELETION_NOTICE_MARKER_AR, $page->body_ar);
     }
 
     private function createLegalPage(): ContentPage

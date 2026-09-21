@@ -200,8 +200,13 @@ export const pageHelpEntries = [
     },
     {
         match: 'admin.loyalty',
-        en: 'Loyalty program: Level 1 starts on registration/login; higher tiers unlock by monthly spend. Discount applies to fare only.',
-        ar: 'برنامج الولاء: المستوى 1 يبدأ عند التسجيل/تسجيل الدخول؛ المستويات الأعلى تُفتح بالإنفاق الشهري. الخصم يطبّق على الأجرة فقط.',
+        en: 'Loyalty: Welcome (Level 1) ends on the first completed order. Higher levels unlock by monthly spend and stay active for the days/months you set. Discount is on fare only (not tax).',
+        ar: 'الولاء: مرحلة Welcome (المستوى 1) تنتهي عند أول طلب مكتمل. المستويات الأعلى تُفتح بالإنفاق الشهري وتبقى للأيام/الأشهر التي تحددها. الخصم على الأجرة فقط (بدون الضريبة).',
+    },
+    {
+        match: 'admin.promo',
+        en: 'Results promo card: edit the title, body, CTA, and action sent to the app via GET /loyalty (program.results_promo).',
+        ar: 'كارت إعلان النتائج: عدّل العنوان والنص وزر الإجراء الذي يصل للتطبيق عبر GET /loyalty (program.results_promo).',
     },
     {
         match: 'admin.notifications',

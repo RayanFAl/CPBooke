@@ -17,6 +17,8 @@ class ContentPagesWebTest extends TestCase
             ->assertOk()
             ->assertSee('Booke', false)
             ->assertSee('سياسة الخصوصية', false)
+            ->assertSee('عند طلب حذف الحساب، يُقفل دخولك إلى تطبيق Booke', false)
+            ->assertSee('سنة واحدة', false)
             ->assertSee('سياسة حجز الطيران', false)
             ->assertSee('سياسة حجز الفنادق', false)
             ->assertSee('سياسة التأمين', false)

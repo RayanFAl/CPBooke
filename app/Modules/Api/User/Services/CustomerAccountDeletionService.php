@@ -43,14 +43,13 @@ class CustomerAccountDeletionService
 
     public const MODE_SCHEDULED = 'scheduled';
 
-    public const GRACE_PERIOD_DAYS = 60;
+    public const GRACE_PERIOD_DAYS = 365;
 
     public function __construct(
         private readonly ApiTokenService $apiTokenService,
         private readonly SavedPassengerService $savedPassengerService,
         private readonly AuditRecorder $auditRecorder,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -67,32 +66,21 @@ class CustomerAccountDeletionService
             return $this->immediateDeletionPayload($user);
         }
 
-        if ($user->hasPendingAccountDeletion()) {
-            if ($mode === self::MODE_IMMEDIATE) {
-                return $this->deleteNow($user);
-            }
-
-            return $this->scheduledDeletionPayload($user);
+        if ($mode !== self::MODE_SCHEDULED) {
+            throw ValidationException::withMessages([
+                'mode' => ['Account deletion from the app is scheduled only.'],
+            ]);
         }
 
-        $this->assertWalletAllowsDeletion($user);
-        $this->assertNoBlockingOrders($user);
-
-        if ($mode === self::MODE_SCHEDULED) {
-            return $this->schedule($user);
-        }
-
-        return $this->deleteNow($user);
+        return $this->schedule($user);
     }
 
     /**
-     * Permanently close a customer account for mobile self-service deletion.
-     *
-     * Personal data is removed or anonymized. Financial/order records remain linked to the tombstone user id.
+     * Schedule mobile self-service account deletion. Permanent closure runs after the grace period.
      *
      * @return array<string, mixed>
      */
-    public function delete(User $user, string $mode = self::MODE_IMMEDIATE): array
+    public function delete(User $user, string $mode = self::MODE_SCHEDULED): array
     {
         return $this->requestDeletion($user, $mode);
     }

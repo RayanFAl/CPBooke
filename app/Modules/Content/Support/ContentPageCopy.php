@@ -4,11 +4,39 @@ namespace App\Modules\Content\Support;
 
 final class ContentPageCopy
 {
+    public const ACCOUNT_DELETION_NOTICE_MARKER_EN = 'When you request account deletion, access to the Booke app is locked';
+
+    public const ACCOUNT_DELETION_NOTICE_MARKER_AR = 'عند طلب حذف الحساب، يُقفل دخولك إلى تطبيق Booke';
+
+    public static function accountDeletionNoticeEn(): string
+    {
+        return 'When you request account deletion, access to the Booke app is locked and you can no longer use the account. We may retain related purchase and booking records in our internal dashboard for up to <strong>one year</strong>, because some tickets and purchased products remain valid for a year even if unused. After that period, those records are deleted or anonymized as required for operational and legal purposes.';
+    }
+
+    public static function accountDeletionNoticeAr(): string
+    {
+        return 'عند طلب حذف الحساب، يُقفل دخولك إلى تطبيق Booke ولا يمكنك استخدام الحساب. قد نحتفظ بسجلات الشراء والحجز المرتبطة بحسابك في لوحة التحكم الداخلية لمدة تصل إلى <strong>سنة واحدة</strong>، لأن بعض التذاكر والمنتجات المشتراة تبقى صالحة لمدة سنة حتى لو لم تُستخدم بعد. بعد انتهاء هذه المدة تُحذف أو تُجهَّل هذه السجلات وفق المتطلبات التشغيلية والقانونية.';
+    }
+
+    public static function accountDeletionSectionEn(bool $numbered = true): string
+    {
+        $heading = $numbered ? '11. Account deletion' : 'Account deletion';
+
+        return '<h2>'.$heading.'</h2>'."\n".'<p>'.self::accountDeletionNoticeEn().'</p>';
+    }
+
+    public static function accountDeletionSectionAr(bool $numbered = true): string
+    {
+        $heading = $numbered ? '11. حذف الحساب' : 'حذف الحساب';
+
+        return '<h2>'.$heading.'</h2>'."\n".'<p>'.self::accountDeletionNoticeAr().'</p>';
+    }
+
     public static function privacyEn(): string
     {
         return <<<'HTML'
 <h1>Privacy Policy</h1>
-<p>Booke operates a travel marketplace application for flights, hotels, travel cover, and eSIM plans. This policy explains what personal data we collect, why we use it, and the rights you have. Last updated: 19 August 2026.</p>
+<p>Booke operates a travel marketplace application for flights, hotels, travel cover, and eSIM plans. This policy explains what personal data we collect, why we use it, and the rights you have. Last updated: 21 September 2026.</p>
 <h2>1. Who we are</h2>
 <p>When you create an account or complete a booking, Booke is the controller of the personal data you provide through the app. Airlines, hotels, insurers, and connectivity providers act as independent controllers for the services they deliver.</p>
 <h2>2. Data we collect</h2>
@@ -36,14 +64,14 @@ final class ContentPageCopy
 <p>Because travel is cross-border, some suppliers process data outside your country. We require appropriate contractual safeguards where they apply.</p>
 <h2>10. Changes</h2>
 <p>We will update this policy when our practices change. The revised text is published on this page and, where required, notified in the app.</p>
-HTML;
+HTML.self::accountDeletionSectionEn();
     }
 
     public static function privacyAr(): string
     {
         return <<<'HTML'
 <h1>سياسة الخصوصية</h1>
-<p>تشغّل Booke تطبيقاً لحجز السفر يشمل الطيران والفنادق وتغطية السفر وباقات eSIM. توضّح هذه السياسة البيانات الشخصية التي نجمعها، وسبب استخدامها، وحقوقك. آخر تحديث: 19 أغسطس 2026.</p>
+<p>تشغّل Booke تطبيقاً لحجز السفر يشمل الطيران والفنادق وتغطية السفر وباقات eSIM. توضّح هذه السياسة البيانات الشخصية التي نجمعها، وسبب استخدامها، وحقوقك. آخر تحديث: 21 سبتمبر 2026.</p>
 <h2>1. من نحن</h2>
 <p>عند إنشاء حساب أو إتمام حجز، تكون Booke الجهة المسؤولة عن البيانات التي تقدّمها عبر التطبيق. شركات الطيران والفنادق وشركات التأمين ومزوّدو الاتصال جهات مستقلة بالنسبة للخدمات التي تقدّمها.</p>
 <h2>2. البيانات التي نجمعها</h2>
@@ -71,7 +99,7 @@ HTML;
 <p>لأن السفر عبر الحدود، قد يعالج بعض المزوّدين البيانات خارج بلدك. نطلب ضمانات تعاقدية مناسبة حيث ينطبق ذلك.</p>
 <h2>10. التعديلات</h2>
 <p>نحدّث هذه السياسة عند تغيّر ممارساتنا. يُنشر النص المحدَّث في هذه الصفحة، ويُخطر به داخل التطبيق عند الحاجة.</p>
-HTML;
+HTML.self::accountDeletionSectionAr();
     }
 
     public static function termsEn(): string

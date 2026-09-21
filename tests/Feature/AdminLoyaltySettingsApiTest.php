@@ -61,6 +61,49 @@ class AdminLoyaltySettingsApiTest extends TestCase
         ]);
     }
 
+    public function test_super_admin_can_update_results_promo_via_api(): void
+    {
+        $admin = $this->createAdminWithRole('super_admin');
+
+        $token = $this->postJson(route('api.v1.admin.auth.login'), [
+            'login' => $admin->email,
+            'password' => 'password',
+            'device_name' => 'postman',
+        ])->json('data.token');
+
+        $this->withToken($token)
+            ->putJson(route('api.v1.admin.loyalty.settings.update'), [
+                'default_currency' => 'LYD',
+                'results_promo' => [
+                    'enabled' => true,
+                    'require_active_level' => true,
+                    'title_ar' => 'عرض خاص',
+                    'title_en' => 'Special offer',
+                    'body_ar' => 'وفر {percent}% مع {level}',
+                    'body_en' => 'Save {percent}% with {level}',
+                    'cta_ar' => 'المزيد',
+                    'cta_en' => 'More',
+                    'action_type' => 'route',
+                    'action_value' => '/loyalty',
+                    'flights' => [
+                        'body_ar' => 'رحلات {percent}%',
+                        'body_en' => 'Flights {percent}%',
+                    ],
+                    'hotels' => [
+                        'body_ar' => 'فنادق {percent}%',
+                        'body_en' => 'Hotels {percent}%',
+                    ],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.settings.results_promo.title_en', 'Special offer')
+            ->assertJsonPath('data.settings.results_promo.action_value', '/loyalty')
+            ->assertJsonPath('data.settings.results_promo.flights.body_en', 'Flights {percent}%');
+
+        $settings = LoyaltySetting::query()->first();
+        $this->assertSame('Special offer', $settings?->metadata['results_promo']['title_en'] ?? null);
+    }
+
     public function test_loyalty_manager_cannot_update_loyalty_settings_via_api(): void
     {
         $admin = $this->createAdminWithRole('loyalty_manager');

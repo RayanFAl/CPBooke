@@ -10,6 +10,7 @@ use App\Models\FinancialTransaction;
 use App\Models\Order;
 use App\Models\User;
 use App\Modules\Api\User\Services\CustomerAccountDeletionService;
+use App\Modules\Monitoring\Services\ApplicationEventRecorder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -20,7 +21,30 @@ class DeleteAccountApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_customer_can_delete_account_immediately_with_password(): void
+    public function test_customer_cannot_delete_account_immediately(): void
+    {
+        $user = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+            'google_id' => null,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->deleteJson('/api/v1/users/account', [
+            'password' => 'password',
+            'mode' => 'immediate',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'validation_failed');
+
+        $this->assertNull($user->fresh()?->deleted_at);
+        $this->assertNull($user->fresh()?->deletion_due_at);
+        $this->assertTrue($user->fresh()?->is_active);
+    }
+
+    public function test_customer_can_schedule_account_deletion_for_365_days(): void
     {
         Notification::fake();
 
@@ -29,7 +53,7 @@ class DeleteAccountApiTest extends TestCase
             'is_admin' => false,
             'google_id' => null,
             'phone' => '0911111111',
-            'email' => 'delete-me@example.test',
+            'email' => 'schedule-me@example.test',
         ]);
 
         Favorite::query()->create([
@@ -44,56 +68,26 @@ class DeleteAccountApiTest extends TestCase
 
         $this->deleteJson('/api/v1/users/account', [
             'password' => 'password',
-            'mode' => 'immediate',
-        ])
-            ->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Account deleted successfully.')
-            ->assertJsonPath('data.mode', 'immediate');
-
-        $tombstone = User::withTrashed()->find($user->id);
-
-        $this->assertNotNull($tombstone);
-        $this->assertTrue($tombstone->trashed());
-        $this->assertFalse($tombstone->is_active);
-        $this->assertNull($tombstone->phone);
-        $this->assertStringContainsString('@account.invalid', (string) $tombstone->email);
-        $this->assertSame(0, Favorite::query()->where('user_id', $user->id)->count());
-        $this->assertSame(0, PersonalAccessToken::query()->where('tokenable_id', $user->id)->count());
-    }
-
-    public function test_customer_can_schedule_account_deletion_for_60_days(): void
-    {
-        Notification::fake();
-
-        $user = User::factory()->create([
-            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
-            'is_admin' => false,
-            'google_id' => null,
-            'email' => 'schedule-me@example.test',
-        ]);
-
-        Sanctum::actingAs($user);
-
-        $this->deleteJson('/api/v1/users/account', [
-            'password' => 'password',
             'mode' => 'scheduled',
         ])
             ->assertOk()
             ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Your account will be permanently deleted in 365 days.')
             ->assertJsonPath('data.mode', 'scheduled')
-            ->assertJsonPath('data.grace_period_days', 60)
+            ->assertJsonPath('data.grace_period_days', 365)
             ->assertJsonPath('data.can_cancel', true);
 
         $user->refresh();
 
         $this->assertFalse($user->trashed());
         $this->assertFalse($user->is_active);
+        $this->assertSame('0911111111', $user->phone);
         $this->assertNotNull($user->deletion_scheduled_at);
         $this->assertNotNull($user->deletion_due_at);
         $this->assertTrue($user->deletion_due_at->equalTo(
-            $user->deletion_scheduled_at->copy()->addDays(60)
+            $user->deletion_scheduled_at->copy()->addDays(365)
         ));
+        $this->assertSame(1, Favorite::query()->where('user_id', $user->id)->count());
         $this->assertSame(0, PersonalAccessToken::query()->where('tokenable_id', $user->id)->count());
     }
 
@@ -157,15 +151,24 @@ class DeleteAccountApiTest extends TestCase
             'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
             'is_admin' => false,
             'google_id' => null,
+            'phone' => '0912345678',
             'is_active' => false,
-            'deletion_scheduled_at' => now()->subDays(60),
+            'deletion_scheduled_at' => now()->subDays(365),
             'deletion_due_at' => now()->subMinute(),
             'email' => 'due-delete@example.test',
         ]);
 
+        Favorite::query()->create([
+            'user_id' => $user->id,
+            'type' => Favorite::TYPE_HOTEL,
+            'item_key' => 'hotel:due-1',
+            'status' => Favorite::STATUS_ACTIVE,
+            'snapshot' => ['name' => 'Due Hotel'],
+        ]);
+
         (new ProcessScheduledAccountDeletionsJob)->handle(
             app(CustomerAccountDeletionService::class),
-            app(\App\Modules\Monitoring\Services\ApplicationEventRecorder::class),
+            app(ApplicationEventRecorder::class),
         );
 
         $tombstone = User::withTrashed()->findOrFail($user->id);
@@ -173,6 +176,9 @@ class DeleteAccountApiTest extends TestCase
         $this->assertTrue($tombstone->trashed());
         $this->assertNotNull($tombstone->account_deleted_at);
         $this->assertNull($tombstone->deletion_due_at);
+        $this->assertNull($tombstone->phone);
+        $this->assertStringContainsString('@account.invalid', (string) $tombstone->email);
+        $this->assertSame(0, Favorite::query()->where('user_id', $user->id)->count());
     }
 
     public function test_customer_account_deletion_is_available_on_customer_route(): void
@@ -189,7 +195,7 @@ class DeleteAccountApiTest extends TestCase
 
         $this->deleteJson('/api/v1/customer/account', [
             'password' => 'password',
-            'mode' => 'immediate',
+            'mode' => 'scheduled',
         ])
             ->assertOk()
             ->assertJsonPath('success', true);
@@ -213,9 +219,10 @@ class DeleteAccountApiTest extends TestCase
 
         $this->deleteJson('/api/v1/users/account', [
             'password' => 'password',
-            'mode' => 'immediate',
+            'mode' => 'scheduled',
         ])->assertOk();
 
+        $this->finalizeDueAccountDeletion($user);
         $this->app['auth']->forgetGuards();
 
         $response = $this->postJson('/api/v1/auth/register', [
@@ -257,9 +264,10 @@ class DeleteAccountApiTest extends TestCase
 
         $this->deleteJson('/api/v1/users/account', [
             'password' => 'password',
-            'mode' => 'immediate',
+            'mode' => 'scheduled',
         ])->assertOk();
 
+        $this->finalizeDueAccountDeletion($user);
         $this->app['auth']->forgetGuards();
 
         $response = $this->postJson('/api/v1/auth/register', [
@@ -296,7 +304,7 @@ class DeleteAccountApiTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$token)
             ->deleteJson('/api/v1/users/account', [
                 'password' => 'password',
-                'mode' => 'immediate',
+                'mode' => 'scheduled',
             ])
             ->assertOk();
 
@@ -360,8 +368,10 @@ class DeleteAccountApiTest extends TestCase
 
         $this->deleteJson('/api/v1/users/account', [
             'password' => 'password',
-            'mode' => 'immediate',
+            'mode' => 'scheduled',
         ])->assertOk();
+
+        $this->finalizeDueAccountDeletion($user);
 
         $this->assertDatabaseHas('orders', [
             'id' => $order->id,
@@ -397,7 +407,7 @@ class DeleteAccountApiTest extends TestCase
 
         $this->deleteJson('/api/v1/users/account', [
             'password' => 'password',
-            'mode' => 'immediate',
+            'mode' => 'scheduled',
         ])
             ->assertStatus(422)
             ->assertJsonPath('success', false);
@@ -417,7 +427,7 @@ class DeleteAccountApiTest extends TestCase
 
         $this->deleteJson('/api/v1/users/account', [
             'password' => 'wrong-password',
-            'mode' => 'immediate',
+            'mode' => 'scheduled',
         ])
             ->assertStatus(422)
             ->assertJsonPath('success', false);
@@ -425,7 +435,7 @@ class DeleteAccountApiTest extends TestCase
         $this->assertNull($user->fresh()?->deleted_at);
     }
 
-    public function test_google_customer_can_delete_account_with_confirmation(): void
+    public function test_google_customer_can_schedule_account_deletion_with_confirmation(): void
     {
         Notification::fake();
 
@@ -439,12 +449,18 @@ class DeleteAccountApiTest extends TestCase
 
         $this->deleteJson('/api/v1/users/account', [
             'confirmation' => 'DELETE',
-            'mode' => 'immediate',
+            'mode' => 'scheduled',
         ])
             ->assertOk()
-            ->assertJsonPath('success', true);
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.mode', 'scheduled')
+            ->assertJsonPath('data.grace_period_days', 365);
 
-        $this->assertTrue(User::withTrashed()->find($user->id)?->trashed() ?? false);
+        $user->refresh();
+
+        $this->assertFalse($user->trashed());
+        $this->assertFalse($user->is_active);
+        $this->assertNotNull($user->deletion_due_at);
     }
 
     public function test_admin_cannot_delete_account_via_mobile_endpoint(): void
@@ -459,7 +475,7 @@ class DeleteAccountApiTest extends TestCase
 
         $this->deleteJson('/api/v1/users/account', [
             'password' => 'password',
-            'mode' => 'immediate',
+            'mode' => 'scheduled',
         ])
             ->assertStatus(422);
 
@@ -470,12 +486,14 @@ class DeleteAccountApiTest extends TestCase
     {
         $this->deleteJson('/api/v1/users/account', [
             'password' => 'password',
-            'mode' => 'immediate',
+            'mode' => 'scheduled',
         ])->assertUnauthorized();
     }
 
-    public function test_delete_account_requires_mode(): void
+    public function test_delete_account_defaults_to_scheduled_mode(): void
     {
+        Notification::fake();
+
         $user = User::factory()->create([
             'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
             'is_admin' => false,
@@ -487,8 +505,9 @@ class DeleteAccountApiTest extends TestCase
         $this->deleteJson('/api/v1/users/account', [
             'password' => 'password',
         ])
-            ->assertStatus(422)
-            ->assertJsonPath('success', false);
+            ->assertOk()
+            ->assertJsonPath('data.mode', 'scheduled')
+            ->assertJsonPath('data.grace_period_days', 365);
     }
 
     public function test_delete_account_service_is_idempotent_for_already_deleted_customer(): void
@@ -504,8 +523,25 @@ class DeleteAccountApiTest extends TestCase
         $service = app(CustomerAccountDeletionService::class);
 
         $service->delete($user);
-        $service->delete(User::withTrashed()->findOrFail($user->id));
+        $user->forceFill(['deletion_due_at' => now()->subMinute()])->save();
+        $service->processDueDeletions();
+
+        $tombstone = User::withTrashed()->findOrFail($user->id);
+        $service->delete($tombstone);
 
         $this->assertTrue(User::withTrashed()->findOrFail($user->id)->trashed());
+    }
+
+    private function finalizeDueAccountDeletion(User $user): void
+    {
+        $user->refresh();
+        $user->forceFill([
+            'deletion_due_at' => now()->subMinute(),
+        ])->save();
+
+        (new ProcessScheduledAccountDeletionsJob)->handle(
+            app(CustomerAccountDeletionService::class),
+            app(ApplicationEventRecorder::class),
+        );
     }
 }

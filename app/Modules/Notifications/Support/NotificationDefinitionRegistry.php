@@ -15,6 +15,7 @@ use App\Modules\Admin\Support\Events\SupportTicketAssigned;
 use App\Modules\Admin\Support\Events\SupportTicketCreated;
 use App\Modules\Admin\Support\Events\SupportTicketReplied;
 use App\Modules\Admin\Support\Events\SupportTicketStatusChanged;
+use App\Modules\Loyalty\Events\LoyaltyDiscountCampaignAnnounced;
 use App\Modules\Loyalty\Events\LoyaltyTierChanged;
 use App\Modules\Notifications\Events\AbandonedFlightSearchDue;
 use App\Modules\Notifications\Events\PassengerActionDue;
@@ -59,6 +60,7 @@ class NotificationDefinitionRegistry
             $event instanceof SupportTicketAssigned => $this->supportTicketAssignedDefinitions($event),
             $event instanceof SupportTicketStatusChanged => $this->supportTicketStatusChangedDefinitions($event),
             $event instanceof LoyaltyTierChanged => $this->loyaltyTierChangedDefinitions($event),
+            $event instanceof LoyaltyDiscountCampaignAnnounced => [$this->loyaltyDiscountCampaignDefinition($event)],
             $event instanceof CriticalFinanceAnomaliesDetected => $this->criticalFinanceAnomalyDefinitions($event),
             $event instanceof ExchangeRateUpdated => [$this->exchangeRateUpdatedDefinition($event)],
             $event instanceof DailyFxSalesReportDue => [$this->dailyFxSalesReportDefinition($event)],
@@ -1151,6 +1153,43 @@ class NotificationDefinitionRegistry
         }
 
         return $definitions;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loyaltyDiscountCampaignDefinition(LoyaltyDiscountCampaignAnnounced $event): array
+    {
+        $durationEn = trim($event->durationLabelEn);
+        $durationAr = trim($event->durationLabelAr);
+
+        return [
+            'code' => 'LOYALTY_DISCOUNT_CAMPAIGN',
+            'name' => 'Loyalty Discount Campaign',
+            'subject' => 'New Booke+ discount: {discount_percentage}%',
+            'body' => 'Enjoy {discount_percentage}% off with {tier_name} for {duration}. Open Booke+ to see your benefits.',
+            'translations' => [
+                'ar' => [
+                    'subject' => 'خصم جديد من Booke+: {discount_percentage}%',
+                    'body' => 'استمتع بخصم {discount_percentage}% مع {tier_name} لمدة {duration_ar}. افتح Booke+ لعرض المزايا.',
+                ],
+            ],
+            'channels' => [NotificationChannels::PUSH, NotificationChannels::IN_APP],
+            'variables' => ['tier_name', 'discount_percentage', 'duration', 'duration_ar', 'deep_link'],
+            'notification_type' => 'system',
+            'topic' => null,
+            'related_type' => 'loyalty_tier',
+            'related_id' => $event->tierId,
+            'users' => $event->users,
+            'payload' => [
+                'tier_name' => $event->tierName,
+                'discount_percentage' => $event->discountPercentage,
+                'duration' => $durationEn !== '' ? $durationEn : 'a limited time',
+                'duration_ar' => $durationAr !== '' ? $durationAr : 'فترة محدودة',
+                'deep_link' => '/loyalty',
+                'idempotency_key' => 'loyalty_campaign|'.$event->tierId.'|'.$event->discountPercentage,
+            ],
+        ];
     }
 
     private function loyaltyDiscountPercentage(LoyaltyHistory $history): ?float

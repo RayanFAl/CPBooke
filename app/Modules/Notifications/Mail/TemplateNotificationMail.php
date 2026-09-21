@@ -14,8 +14,7 @@ class TemplateNotificationMail extends Mailable
         private readonly ?string $subjectLine,
         private readonly string $bodyText,
         private readonly ?string $mailLocale = null,
-    ) {
-    }
+    ) {}
 
     public function build(): self
     {
@@ -32,7 +31,7 @@ class TemplateNotificationMail extends Mailable
 
         $support = trim((string) config('mail.addresses.support', ''));
         if ($support !== '') {
-            $mail->replyTo($support, (string) config('mail.from.name'));
+            $mail->replyTo($support, (string) config('mail.names.support', 'Booke Support'));
         }
 
         return $mail;

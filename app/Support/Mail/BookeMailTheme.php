@@ -31,9 +31,7 @@ final class BookeMailTheme
 
     public const ERROR = '#E74C3C';
 
-    private function __construct()
-    {
-    }
+    private function __construct() {}
 
     public static function isRtl(?string $locale): bool
     {
@@ -72,7 +70,9 @@ final class BookeMailTheme
             'locale' => $locale,
             'rtl' => $rtl,
             'dir' => $rtl ? 'rtl' : 'ltr',
+            'align' => $rtl ? 'right' : 'left',
             'brandName' => (string) config('mail.from.name', config('app.name', 'Booke')),
+            'logoUrl' => rtrim((string) config('app.url'), '/').'/images/app_logo.png',
             'supportEmail' => trim((string) config('mail.addresses.support', '')),
             'colors' => self::colors(),
             'footerHelp' => $rtl

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dev;
 
 use App\Mail\PasswordResetOtpMail;
+use App\Mail\SecurityAlertMail;
 use App\Modules\Notifications\Mail\TemplateNotificationMail;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -14,7 +15,23 @@ class MailPreviewController extends Controller
     {
         $samples = [
             [
-                'label' => 'إشعار — عربي',
+                'label' => 'أمان — تسجيل دخول (عربي)',
+                'url' => route('dev.mail.preview', ['type' => 'security-login', 'locale' => 'ar']),
+            ],
+            [
+                'label' => 'Security — New login (English)',
+                'url' => route('dev.mail.preview', ['type' => 'security-login', 'locale' => 'en']),
+            ],
+            [
+                'label' => 'أمان — تغيير كلمة المرور (عربي)',
+                'url' => route('dev.mail.preview', ['type' => 'security-password', 'locale' => 'ar']),
+            ],
+            [
+                'label' => 'Security — Password changed (English)',
+                'url' => route('dev.mail.preview', ['type' => 'security-password', 'locale' => 'en']),
+            ],
+            [
+                'label' => 'إشعار عام — عربي',
                 'url' => route('dev.mail.preview', ['type' => 'notification', 'locale' => 'ar']),
             ],
             [
@@ -78,6 +95,8 @@ HTML;
 
         $html = match ($type) {
             'otp' => $this->renderOtpPreview($locale),
+            'security-login' => $this->renderSecurityPreview(SecurityAlertMail::VARIANT_LOGIN, $locale),
+            'security-password' => $this->renderSecurityPreview(SecurityAlertMail::VARIANT_PASSWORD_CHANGED, $locale),
             default => $this->renderNotificationPreview($locale),
         };
 
@@ -108,6 +127,25 @@ HTML;
             expiresInMinutes: 10,
             recipientName: $locale === 'en' ? 'Ahmed' : 'أحمد',
             mailLocale: $locale,
+        ))->render();
+    }
+
+    private function renderSecurityPreview(string $variant, string $locale): string
+    {
+        $isArabic = $locale === 'ar';
+
+        return (new SecurityAlertMail(
+            variant: $variant,
+            recipientName: $isArabic ? 'أحمد' : 'Ahmed',
+            mailLocale: $locale,
+            meta: [
+                'device_name' => 'iPhone 15 Pro · iOS 18',
+                'ip' => '41.252.88.14',
+                'location' => $isArabic ? 'طرابلس، ليبيا' : 'Tripoli, Libya',
+                'occurred_at' => $isArabic ? '21 سبتمبر 2026 · 09:40 ص' : '21 Sep 2026 · 09:40 AM',
+                'timezone_label' => $isArabic ? 'بتوقيت طرابلس (GMT+2)' : 'Tripoli time (GMT+2)',
+                'cta_url' => rtrim((string) config('app.url'), '/').'/profile',
+            ],
         ))->render();
     }
 }

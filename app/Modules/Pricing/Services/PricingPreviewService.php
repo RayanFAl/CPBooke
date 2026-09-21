@@ -14,8 +14,7 @@ class PricingPreviewService
     public function __construct(
         private readonly PricingEngine $pricingEngine,
         private readonly PricingVersionService $pricingVersionService,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string, mixed>  $payload
@@ -41,11 +40,15 @@ class PricingPreviewService
             source: 'preview',
             attributes: array_merge(
                 Arr::get($payload, 'attributes', []),
-                [
+                array_filter([
                     'provider_name' => Arr::get($payload, 'provider_name', 'default'),
                     'tax_amount' => $taxAmount,
                     'fare_amount' => $fareAmount,
-                ],
+                    'airline_code' => Arr::get($payload, 'airline_code')
+                        ?? Arr::get($payload, 'attributes.airline_code'),
+                    'company_key' => Arr::get($payload, 'company_key')
+                        ?? Arr::get($payload, 'attributes.company_key'),
+                ], static fn (mixed $value): bool => $value !== null && $value !== ''),
             ),
         );
 

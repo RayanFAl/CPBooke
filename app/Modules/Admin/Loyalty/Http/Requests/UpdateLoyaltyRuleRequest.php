@@ -27,6 +27,11 @@ class UpdateLoyaltyRuleRequest extends FormRequest
             'is_active' => ['required', 'boolean'],
             'priority' => ['required', 'integer', 'min:0', 'max:255'],
             'benefit_duration_months' => ['nullable', 'integer', 'min:0', 'max:120'],
+            'benefit_duration_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
+            'benefit_duration_unit' => ['nullable', 'string', 'in:days,months'],
+            'duration_months' => ['nullable', 'integer', 'min:0', 'max:120'],
+            'duration_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
+            'duration_unit' => ['nullable', 'string', 'in:days,months'],
         ];
     }
 }

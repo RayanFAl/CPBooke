@@ -10,6 +10,7 @@ use App\Modules\Admin\Support\Events\SupportTicketCreated;
 use App\Modules\Admin\Support\Events\SupportTicketReplied;
 use App\Modules\Admin\Support\Events\SupportTicketStatusChanged;
 use App\Modules\Admin\Support\Listeners\SupportEventLoggerListener;
+use App\Modules\Loyalty\Events\LoyaltyDiscountCampaignQueued;
 use App\Modules\Loyalty\Events\LoyaltyTierChanged;
 use App\Modules\Loyalty\Listeners\InitializeUserLoyaltyOnRegistrationListener;
 use App\Modules\Loyalty\Listeners\RecalculateUserLoyaltyListener;
@@ -19,6 +20,7 @@ use App\Modules\Notifications\Events\PriceAlertHit;
 use App\Modules\Notifications\Events\SeatAlertAvailable;
 use App\Modules\Notifications\Events\SeatAlertStillWatching;
 use App\Modules\Notifications\Listeners\DispatchExchangeRateUpdatedNotificationListener;
+use App\Modules\Notifications\Listeners\DispatchLoyaltyDiscountCampaignNotificationListener;
 use App\Modules\Notifications\Listeners\DispatchLoyaltyTierChangedNotificationListener;
 use App\Modules\Notifications\Listeners\DispatchSeatAlertNotificationListener;
 use App\Modules\Notifications\Listeners\DispatchSystemNotificationListener;
@@ -129,6 +131,9 @@ class EventServiceProvider extends ServiceProvider
         ],
         LoyaltyTierChanged::class => [
             DispatchLoyaltyTierChangedNotificationListener::class,
+        ],
+        LoyaltyDiscountCampaignQueued::class => [
+            DispatchLoyaltyDiscountCampaignNotificationListener::class,
         ],
         CriticalFinanceAnomaliesDetected::class => [
             DispatchSystemNotificationListener::class,

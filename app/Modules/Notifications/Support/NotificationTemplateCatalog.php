@@ -674,6 +674,18 @@ final class NotificationTemplateCatalog
                 variables: ['user_name', 'tier_name', 'discount_percentage', 'deep_link'],
             ),
             self::entry(
+                code: 'LOYALTY_DISCOUNT_CAMPAIGN',
+                name: 'Loyalty Discount Campaign',
+                category: NotificationTemplateCategories::LOYALTY,
+                description: 'Broadcast when an admin creates an active promotional loyalty level and chooses to notify everyone.',
+                subject: 'New Booke+ discount: {discount_percentage}%',
+                body: 'Enjoy {discount_percentage}% off with {tier_name} for {duration}. Open Booke+ to see your benefits.',
+                arSubject: 'خصم جديد من Booke+: {discount_percentage}%',
+                arBody: 'استمتع بخصم {discount_percentage}% مع {tier_name} لمدة {duration_ar}. افتح Booke+ لعرض المزايا.',
+                channels: [NotificationChannels::PUSH, NotificationChannels::IN_APP],
+                variables: ['tier_name', 'discount_percentage', 'duration', 'duration_ar', 'deep_link'],
+            ),
+            self::entry(
                 code: 'APP_UPDATE_AVAILABLE',
                 name: 'App Update Available',
                 category: NotificationTemplateCategories::GENERAL,

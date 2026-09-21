@@ -1,8 +1,9 @@
 <script setup>
 import AdminLayout from '../../layouts/AdminLayout.vue';
-import LoyaltySettingsPanel from '../components/LoyaltySettingsPanel.vue';
+import AdminModal from '../../components/AdminModal.vue';
+import LoyaltyCompanyRatesPanel from '../components/LoyaltyCompanyRatesPanel.vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
 
 const props = defineProps({
@@ -22,18 +23,45 @@ const props = defineProps({
         type: String,
         default: '',
     },
+    company_rates: {
+        type: Object,
+        default: null,
+    },
+    company_rates_sync_url: {
+        type: String,
+        default: '',
+    },
+    company_rates_url: {
+        type: String,
+        default: '',
+    },
     can_manage_settings: {
+        type: Boolean,
+        default: false,
+    },
+    can_manage_company_rates: {
         type: Boolean,
         default: false,
     },
 });
 
-const { t, forwardArrow } = useAdminLocale();
+const { t } = useAdminLocale();
 const page = usePage();
-const activeTab = ref('overview');
 const programEnabled = ref(Boolean(props.program.loyalty_enabled));
+const settingsState = ref(props.settings ?? null);
 const isTogglingProgram = ref(false);
 const toggleError = ref('');
+const isSavingBasics = ref(false);
+const isDuplicatingLevel = ref(false);
+const editingTierId = ref(null);
+const showAddLevel = ref(false);
+const noteOpen = ref(false);
+const ratesMatrix = ref(props.company_rates || {
+    tiers: [],
+    companies: [],
+    rates: [],
+    airlines: { count: 0, source: null, error: null },
+});
 
 const permissions = computed(() => page.props.auth.user?.permissions ?? []);
 const canManageTiers = computed(() => permissions.value.includes('loyalty.manage'));
@@ -43,6 +71,157 @@ const canEditProgram = computed(() => canManageTiers.value || canManageRules.val
 const canManageSettings = computed(
     () => props.can_manage_settings || permissions.value.includes('loyalty.settings.manage'),
 );
+const canManageCompanyRates = computed(
+    () => props.can_manage_company_rates || permissions.value.includes('loyalty.manage-benefits'),
+);
+
+const primaryDiscountBenefit = (tierId) => props.dashboard.benefits.find(
+    (benefit) => benefit.tier_id === tierId
+        && benefit.benefit_type === 'discount'
+        && benefit.is_active,
+);
+
+const primaryRule = (tierId) => props.dashboard.rules.find((rule) => rule.tier_id === tierId);
+
+const launchTiers = computed(() => props.dashboard.tiers
+    .filter((tier) => tier.level > 0)
+    .map((tier) => {
+        const rule = primaryRule(tier.id);
+        const benefit = primaryDiscountBenefit(tier.id);
+
+        return {
+            tier,
+            rule,
+            benefit,
+            users_count: tier.users_count,
+            monthly_spend: rule?.min_period_spend ?? 0,
+            duration_value: (() => {
+                const unit = rule?.metadata?.benefit_duration_unit;
+                const days = rule?.metadata?.benefit_duration_days;
+                const months = rule?.metadata?.benefit_duration_months;
+
+                if (unit === 'days' || (days && !months)) {
+                    return days ?? '';
+                }
+
+                return months ?? '';
+            })(),
+            duration_unit: (() => {
+                const unit = rule?.metadata?.benefit_duration_unit;
+
+                if (unit === 'days' || unit === 'months') {
+                    return unit;
+                }
+
+                if (rule?.metadata?.benefit_duration_days && !rule?.metadata?.benefit_duration_months) {
+                    return 'days';
+                }
+
+                return 'months';
+            })(),
+            discount: benefit?.value ?? '',
+        };
+    }));
+
+const editingEntry = computed(() => launchTiers.value.find(
+    (entry) => entry.tier.id === editingTierId.value,
+) ?? null);
+
+const nextSuggestedLevel = computed(() => {
+    const levels = launchTiers.value.map((entry) => Number(entry.tier.level) || 0);
+
+    return (levels.length ? Math.max(...levels) : 0) + 1;
+});
+
+const newTierForm = useForm({
+    name: '',
+    discount_percentage: 3,
+    monthly_spend: 0,
+    duration_value: '',
+    duration_unit: 'months',
+    is_active: true,
+    notify_customers: false,
+});
+
+watch(
+    () => [newTierForm.duration_unit, newTierForm.duration_value],
+    ([unit, value]) => {
+        const days = value === '' || value === null ? 0 : Number(value);
+
+        if (unit === 'days' && days > 0) {
+            newTierForm.notify_customers = true;
+        }
+    },
+);
+
+const openEdit = (tierId) => {
+    editingTierId.value = tierId;
+};
+
+const backToList = () => {
+    editingTierId.value = null;
+};
+
+const openAddLevel = () => {
+    showAddLevel.value = true;
+};
+
+const closeAddLevel = () => {
+    showAddLevel.value = false;
+};
+
+const duplicateLevel = (entry) => {
+    if (!canManageTiers.value || !entry?.tier || isDuplicatingLevel.value) {
+        return;
+    }
+
+    isDuplicatingLevel.value = true;
+
+    useForm({}).post(route('admin.loyalty.tiers.duplicate', entry.tier.id), {
+        preserveScroll: true,
+        onFinish: () => {
+            isDuplicatingLevel.value = false;
+        },
+    });
+};
+
+const createTier = () => {
+    if (!canManageTiers.value) {
+        return;
+    }
+
+    newTierForm
+        .transform((data) => {
+            const value = data.duration_value === '' || data.duration_value === null
+                ? null
+                : Number(data.duration_value);
+            const unit = data.duration_unit === 'days' ? 'days' : 'months';
+
+            return {
+                name: data.name?.trim() ? data.name.trim() : `Level ${nextSuggestedLevel.value}`,
+                discount_percentage: data.discount_percentage === '' ? 0 : Number(data.discount_percentage),
+                monthly_spend: data.monthly_spend === '' || data.monthly_spend === null ? 0 : Number(data.monthly_spend),
+                duration_unit: unit,
+                duration_days: unit === 'days' ? value : null,
+                duration_months: unit === 'months' ? value : null,
+                is_active: Boolean(data.is_active),
+                notify_customers: Boolean(data.notify_customers),
+            };
+        })
+        .post(route('admin.loyalty.tiers.store'), {
+            preserveScroll: true,
+            onSuccess: () => {
+                newTierForm.reset();
+                newTierForm.discount_percentage = 3;
+                newTierForm.monthly_spend = 0;
+                newTierForm.duration_value = '';
+                newTierForm.duration_unit = 'months';
+                newTierForm.is_active = true;
+                newTierForm.notify_customers = false;
+                showAddLevel.value = false;
+            },
+        });
+};
 
 const csrfToken = () => {
     if (typeof document === 'undefined') {
@@ -61,7 +240,7 @@ const toggleLoyaltyProgram = async () => {
     toggleError.value = '';
 
     const nextEnabled = !programEnabled.value;
-    const current = props.settings ?? {};
+    const current = settingsState.value ?? props.settings ?? {};
 
     try {
         const response = await fetch(props.settings_update_url, {
@@ -81,6 +260,7 @@ const toggleLoyaltyProgram = async () => {
                 default_currency: String(current.default_currency ?? props.program.default_currency ?? 'LYD'),
                 max_global_discount_amount: current.max_global_discount_amount ?? null,
                 minimum_discountable_order_amount: current.minimum_discountable_order_amount ?? null,
+                results_promo: current.results_promo ?? undefined,
             }),
         });
 
@@ -93,6 +273,9 @@ const toggleLoyaltyProgram = async () => {
         }
 
         programEnabled.value = Boolean(payload.data?.loyalty_enabled);
+        if (payload.data) {
+            settingsState.value = payload.data;
+        }
     } catch {
         toggleError.value = t('Unable to save loyalty settings right now.');
     } finally {
@@ -100,78 +283,23 @@ const toggleLoyaltyProgram = async () => {
     }
 };
 
-const workspaceTabs = computed(() => [
-    { id: 'overview', label: t('Overview') },
-    { id: 'program', label: t('Program') },
-]);
-
-const workspaceTabClass = (tabId) => (activeTab.value === tabId
-    ? 'bg-slate-950 text-white'
-    : 'text-slate-600 hover:bg-slate-100');
-
-const pretty = (value) => {
-    if (value === null || value === undefined || value === '') {
-        return t('Not available');
+const saveLevelBasics = (entry) => {
+    if (!canEditProgram.value || !entry) {
+        return;
     }
 
-    return String(value).replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
-};
+    isSavingBasics.value = true;
+    let pending = 0;
 
-const primaryDiscountBenefit = (tierId) => props.dashboard.benefits.find(
-    (benefit) => benefit.tier_id === tierId
-        && benefit.benefit_type === 'discount'
-        && benefit.is_active,
-);
+    const done = () => {
+        pending -= 1;
+        if (pending <= 0) {
+            isSavingBasics.value = false;
+        }
+    };
 
-const primaryRule = (tierId) => props.dashboard.rules.find((rule) => rule.tier_id === tierId);
-
-const launchTiers = computed(() => props.dashboard.tiers
-    .filter((tier) => tier.is_active && tier.level > 0)
-    .map((tier) => {
-        const rule = primaryRule(tier.id);
-        const benefit = primaryDiscountBenefit(tier.id);
-
-        return {
-            tier,
-            rule,
-            benefit,
-            users_count: tier.users_count,
-            monthly_spend: rule?.min_period_spend ?? 0,
-            duration_months: rule?.metadata?.benefit_duration_months ?? '',
-            discount: benefit?.value ?? '',
-        };
-    }));
-
-const requirementLabel = (monthlySpend) => {
-    if (Number(monthlySpend) <= 0) {
-        return t('On registration / login');
-    }
-
-    return `${monthlySpend} ${props.program.default_currency} ${t('this month')}`;
-};
-
-const durationLabel = (months) => {
-    if (!months) {
-        return t('Permanent');
-    }
-
-    return `${months} ${t('months')}`;
-};
-
-const formatDiscount = (benefit) => {
-    if (!benefit || benefit.value === '' || benefit.value === null) {
-        return t('Not configured');
-    }
-
-    if (benefit.value_type === 'percentage') {
-        return `${benefit.value}%`;
-    }
-
-    return `${benefit.value} ${props.program.default_currency}`;
-};
-
-const saveProgramTier = (entry) => {
     if (canManageTiers.value) {
+        pending += 1;
         useForm({
             code: entry.tier.code,
             name: entry.tier.name,
@@ -183,10 +311,17 @@ const saveProgramTier = (entry) => {
             is_default: entry.tier.is_default,
         }).put(route('admin.loyalty.tiers.update', entry.tier.id), {
             preserveScroll: true,
+            onFinish: done,
         });
     }
 
     if (canManageRules.value && entry.rule) {
+        pending += 1;
+        const durationValue = entry.duration_value === '' || entry.duration_value === null
+            ? null
+            : Number(entry.duration_value);
+        const durationUnit = entry.duration_unit === 'days' ? 'days' : 'months';
+
         useForm({
             name: entry.rule.name,
             rule_type: 'upgrade',
@@ -198,15 +333,17 @@ const saveProgramTier = (entry) => {
             allow_downgrade: entry.rule.allow_downgrade,
             is_active: entry.rule.is_active,
             priority: entry.rule.priority,
-            benefit_duration_months: entry.duration_months === '' || entry.duration_months === null
-                ? null
-                : Number(entry.duration_months),
+            benefit_duration_unit: durationUnit,
+            benefit_duration_days: durationUnit === 'days' ? durationValue : null,
+            benefit_duration_months: durationUnit === 'months' ? durationValue : null,
         }).put(route('admin.loyalty.rules.update', entry.rule.id), {
             preserveScroll: true,
+            onFinish: done,
         });
     }
 
     if (canManageBenefits.value && entry.benefit) {
+        pending += 1;
         useForm({
             name: entry.benefit.name,
             description: entry.benefit.description ?? '',
@@ -218,345 +355,396 @@ const saveProgramTier = (entry) => {
             is_active: entry.benefit.is_active,
         }).put(route('admin.loyalty.benefits.update', entry.benefit.id), {
             preserveScroll: true,
+            onFinish: done,
         });
+    }
+
+    if (pending === 0) {
+        isSavingBasics.value = false;
     }
 };
 
-const metrics = computed(() => [
-    {
-        key: 'profiles',
-        label: t('Enrolled customers'),
-        helper: t('Customers with a loyalty profile'),
-        value: props.dashboard.metrics.profiles,
-    },
-    {
-        key: 'upgrades_last_30_days',
-        label: t('Upgrades in 30 days'),
-        helper: t('Tier upgrades in the last month'),
-        value: props.dashboard.metrics.upgrades_last_30_days,
-        tone: 'text-cyan-700',
-    },
-    {
-        key: 'average_completed_orders',
-        label: t('Average completed orders'),
-        helper: t('Completed bookings per profile'),
-        value: props.dashboard.metrics.average_completed_orders,
-    },
-]);
-
-const activeTiersCount = computed(() => launchTiers.value.length);
-
-const onSettingsSaved = (settings) => {
-    if (settings && typeof settings.loyalty_enabled === 'boolean') {
-        programEnabled.value = settings.loyalty_enabled;
+const onRatesSaved = (matrix) => {
+    if (matrix) {
+        ratesMatrix.value = matrix;
     }
+};
+
+const requirementLabel = (monthlySpend) => {
+    if (Number(monthlySpend) <= 0) {
+        return t('On registration / login');
+    }
+
+    return `${monthlySpend} ${props.program.default_currency}`;
+};
+
+const durationLabel = (entry) => {
+    const value = Number(entry?.duration_value);
+    const unit = entry?.duration_unit === 'days' ? 'days' : 'months';
+
+    if (!value) {
+        return t('Permanent');
+    }
+
+    return unit === 'days'
+        ? `${value} ${t('days')}`
+        : `${value} ${t('months')}`;
+};
+
+const formatDiscount = (benefit) => {
+    if (!benefit || benefit.value === '' || benefit.value === null) {
+        return '—';
+    }
+
+    return `${benefit.value}%`;
 };
 
 const programStatusLabel = computed(() => (programEnabled.value ? t('Enabled') : t('Disabled')));
-
-const recentUsers = computed(() => props.dashboard.users_per_tier.flatMap((bucket) => bucket.users.map((entry) => ({
-    ...entry,
-    tier_name: bucket.tier.name,
-    tier_level: bucket.tier.level,
-}))).slice(0, 12));
-
-const inputClass = 'mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400';
+const inputClass = 'block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400 disabled:bg-slate-50';
 </script>
 
 <template>
     <Head :title="t('Loyalty')" />
 
     <AdminLayout
-        title="Loyalty"
-        description="Member discounts and automatic tier upgrades based on completed bookings."
+        :title="t('Loyalty')"
+        :description="t('Open a level to edit its details and company discounts.')"
     >
         <section class="space-y-4">
-            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div class="border-b border-slate-100 px-4 py-5 sm:px-5">
-                    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                        <div>
-                            <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
-                                {{ t('Retention') }}
-                            </p>
-                            <h2 class="mt-2 text-2xl font-semibold text-slate-950">{{ t('Loyalty program') }}</h2>
-                            <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                                {{ t('Level 1 starts automatically on registration or login with a permanent discount. Higher levels unlock from monthly spend and stay active for a fixed number of months.') }}
-                            </p>
-                            <div class="mt-3 max-w-2xl rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
-                                <p class="font-semibold text-slate-800">{{ t('How the discount is calculated') }}</p>
-                                <ul class="mt-2 list-disc space-y-1 ps-4">
-                                    <li>{{ t('Fare = ticket/base price only (before tax). This is the amount loyalty can discount.') }}</li>
-                                    <li>{{ t('Tax = taxes and fees. Loyalty never discounts tax.') }}</li>
-                                    <li>{{ t('Discount = Fare × membership percentage (example: Level 1 = 3%).') }}</li>
-                                    <li>{{ t('Final price = (Fare − Discount) + Tax') }}</li>
-                                </ul>
-                                <p class="mt-2 text-slate-700">
-                                    {{ t('Example: Fare 490, Tax 0, discount 3% → Discount 14.7 → Final ≈ 475.3. If Tax exists (e.g. Fare 613 + Tax 127 = 740), discount applies to 613 only, then tax is added back.') }}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="flex flex-col items-start gap-2 lg:items-end">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                    :disabled="!canManageSettings || isTogglingProgram"
-                                    :aria-pressed="programEnabled"
-                                    @click="toggleLoyaltyProgram"
-                                >
-                                    <span class="font-medium">{{ t('Loyalty') }}</span>
-                                    <span
-                                        class="relative inline-flex h-6 w-11 shrink-0 rounded-full transition"
-                                        :class="programEnabled ? 'bg-slate-950' : 'bg-slate-300'"
-                                    >
-                                        <span
-                                            class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition"
-                                            :class="programEnabled ? 'start-5' : 'start-0.5'"
-                                        />
-                                    </span>
-                                    <span class="min-w-14 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        {{ isTogglingProgram ? t('Saving...') : programStatusLabel }}
-                                    </span>
-                                </button>
-                                <span class="rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white">
-                                    {{ activeTiersCount }} {{ t('active tiers') }}
-                                </span>
-                            </div>
-                            <p v-if="toggleError" class="text-xs text-rose-600">{{ toggleError }}</p>
-                            <p v-else-if="!canManageSettings" class="text-xs text-slate-500">
-                                {{ t('Only Super Admin can enable or disable loyalty.') }}
-                            </p>
-                        </div>
+            <div class="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="text-xl font-semibold text-slate-950">{{ t('Loyalty') }}</h2>
+                        <p class="mt-1 text-sm text-slate-500">
+                            {{ editingEntry
+                                ? t('Editing one level only — not a general table.')
+                                : t('Level 1 starts automatically on registration or login with a permanent discount. Higher levels unlock from monthly spend and stay active for a fixed number of months.') }}
+                        </p>
                     </div>
 
-                    <div class="mt-5 grid gap-3 sm:grid-cols-3">
-                        <article
-                            v-for="metric in metrics"
-                            :key="metric.key"
-                            class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
-                        >
-                            <p class="text-xs font-medium text-slate-500">{{ metric.label }}</p>
-                            <p class="mt-1 text-xl font-semibold text-slate-950" :class="metric.tone">{{ metric.value }}</p>
-                            <p class="mt-1 text-xs text-slate-500">{{ metric.helper }}</p>
-                        </article>
-                    </div>
-                </div>
-
-                <div class="border-b border-slate-100 px-3 py-2 sm:px-4">
-                    <nav class="flex gap-1">
+                    <div class="flex flex-col items-start gap-1 sm:items-end">
                         <button
-                            v-for="tab in workspaceTabs"
-                            :key="tab.id"
                             type="button"
-                            class="rounded-lg px-3 py-2 text-sm font-medium transition"
-                            :class="workspaceTabClass(tab.id)"
-                            @click="activeTab = tab.id"
+                            class="inline-flex items-center gap-3 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 transition hover:bg-white disabled:opacity-60"
+                            :disabled="!canManageSettings || isTogglingProgram"
+                            :aria-pressed="programEnabled"
+                            @click="toggleLoyaltyProgram"
                         >
-                            {{ tab.label }}
+                            <span class="font-medium">{{ t('Program') }}</span>
+                            <span
+                                class="relative inline-flex h-6 w-11 shrink-0 rounded-full transition"
+                                :class="programEnabled ? 'bg-emerald-600' : 'bg-slate-300'"
+                            >
+                                <span
+                                    class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition"
+                                    :class="programEnabled ? 'start-5' : 'start-0.5'"
+                                />
+                            </span>
+                            <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                {{ isTogglingProgram ? t('Saving...') : programStatusLabel }}
+                            </span>
                         </button>
-                    </nav>
+                        <p v-if="toggleError" class="text-xs text-rose-600">{{ toggleError }}</p>
+                    </div>
                 </div>
 
-                <div class="p-4 sm:p-5">
-                    <div v-if="activeTab === 'overview'" class="space-y-4">
-                        <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                            <h3 class="text-sm font-semibold text-slate-950">{{ t('Tier ladder') }}</h3>
-                            <p class="mt-1 text-sm text-slate-600">
-                                {{ t('Level 1 is granted on registration or login. Higher levels unlock from monthly spend.') }}
-                            </p>
+                <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                    <button
+                        type="button"
+                        class="flex w-full items-center justify-between gap-3 px-4 py-3 text-start transition hover:bg-slate-100/80"
+                        :aria-expanded="noteOpen"
+                        @click="noteOpen = !noteOpen"
+                    >
+                        <span class="text-xs font-semibold text-slate-800">
+                            {{ t('Note') }} — {{ t('How the discount is calculated') }}
+                        </span>
+                        <span class="text-sm text-slate-500" aria-hidden="true">
+                            {{ noteOpen ? '−' : '+' }}
+                        </span>
+                    </button>
 
-                            <div v-if="launchTiers.length === 0" class="mt-4 rounded-lg bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                                {{ t('No loyalty tiers have been configured yet.') }}
-                            </div>
-
-                            <div v-else class="mt-4 overflow-x-auto">
-                                <table class="min-w-full text-left text-sm">
-                                    <thead class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                                        <tr>
-                                            <th class="px-3 py-2 font-medium">{{ t('Tier') }}</th>
-                                            <th class="px-3 py-2 font-medium">{{ t('Monthly spend') }}</th>
-                                            <th class="px-3 py-2 font-medium">{{ t('Discount') }}</th>
-                                            <th class="px-3 py-2 font-medium">{{ t('Active for') }}</th>
-                                            <th class="px-3 py-2 font-medium">{{ t('Customers') }}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr
-                                            v-for="entry in launchTiers"
-                                            :key="entry.tier.id"
-                                            class="border-b border-slate-100 last:border-0"
-                                        >
-                                            <td class="px-3 py-3 font-medium text-slate-950">{{ entry.tier.name }}</td>
-                                            <td class="px-3 py-3 text-slate-600">{{ requirementLabel(entry.monthly_spend) }}</td>
-                                            <td class="px-3 py-3 text-slate-950">{{ formatDiscount(entry.benefit) }}</td>
-                                            <td class="px-3 py-3 text-slate-600">{{ durationLabel(entry.duration_months) }}</td>
-                                            <td class="px-3 py-3 text-slate-600">{{ entry.users_count }}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <button
-                                v-if="canEditProgram"
-                                type="button"
-                                class="mt-4 text-sm font-medium text-cyan-700 transition hover:text-cyan-900"
-                                @click="activeTab = 'program'"
-                            >
-                                {{ t('Edit program') }} {{ forwardArrow }}
-                            </button>
-                        </article>
-
-                        <div class="grid gap-4 xl:grid-cols-2">
-                            <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <h3 class="text-sm font-semibold text-slate-950">{{ t('Recent loyalty changes') }}</h3>
-                                <p class="mt-1 text-sm text-slate-600">{{ t('Latest upgrade or downgrade events.') }}</p>
-
-                                <div class="mt-4 space-y-2">
-                                    <div
-                                        v-if="dashboard.recent_history.length === 0"
-                                        class="rounded-lg bg-slate-50 px-4 py-4 text-sm text-slate-600"
-                                    >
-                                        {{ t('No loyalty history entries yet.') }}
-                                    </div>
-                                    <div
-                                        v-for="entry in dashboard.recent_history"
-                                        :key="entry.id"
-                                        class="rounded-lg border border-slate-200 px-4 py-3"
-                                    >
-                                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                            <div>
-                                                <p class="text-sm font-medium text-slate-950">{{ entry.user.name || entry.user.email || t('Unknown user') }}</p>
-                                                <p class="mt-1 text-xs text-slate-500">{{ pretty(entry.action) }} · {{ entry.changed_at }}</p>
-                                            </div>
-                                            <p class="text-sm text-slate-600">{{ entry.from_tier || t('No tier') }} {{ forwardArrow }} {{ entry.to_tier || t('No tier') }}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </article>
-
-                            <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <h3 class="text-sm font-semibold text-slate-950">{{ t('Users per tier') }}</h3>
-                                <p class="mt-1 text-sm text-slate-600">{{ t('Recent customers in each loyalty tier.') }}</p>
-
-                                <div class="mt-4 space-y-2">
-                                    <div
-                                        v-for="entry in recentUsers"
-                                        :key="entry.profile_id"
-                                        class="rounded-lg border border-slate-200 px-4 py-3"
-                                    >
-                                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                            <div>
-                                                <p class="text-sm font-medium text-slate-950">{{ entry.user.name || entry.user.email || t('Unknown user') }}</p>
-                                                <p class="mt-1 text-xs text-slate-500">{{ entry.tier_name }} · {{ t('Level') }} {{ entry.tier_level }}</p>
-                                            </div>
-                                            <div class="text-right text-xs text-slate-500">
-                                                <p>{{ t('Orders') }} {{ entry.completed_orders_count }}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div
-                                        v-if="recentUsers.length === 0"
-                                        class="rounded-lg bg-slate-50 px-4 py-4 text-sm text-slate-600"
-                                    >
-                                        {{ t('No users in this tier yet.') }}
-                                    </div>
-                                </div>
-                            </article>
-                        </div>
-                    </div>
-
-                    <div v-else class="space-y-5">
-                        <LoyaltySettingsPanel
-                            :initial-settings="settings"
-                            :can-manage="canManageSettings"
-                            :update-url="settings_update_url"
-                            @saved="onSettingsSaved"
-                        />
-
-                        <div class="space-y-4">
-                            <div>
-                                <h3 class="text-sm font-semibold text-slate-950">{{ t('Tier configuration') }}</h3>
-                                <p class="mt-1 text-sm text-slate-600">
-                                    {{ t('Each card combines the level name, how it unlocks, discount, and active duration. Leave monthly spend at 0 for the starter level.') }}
-                                </p>
-                            </div>
-
-                            <div class="grid gap-4">
-                                <form
-                                    v-for="entry in launchTiers"
-                                    :key="entry.tier.id"
-                                    class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-                                    @submit.prevent="saveProgramTier(entry)"
-                                >
-                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                        <div>
-                                            <p class="text-sm font-semibold text-slate-950">{{ entry.tier.name }}</p>
-                                            <p class="mt-1 text-xs text-slate-500">
-                                                {{ pretty(entry.tier.code) }} · {{ entry.users_count }} {{ t('customers') }}
-                                            </p>
-                                        </div>
-                                        <button
-                                            v-if="canEditProgram"
-                                            type="submit"
-                                            class="inline-flex shrink-0 items-center justify-center rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                                        >
-                                            {{ t('Save tier') }}
-                                        </button>
-                                    </div>
-
-                                    <div class="mt-4 grid gap-3 md:grid-cols-4">
-                                        <label class="block text-sm">
-                                            <span class="font-medium text-slate-700">{{ t('Display name') }}</span>
-                                            <input v-model="entry.tier.name" type="text" :class="inputClass" :disabled="!canManageTiers">
-                                        </label>
-                                        <label class="block text-sm">
-                                            <span class="font-medium text-slate-700">{{ t('Monthly spend target') }}</span>
-                                            <input
-                                                v-if="entry.rule"
-                                                v-model="entry.rule.min_period_spend"
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                :class="inputClass"
-                                                :disabled="!canManageRules"
-                                            >
-                                        </label>
-                                        <label class="block text-sm">
-                                            <span class="font-medium text-slate-700">{{ t('Discount percentage') }}</span>
-                                            <input
-                                                v-if="entry.benefit"
-                                                v-model="entry.benefit.value"
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                :class="inputClass"
-                                                :disabled="!canManageBenefits"
-                                            >
-                                        </label>
-                                        <label class="block text-sm">
-                                            <span class="font-medium text-slate-700">{{ t('Active for (months)') }}</span>
-                                            <input
-                                                v-if="entry.rule"
-                                                v-model="entry.duration_months"
-                                                type="number"
-                                                min="0"
-                                                step="1"
-                                                :class="inputClass"
-                                                :disabled="!canManageRules"
-                                                :placeholder="t('Empty = permanent')"
-                                            >
-                                            <span class="mt-1 block text-xs text-slate-500">
-                                                {{ t('Leave empty or 0 for a permanent discount (starter Level 1).') }}
-                                            </span>
-                                        </label>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
+                    <div v-show="noteOpen" class="border-t border-slate-200 px-4 py-3 text-xs leading-5 text-slate-600">
+                        <ul class="list-disc space-y-1 ps-4">
+                            <li>{{ t('Fare = ticket/base price only (before tax). This is the amount loyalty can discount.') }}</li>
+                            <li>{{ t('Tax = taxes and fees. Loyalty never discounts tax.') }}</li>
+                            <li>{{ t('Discount = Fare × membership percentage (example: Level 1 = 3%).') }}</li>
+                            <li>{{ t('Final price = (Fare − Discount) + Tax') }}</li>
+                            <li>{{ t('Welcome / Level 1 discount stays active until the first completed order, then it ends.') }}</li>
+                        </ul>
+                        <p class="mt-2 text-slate-700">
+                            {{ t('Example: Fare 490, Tax 0, discount 3% → Discount 14.7 → Final ≈ 475.3. If Tax exists (e.g. Fare 613 + Tax 127 = 740), discount applies to 613 only, then tax is added back.') }}
+                        </p>
                     </div>
                 </div>
             </div>
+
+            <!-- LIST -->
+            <template v-if="!editingEntry">
+                <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div class="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                        <div>
+                            <h3 class="text-sm font-semibold text-slate-950">{{ t('Levels') }}</h3>
+                            <p class="mt-1 text-sm text-slate-500">{{ t('Click Edit to open one level.') }}</p>
+                        </div>
+                        <button
+                            v-if="canManageTiers"
+                            type="button"
+                            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-950 text-lg font-semibold leading-none text-white transition hover:bg-slate-800"
+                            :aria-label="t('Add level')"
+                            :title="t('Add level')"
+                            @click="openAddLevel"
+                        >
+                            +
+                        </button>
+                    </div>
+
+                    <div v-if="launchTiers.length === 0" class="px-5 py-8 text-sm text-slate-500">
+                        {{ t('No loyalty tiers have been configured yet.') }}
+                    </div>
+
+                    <div v-else class="divide-y divide-slate-100">
+                        <div
+                            v-for="entry in launchTiers"
+                            :key="entry.tier.id"
+                            class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                            :class="entry.tier.is_active ? '' : 'bg-slate-50/80'"
+                        >
+                            <div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <p class="text-sm font-semibold text-slate-950">{{ entry.tier.name }}</p>
+                                    <span
+                                        class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                                        :class="entry.tier.is_active
+                                            ? 'bg-emerald-50 text-emerald-700'
+                                            : 'bg-slate-200 text-slate-600'"
+                                    >
+                                        {{ entry.tier.is_active ? t('Active') : t('Inactive') }}
+                                    </span>
+                                </div>
+                                <p class="mt-1 text-xs text-slate-500">
+                                    {{ t('Discount') }} {{ formatDiscount(entry.benefit) }}
+                                    · {{ requirementLabel(entry.monthly_spend) }}
+                                    · {{ durationLabel(entry) }}
+                                    · {{ entry.users_count }} {{ t('customers') }}
+                                </p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button
+                                    v-if="canManageTiers"
+                                    type="button"
+                                    class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 hover:text-slate-950 disabled:opacity-60"
+                                    :aria-label="t('Copy level')"
+                                    :title="t('Copy level')"
+                                    :disabled="isDuplicatingLevel"
+                                    @click="duplicateLevel(entry)"
+                                >
+                                    <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4" aria-hidden="true">
+                                        <path d="M7 3.5A1.5 1.5 0 018.5 2h6A1.5 1.5 0 0116 3.5v10a1.5 1.5 0 01-1.5 1.5h-6A1.5 1.5 0 017 13.5v-10z" />
+                                        <path d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h6a1.5 1.5 0 001.5-1.5V16H8.5A2.5 2.5 0 016 13.5V6H4.5z" />
+                                    </svg>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                                    @click="openEdit(entry.tier.id)"
+                                >
+                                    {{ t('Edit') }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <AdminModal
+                    :show="showAddLevel"
+                    title="Add level"
+                    max-width="xl"
+                    @close="closeAddLevel"
+                >
+                    <form class="space-y-4" @submit.prevent="createTier">
+                        <p class="text-sm text-slate-500">
+                            {{ t('New level will be Level :level', { level: nextSuggestedLevel }) }}
+                        </p>
+
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <label class="block text-sm">
+                                <span class="mb-1 block text-slate-600">{{ t('Name') }}</span>
+                                <input v-model="newTierForm.name" type="text" :class="inputClass" :placeholder="`Level ${nextSuggestedLevel}`">
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block text-slate-600">{{ t('Discount') }} %</span>
+                                <input v-model="newTierForm.discount_percentage" type="number" min="0" max="100" step="0.01" :class="inputClass" required>
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block text-slate-600">{{ t('Monthly spend') }}</span>
+                                <input v-model="newTierForm.monthly_spend" type="number" min="0" step="0.01" :class="inputClass">
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block text-slate-600">{{ t('Duration') }}</span>
+                                <input v-model="newTierForm.duration_value" type="number" min="0" step="1" :class="inputClass" :placeholder="t('Permanent')">
+                            </label>
+                            <label class="block text-sm sm:col-span-2">
+                                <span class="mb-1 block text-slate-600">{{ t('Unit') }}</span>
+                                <select v-model="newTierForm.duration_unit" :class="inputClass">
+                                    <option value="days">{{ t('Days') }}</option>
+                                    <option value="months">{{ t('Months') }}</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <label class="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                            <input v-model="newTierForm.notify_customers" type="checkbox" class="mt-0.5 h-4 w-4">
+                            <span>
+                                {{ t('Send push notification to everyone about this discount') }}
+                                <span class="mt-0.5 block text-xs text-slate-500">
+                                    {{ t('Recommended for short campaigns (e.g. 3 days).') }}
+                                </span>
+                            </span>
+                        </label>
+
+                        <p v-if="Object.keys(newTierForm.errors).length" class="text-sm text-rose-600">
+                            {{ Object.values(newTierForm.errors)[0] }}
+                        </p>
+
+                        <div class="flex items-center justify-end gap-2 pt-1">
+                            <button
+                                type="button"
+                                class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                                @click="closeAddLevel"
+                            >
+                                {{ t('Cancel') }}
+                            </button>
+                            <button
+                                type="submit"
+                                class="rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
+                                :disabled="newTierForm.processing"
+                            >
+                                {{ newTierForm.processing ? t('Saving...') : t('Add') }}
+                            </button>
+                        </div>
+                    </form>
+                </AdminModal>
+            </template>
+
+            <!-- EDIT ONE LEVEL -->
+            <template v-else>
+                <div class="flex items-center justify-between gap-3">
+                    <button
+                        type="button"
+                        class="text-sm font-medium text-slate-600 transition hover:text-slate-950"
+                        @click="backToList"
+                    >
+                        ← {{ t('Back to levels') }}
+                    </button>
+                    <p class="text-sm font-semibold text-slate-950">{{ editingEntry.tier.name }}</p>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h3 class="text-sm font-semibold text-slate-950">{{ t('Level details') }}</h3>
+                            <p class="mt-1 text-sm text-slate-500">{{ t('Basic settings for this level only.') }}</p>
+                        </div>
+                        <button
+                            v-if="canEditProgram"
+                            type="button"
+                            class="rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
+                            :disabled="isSavingBasics"
+                            @click="saveLevelBasics(editingEntry)"
+                        >
+                            {{ isSavingBasics ? t('Saving...') : t('Save details') }}
+                        </button>
+                    </div>
+
+                    <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                        <label class="block text-sm">
+                            <span class="mb-1 block text-slate-600">{{ t('Name') }}</span>
+                            <input v-model="editingEntry.tier.name" type="text" :class="inputClass" :disabled="!canManageTiers">
+                        </label>
+                        <label class="block text-sm">
+                            <span class="mb-1 block text-slate-600">{{ t('Status') }}</span>
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm transition hover:bg-slate-50 disabled:opacity-60"
+                                :disabled="!canManageTiers"
+                                @click="editingEntry.tier.is_active = !editingEntry.tier.is_active"
+                            >
+                                <span>{{ editingEntry.tier.is_active ? t('Active') : t('Inactive') }}</span>
+                                <span
+                                    class="relative inline-flex h-6 w-11 shrink-0 rounded-full transition"
+                                    :class="editingEntry.tier.is_active ? 'bg-emerald-600' : 'bg-slate-300'"
+                                >
+                                    <span
+                                        class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition"
+                                        :class="editingEntry.tier.is_active ? 'start-5' : 'start-0.5'"
+                                    />
+                                </span>
+                            </button>
+                        </label>
+                        <label class="block text-sm">
+                            <span class="mb-1 block text-slate-600">{{ t('Monthly spend') }}</span>
+                            <input
+                                v-if="editingEntry.rule"
+                                v-model="editingEntry.rule.min_period_spend"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                :class="inputClass"
+                                :disabled="!canManageRules"
+                            >
+                        </label>
+                        <label class="block text-sm">
+                            <span class="mb-1 block text-slate-600">{{ t('Default discount') }} %</span>
+                            <input
+                                v-if="editingEntry.benefit"
+                                v-model="editingEntry.benefit.value"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                :class="inputClass"
+                                :disabled="!canManageBenefits"
+                            >
+                        </label>
+                        <label class="block text-sm">
+                            <span class="mb-1 block text-slate-600">{{ t('Duration') }}</span>
+                            <input
+                                v-if="editingEntry.rule"
+                                v-model="editingEntry.duration_value"
+                                type="number"
+                                min="0"
+                                step="1"
+                                :class="inputClass"
+                                :disabled="!canManageRules"
+                                :placeholder="t('Permanent')"
+                            >
+                        </label>
+                        <label class="block text-sm">
+                            <span class="mb-1 block text-slate-600">{{ t('Unit') }}</span>
+                            <select
+                                v-if="editingEntry.rule"
+                                v-model="editingEntry.duration_unit"
+                                :class="inputClass"
+                                :disabled="!canManageRules"
+                            >
+                                <option value="days">{{ t('Days') }}</option>
+                                <option value="months">{{ t('Months') }}</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+
+                <LoyaltyCompanyRatesPanel
+                    :key="editingEntry.tier.id"
+                    :tier-id="editingEntry.tier.id"
+                    :initial-matrix="ratesMatrix"
+                    :sync-url="company_rates_sync_url"
+                    :show-url="company_rates_url"
+                    :can-manage="canManageCompanyRates"
+                    compact
+                    @saved="onRatesSaved"
+                />
+            </template>
         </section>
     </AdminLayout>
 </template>

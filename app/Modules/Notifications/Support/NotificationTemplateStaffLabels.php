@@ -91,6 +91,7 @@ final class NotificationTemplateStaffLabels
             'LOYALTY_NEAR_REWARD' => ['en' => 'Close to the next loyalty reward', 'ar' => 'قريب من مكافأة الولاء التالية'],
             'LOYALTY_TIER_CHANGED' => ['en' => 'Loyalty tier changed', 'ar' => 'تغيّر مستوى الولاء'],
             'ACCOUNT_WELCOME_LOYALTY' => ['en' => 'Welcome + loyalty discount unlocked', 'ar' => 'ترحيب + فتح خصم الولاء'],
+            'LOYALTY_DISCOUNT_CAMPAIGN' => ['en' => 'Loyalty discount campaign for everyone', 'ar' => 'حملة خصم ولاء للجميع'],
             'ABANDONED_FLIGHT_SEARCH' => ['en' => 'Customer searched and did not book', 'ar' => 'العميل بحث ولم يكمل الحجز'],
             'PRICE_ALERT_HIT' => ['en' => 'Watched flight price dropped', 'ar' => 'انخفض سعر الرحلة التي يراقبها'],
             'SEAT_ALERT_AVAILABLE' => ['en' => 'Watched seats became available', 'ar' => 'أصبحت المقاعد التي يراقبها متاحة'],

@@ -172,12 +172,12 @@ class UsersTest extends TestCase
                 ->where('user.recent_activities.0.action', 'activity_12')
                 ->where('user.recent_activities.1.action', 'activity_11')
                 ->where('user.recent_activities.9.action', 'activity_03')
-                ->where('user.loyalty.current_tier.code', 'level_1')
-                ->where('user.loyalty.current_level', 1)
-                ->where('user.loyalty.next_tier.code', 'level_2')
-                ->where('user.loyalty.progress_to_next_level.current_metrics.month_spend', '2478.00')
-                ->where('user.loyalty.benefits_unlocked.0.code', 'level_1_discount')
-                ->has('user.loyalty.history', 1)
+                ->where('user.loyalty.current_tier', null)
+                ->where('user.loyalty.current_level', 0)
+                ->where('user.loyalty.next_tier.code', 'explorer')
+                ->where('user.loyalty.progress_to_next_level.current_metrics.month_spend', 2478)
+                ->where('user.loyalty.benefits_unlocked', [])
+                ->has('user.loyalty.history', 0)
             );
 
         Carbon::setTestNow();

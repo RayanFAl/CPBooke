@@ -4,13 +4,17 @@ namespace App\Modules\Admin\Loyalty\Services;
 
 use App\Models\AuditLog;
 use App\Models\LoyaltyBenefit;
+use App\Models\LoyaltyCompanyRate;
 use App\Models\LoyaltyHistory;
 use App\Models\LoyaltyRule;
 use App\Models\LoyaltyTier;
+use App\Models\Order;
 use App\Models\UserLoyaltyProfile;
 use App\Modules\Audit\Services\AuditRecorder;
+use App\Modules\Loyalty\Events\LoyaltyDiscountCampaignQueued;
 use App\Support\Rbac\RbacAuditLogger;
 use App\Support\Rbac\RbacAuthorizer;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class LoyaltyAdminService
@@ -19,8 +23,7 @@ class LoyaltyAdminService
         private readonly RbacAuthorizer $rbacAuthorizer,
         private readonly RbacAuditLogger $rbacAuditLogger,
         private readonly AuditRecorder $auditRecorder,
-    ) {
-    }
+    ) {}
 
     /**
      * Build the loyalty admin dashboard payload.
@@ -184,21 +187,384 @@ class LoyaltyAdminService
         return $tier;
     }
 
+    /**
+     * Create a new loyalty level with rule, discount benefit, and default company rates.
+     *
+     * @param  array{
+     *     name?: string|null,
+     *     discount_percentage: float|int|string,
+     *     monthly_spend?: float|int|string|null,
+     *     duration_months?: int|string|null,
+     *     duration_days?: int|string|null,
+     *     duration_unit?: string|null,
+     *     is_active?: bool,
+     *     notify_customers?: bool
+     * }  $data
+     */
+    public function createTier(array $data): LoyaltyTier
+    {
+        $actor = $this->rbacAuthorizer->authorize('loyalty.manage', allowSystem: true);
+        $discount = max(0, min(100, round((float) $data['discount_percentage'], 2)));
+
+        $tier = DB::transaction(function () use ($data, $discount): LoyaltyTier {
+            $nextLevel = (int) (LoyaltyTier::query()->max('level') ?? 0) + 1;
+
+            if ($nextLevel < 1) {
+                $nextLevel = 1;
+            }
+
+            $name = trim((string) ($data['name'] ?? '')) ?: "Level {$nextLevel}";
+            $code = 'level_'.$nextLevel;
+            $suffix = 2;
+
+            while (LoyaltyTier::query()->where('code', $code)->exists()) {
+                $code = 'level_'.$nextLevel.'_'.$suffix;
+                $suffix++;
+            }
+
+            $monthlySpend = max(0, round((float) ($data['monthly_spend'] ?? 0), 2));
+            $durationMeta = $this->normalizeDurationMetadata(
+                $data['duration_unit'] ?? null,
+                $data['duration_days'] ?? null,
+                $data['duration_months'] ?? null,
+            );
+
+            $tier = LoyaltyTier::query()->create([
+                'level' => $nextLevel,
+                'code' => $code,
+                'name' => $name,
+                'badge_label' => $name,
+                'description' => $monthlySpend > 0
+                    ? "Unlocked after {$monthlySpend} monthly spend."
+                    : 'Starter loyalty level.',
+                'color_token' => 'slate',
+                'sort_order' => $nextLevel,
+                'is_active' => array_key_exists('is_active', $data) ? (bool) $data['is_active'] : true,
+                'is_default' => false,
+                'metadata' => [
+                    'name_en' => $name,
+                    'name_ar' => $name,
+                    'mobile_code' => $code,
+                    'mobile_benefits' => [],
+                ],
+            ]);
+
+            LoyaltyRule::query()->create([
+                'tier_id' => $tier->id,
+                'rule_type' => LoyaltyRule::TYPE_UPGRADE,
+                'name' => $monthlySpend > 0
+                    ? "{$name} monthly spend target"
+                    : "{$name} on registration",
+                'min_completed_orders' => 0,
+                'min_lifetime_spend' => 0,
+                'min_period_orders' => 0,
+                'min_period_spend' => $monthlySpend,
+                'period_days' => 30,
+                'allow_downgrade' => false,
+                'is_active' => true,
+                'priority' => max(1, 100 - $nextLevel),
+                'metadata' => $durationMeta,
+            ]);
+
+            LoyaltyBenefit::query()->create([
+                'tier_id' => $tier->id,
+                'code' => $code.'_discount',
+                'name' => "{$name} discount",
+                'description' => "{$discount}% loyalty discount",
+                'benefit_type' => LoyaltyBenefit::TYPE_DISCOUNT,
+                'value_type' => LoyaltyBenefit::VALUE_TYPE_PERCENTAGE,
+                'value' => $discount,
+                'configuration' => ['applies_to' => Order::serviceTypes()],
+                'applies_to_services' => Order::serviceTypes(),
+                'priority' => 10,
+                'stackable' => false,
+                'finance_sensitive' => false,
+                'display_order' => 1,
+                'is_highlighted' => true,
+                'is_active' => true,
+                'metadata' => [
+                    'label_en' => rtrim(rtrim(number_format($discount, 2, '.', ''), '0'), '.').'% off bookings',
+                    'label_ar' => 'خصم '.rtrim(rtrim(number_format($discount, 2, '.', ''), '0'), '.').'% على الحجوزات',
+                ],
+            ]);
+
+            $this->seedCompanyRatesForTier($tier, $discount);
+
+            return $tier->refresh();
+        });
+
+        $this->rbacAuditLogger->log('loyalty.tier.created', 'loyalty.manage', $actor, 'loyalty_tier', $tier->id, [
+            'code' => $tier->code,
+            'level' => $tier->level,
+        ]);
+
+        $this->auditRecorder->success(
+            AuditLog::MODULE_LOYALTY,
+            'loyalty.tier.created',
+            "Loyalty tier created: {$tier->code} ({$tier->name})",
+            AuditLog::ENTITY_LOYALTY_TIER,
+            $tier->id,
+            $actor,
+            null,
+            $this->tierSnapshot($tier),
+            ['source' => 'admin.loyalty', 'code' => $tier->code],
+        );
+
+        if ($this->shouldNotifyCustomers($data, $tier)) {
+            $durationLabels = $this->campaignDurationLabels($data);
+
+            event(new LoyaltyDiscountCampaignQueued(
+                tierId: (int) $tier->id,
+                tierName: (string) $tier->name,
+                discountPercentage: rtrim(rtrim(number_format($discount, 2, '.', ''), '0'), '.'),
+                durationLabelEn: $durationLabels['en'],
+                durationLabelAr: $durationLabels['ar'],
+            ));
+        }
+
+        return $tier;
+    }
+
+    /**
+     * Copy an existing level (rule, benefits, company rates) into a new level.
+     * Admin then only needs to change the values they want.
+     */
+    public function duplicateTier(LoyaltyTier $source): LoyaltyTier
+    {
+        $actor = $this->rbacAuthorizer->authorize('loyalty.manage', allowSystem: true);
+
+        $source->loadMissing(['rules', 'benefits']);
+
+        $tier = DB::transaction(function () use ($source): LoyaltyTier {
+            $nextLevel = (int) (LoyaltyTier::query()->max('level') ?? 0) + 1;
+
+            if ($nextLevel < 1) {
+                $nextLevel = 1;
+            }
+
+            $baseName = trim((string) $source->name) ?: "Level {$nextLevel}";
+            $name = $baseName.' (copy)';
+            $code = 'level_'.$nextLevel;
+            $suffix = 2;
+
+            while (LoyaltyTier::query()->where('code', $code)->exists()) {
+                $code = 'level_'.$nextLevel.'_'.$suffix;
+                $suffix++;
+            }
+
+            $sourceMeta = is_array($source->metadata) ? $source->metadata : [];
+            $metadata = array_merge($sourceMeta, [
+                'name_en' => trim((string) ($sourceMeta['name_en'] ?? $baseName)).' (copy)',
+                'name_ar' => trim((string) ($sourceMeta['name_ar'] ?? $baseName)).' (نسخة)',
+                'mobile_code' => $code,
+                'duplicated_from_tier_id' => $source->id,
+            ]);
+
+            $tier = LoyaltyTier::query()->create([
+                'level' => $nextLevel,
+                'code' => $code,
+                'name' => $name,
+                'badge_label' => $name,
+                'description' => $source->description,
+                'color_token' => $source->color_token ?: 'slate',
+                'sort_order' => $nextLevel,
+                'is_active' => (bool) $source->is_active,
+                'is_default' => false,
+                'metadata' => $metadata,
+            ]);
+
+            foreach ($source->rules as $rule) {
+                LoyaltyRule::query()->create([
+                    'tier_id' => $tier->id,
+                    'rule_type' => $rule->rule_type,
+                    'name' => str_replace($baseName, $name, (string) $rule->name),
+                    'min_completed_orders' => $rule->min_completed_orders,
+                    'min_lifetime_spend' => $rule->min_lifetime_spend,
+                    'min_period_orders' => $rule->min_period_orders,
+                    'min_period_spend' => $rule->min_period_spend,
+                    'period_days' => $rule->period_days,
+                    'allow_downgrade' => (bool) $rule->allow_downgrade,
+                    'is_active' => (bool) $rule->is_active,
+                    'priority' => max(1, 100 - $nextLevel),
+                    'metadata' => $rule->metadata ?? [],
+                ]);
+            }
+
+            foreach ($source->benefits as $benefit) {
+                $benefitCode = $code.'_'.preg_replace('/^'.preg_quote((string) $source->code, '/').'_?/', '', (string) $benefit->code);
+                $benefitCode = trim((string) $benefitCode, '_');
+
+                if ($benefitCode === '' || $benefitCode === $code) {
+                    $benefitCode = $code.'_benefit_'.$benefit->id;
+                }
+
+                while (LoyaltyBenefit::query()->where('code', $benefitCode)->exists()) {
+                    $benefitCode .= '_copy';
+                }
+
+                LoyaltyBenefit::query()->create([
+                    'tier_id' => $tier->id,
+                    'code' => $benefitCode,
+                    'name' => str_replace($baseName, $name, (string) $benefit->name),
+                    'description' => $benefit->description,
+                    'benefit_type' => $benefit->benefit_type,
+                    'value_type' => $benefit->value_type,
+                    'value' => $benefit->value,
+                    'configuration' => $benefit->configuration ?? [],
+                    'applies_to_services' => $benefit->applies_to_services ?? [],
+                    'minimum_order_amount' => $benefit->minimum_order_amount,
+                    'maximum_discount_amount' => $benefit->maximum_discount_amount,
+                    'priority' => $benefit->priority,
+                    'stackable' => (bool) $benefit->stackable,
+                    'finance_sensitive' => (bool) $benefit->finance_sensitive,
+                    'display_order' => $benefit->display_order,
+                    'is_highlighted' => (bool) $benefit->is_highlighted,
+                    'is_active' => (bool) $benefit->is_active,
+                    'metadata' => $benefit->metadata ?? [],
+                ]);
+            }
+
+            if (Schema::hasTable('loyalty_company_rates')) {
+                $now = now();
+                $rateRows = LoyaltyCompanyRate::query()
+                    ->where('tier_id', $source->id)
+                    ->get()
+                    ->map(static fn (LoyaltyCompanyRate $rate): array => [
+                        'tier_id' => $tier->id,
+                        'service_type' => $rate->service_type,
+                        'company_key' => $rate->company_key,
+                        'company_name' => $rate->company_name,
+                        'discount_percentage' => $rate->discount_percentage,
+                        'is_active' => (bool) $rate->is_active,
+                        'sort_order' => $rate->sort_order,
+                        'metadata' => json_encode(array_merge(
+                            is_array($rate->metadata) ? $rate->metadata : [],
+                            ['duplicated_from_tier_id' => $source->id],
+                        )),
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ])
+                    ->all();
+
+                if ($rateRows !== []) {
+                    LoyaltyCompanyRate::query()->insertOrIgnore($rateRows);
+                }
+            }
+
+            return $tier->refresh();
+        });
+
+        $this->rbacAuditLogger->log('loyalty.tier.duplicated', 'loyalty.manage', $actor, 'loyalty_tier', $tier->id, [
+            'code' => $tier->code,
+            'level' => $tier->level,
+            'source_tier_id' => $source->id,
+            'source_code' => $source->code,
+        ]);
+
+        $this->auditRecorder->success(
+            AuditLog::MODULE_LOYALTY,
+            'loyalty.tier.duplicated',
+            "Loyalty tier duplicated from {$source->code} to {$tier->code}",
+            AuditLog::ENTITY_LOYALTY_TIER,
+            $tier->id,
+            $actor,
+            null,
+            $this->tierSnapshot($tier),
+            [
+                'source' => 'admin.loyalty',
+                'code' => $tier->code,
+                'source_tier_id' => $source->id,
+            ],
+        );
+
+        return $tier;
+    }
+
+    private function seedCompanyRatesForTier(LoyaltyTier $tier, float $discountPercentage): void
+    {
+        if (! Schema::hasTable('loyalty_company_rates')) {
+            return;
+        }
+
+        $now = now();
+        $formatted = number_format($discountPercentage, 2, '.', '');
+        $rows = [];
+
+        foreach (LoyaltyCompanyRate::catalogCompanies() as $company) {
+            $rows[] = [
+                'tier_id' => $tier->id,
+                'service_type' => $company['service_type'],
+                'company_key' => $company['company_key'],
+                'company_name' => $company['company_name'],
+                'discount_percentage' => $formatted,
+                'is_active' => true,
+                'sort_order' => $company['sort_order'],
+                'metadata' => json_encode(['seeded_on_create' => true]),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        $airlines = LoyaltyCompanyRate::query()
+            ->where('service_type', Order::SERVICE_TYPE_FLIGHT)
+            ->select('company_key', 'company_name', 'sort_order')
+            ->distinct()
+            ->orderBy('sort_order')
+            ->get();
+
+        foreach ($airlines as $index => $airline) {
+            $rows[] = [
+                'tier_id' => $tier->id,
+                'service_type' => Order::SERVICE_TYPE_FLIGHT,
+                'company_key' => $airline->company_key,
+                'company_name' => $airline->company_name ?: $airline->company_key,
+                'discount_percentage' => $formatted,
+                'is_active' => true,
+                'sort_order' => (int) ($airline->sort_order ?? $index),
+                'metadata' => json_encode(['seeded_on_create' => true]),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        if ($rows !== []) {
+            LoyaltyCompanyRate::query()->insertOrIgnore($rows);
+        }
+    }
+
     public function updateRule(LoyaltyRule $rule, array $data): LoyaltyRule
     {
         $actor = $this->rbacAuthorizer->authorize('loyalty.manage-rules', allowSystem: true);
         $before = $this->ruleSnapshot($rule);
 
-        $durationProvided = array_key_exists('benefit_duration_months', $data);
-        $durationMonths = $durationProvided ? $data['benefit_duration_months'] : null;
-        unset($data['benefit_duration_months']);
+        $durationProvided = array_key_exists('benefit_duration_months', $data)
+            || array_key_exists('benefit_duration_days', $data)
+            || array_key_exists('benefit_duration_unit', $data)
+            || array_key_exists('duration_months', $data)
+            || array_key_exists('duration_days', $data)
+            || array_key_exists('duration_unit', $data);
+
+        $durationMeta = null;
 
         if ($durationProvided) {
-            $metadata = $rule->metadata ?? [];
-            $metadata['benefit_duration_months'] = $durationMonths !== null && (int) $durationMonths > 0
-                ? (int) $durationMonths
-                : null;
-            $data['metadata'] = $metadata;
+            $durationMeta = $this->normalizeDurationMetadata(
+                $data['benefit_duration_unit'] ?? $data['duration_unit'] ?? null,
+                $data['benefit_duration_days'] ?? $data['duration_days'] ?? null,
+                $data['benefit_duration_months'] ?? $data['duration_months'] ?? null,
+            );
+        }
+
+        unset(
+            $data['benefit_duration_months'],
+            $data['benefit_duration_days'],
+            $data['benefit_duration_unit'],
+            $data['duration_months'],
+            $data['duration_days'],
+            $data['duration_unit'],
+        );
+
+        if ($durationMeta !== null) {
+            $data['metadata'] = array_merge($rule->metadata ?? [], $durationMeta);
         }
 
         $rule->forceFill($data)->save();
@@ -210,6 +576,8 @@ class LoyaltyAdminService
             'tier_id' => $rule->tier_id,
             'name' => $rule->name,
             'benefit_duration_months' => $rule->metadata['benefit_duration_months'] ?? null,
+            'benefit_duration_days' => $rule->metadata['benefit_duration_days'] ?? null,
+            'benefit_duration_unit' => $rule->metadata['benefit_duration_unit'] ?? null,
             'before' => $oldValues,
             'after' => $newValues,
         ]);
@@ -312,6 +680,118 @@ class LoyaltyAdminService
             'is_active' => (bool) $rule->is_active,
             'priority' => $rule->priority,
             'benefit_duration_months' => $rule->metadata['benefit_duration_months'] ?? null,
+            'benefit_duration_days' => $rule->metadata['benefit_duration_days'] ?? null,
+            'benefit_duration_unit' => $rule->metadata['benefit_duration_unit'] ?? null,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function shouldNotifyCustomers(array $data, LoyaltyTier $tier): bool
+    {
+        if (! $tier->is_active) {
+            return false;
+        }
+
+        if (array_key_exists('notify_customers', $data)) {
+            return (bool) $data['notify_customers'];
+        }
+
+        $unit = (string) ($data['duration_unit'] ?? '');
+        $days = isset($data['duration_days']) && $data['duration_days'] !== ''
+            ? (int) $data['duration_days']
+            : 0;
+
+        return $unit === 'days' && $days > 0;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array{en: string, ar: string}
+     */
+    private function campaignDurationLabels(array $data): array
+    {
+        $unit = (string) ($data['duration_unit'] ?? '');
+        $days = isset($data['duration_days']) && $data['duration_days'] !== ''
+            ? (int) $data['duration_days']
+            : 0;
+        $months = isset($data['duration_months']) && $data['duration_months'] !== ''
+            ? (int) $data['duration_months']
+            : 0;
+
+        if ($unit === 'days' && $days > 0) {
+            return [
+                'en' => $days === 1 ? '1 day' : "{$days} days",
+                'ar' => $days === 1 ? 'يوم واحد' : "{$days} أيام",
+            ];
+        }
+
+        if (($unit === 'months' || $unit === '') && $months > 0) {
+            return [
+                'en' => $months === 1 ? '1 month' : "{$months} months",
+                'ar' => $months === 1 ? 'شهر واحد' : "{$months} أشهر",
+            ];
+        }
+
+        return [
+            'en' => 'a limited time',
+            'ar' => 'فترة محدودة',
+        ];
+    }
+
+    /**
+     * @return array{
+     *     benefit_duration_unit: string|null,
+     *     benefit_duration_days: int|null,
+     *     benefit_duration_months: int|null
+     * }
+     */
+    private function normalizeDurationMetadata(mixed $unit, mixed $days, mixed $months): array
+    {
+        $normalizedUnit = is_string($unit) && in_array($unit, ['days', 'months'], true)
+            ? $unit
+            : null;
+        $daysValue = $days !== null && $days !== '' ? (int) $days : 0;
+        $monthsValue = $months !== null && $months !== '' ? (int) $months : 0;
+
+        if ($normalizedUnit === null) {
+            if ($daysValue > 0 && $monthsValue <= 0) {
+                $normalizedUnit = 'days';
+            } elseif ($monthsValue > 0) {
+                $normalizedUnit = 'months';
+            }
+        }
+
+        if ($normalizedUnit === 'days' && $daysValue > 0) {
+            return [
+                'benefit_duration_unit' => 'days',
+                'benefit_duration_days' => $daysValue,
+                'benefit_duration_months' => null,
+            ];
+        }
+
+        if ($normalizedUnit === 'months' && $monthsValue > 0) {
+            return [
+                'benefit_duration_unit' => 'months',
+                'benefit_duration_days' => null,
+                'benefit_duration_months' => $monthsValue,
+            ];
+        }
+
+        // Legacy: duration_months alone without unit.
+        if ($monthsValue > 0) {
+            return [
+                'benefit_duration_unit' => 'months',
+                'benefit_duration_days' => null,
+                'benefit_duration_months' => $monthsValue,
+            ];
+        }
+
+        return [
+            'benefit_duration_unit' => null,
+            'benefit_duration_days' => null,
+            'benefit_duration_months' => null,
         ];
     }
 

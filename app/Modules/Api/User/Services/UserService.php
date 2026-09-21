@@ -20,8 +20,7 @@ class UserService
         private readonly ProfileOtpService $profileOtpService,
         private readonly SavedPassengerService $savedPassengerService,
         private readonly CustomerAccountDeletionService $customerAccountDeletionService,
-    ) {
-    }
+    ) {}
 
     /**
      * Return the authenticated user's current profile entity.
@@ -149,7 +148,7 @@ class UserService
     public function sendEmailVerification(User $user): array
     {
         if ($user->email_verified_at !== null) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'email' => ['Your email is already verified.'],
             ]);
         }
@@ -177,7 +176,7 @@ class UserService
     public function sendPhoneVerification(User $user): array
     {
         if ($user->phone_verified_at !== null) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'phone' => ['Your phone is already verified.'],
             ]);
         }
@@ -200,7 +199,7 @@ class UserService
     }
 
     /**
-     * Permanently delete or schedule deletion of the authenticated customer account.
+     * Schedule deletion of the authenticated customer account (365-day grace period).
      *
      * @return array<string, mixed>
      */

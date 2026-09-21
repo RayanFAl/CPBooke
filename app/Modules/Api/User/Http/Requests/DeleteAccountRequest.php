@@ -13,6 +13,13 @@ class DeleteAccountRequest extends ApiFormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (! $this->filled('mode')) {
+            $this->merge(['mode' => CustomerAccountDeletionService::MODE_SCHEDULED]);
+        }
+    }
+
     /**
      * @return array<string, array<int, mixed>|string>
      */
@@ -29,7 +36,6 @@ class DeleteAccountRequest extends ApiFormRequest
                 'required',
                 'string',
                 Rule::in([
-                    CustomerAccountDeletionService::MODE_IMMEDIATE,
                     CustomerAccountDeletionService::MODE_SCHEDULED,
                 ]),
             ],
@@ -52,7 +58,7 @@ class DeleteAccountRequest extends ApiFormRequest
     public function messages(): array
     {
         return [
-            'mode.in' => 'Choose immediate or scheduled account deletion.',
+            'mode.in' => 'Account deletion from the app is scheduled only.',
             'confirmation.in' => 'Type DELETE to confirm account deletion.',
             'password.current_password' => 'The password is incorrect.',
         ];

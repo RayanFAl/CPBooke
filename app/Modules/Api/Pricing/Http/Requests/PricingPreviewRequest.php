@@ -32,7 +32,11 @@ class PricingPreviewRequest extends ApiFormRequest
             'fare_amount' => ['nullable', 'numeric', 'min:0'],
             'tax_amount' => ['nullable', 'numeric', 'min:0'],
             'provider_name' => ['nullable', 'string', 'max:120'],
+            'airline_code' => ['nullable', 'string', 'max:16'],
+            'company_key' => ['nullable', 'string', 'max:80'],
             'attributes' => ['nullable', 'array'],
+            'attributes.airline_code' => ['nullable', 'string', 'max:16'],
+            'attributes.company_key' => ['nullable', 'string', 'max:80'],
         ];
     }
 }

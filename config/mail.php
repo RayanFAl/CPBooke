@@ -121,6 +121,10 @@ return [
     | Booke mailbox roles (role-based addresses)
     |--------------------------------------------------------------------------
     |
+    | Defaults below are used only until Admin → Settings → Contact is saved.
+    | Runtime values come from system_settings (noreply_email, support_email,
+    | info_email, feedback_email) and override these env defaults on boot.
+    |
     | noreply  — system automation From: Booke <no-reply@booke.ly>
     | support  — customer help Reply-To / contact: Booke Support <support@booke.ly>
     | feedback — product feedback inbox (inbound; app does not send as this)

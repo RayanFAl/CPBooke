@@ -37,9 +37,6 @@ class UserService
      */
     public function update(User $user, UpdateProfileDTO $data): User
     {
-        $phoneChanged = $data->phoneProvided
-            && trim((string) ($data->phone ?? '')) !== trim((string) ($user->phone ?? ''));
-
         $this->forgetTransientAttributes($user);
 
         $attributes = [
@@ -48,7 +45,14 @@ class UserService
         ];
 
         if ($data->phoneProvided) {
-            $attributes['phone'] = $data->phone;
+            $incoming = trim((string) ($data->phone ?? ''));
+            $current = trim((string) ($user->phone ?? ''));
+
+            if ($incoming !== $current) {
+                throw ValidationException::withMessages([
+                    'phone' => ['Use the phone change verification flow to update your phone number.'],
+                ]);
+            }
         }
 
         if ($data->countryProvided) {
@@ -56,26 +60,7 @@ class UserService
         }
 
         $user->fill($attributes);
-
-        if ($phoneChanged) {
-            $user->phone_verified_at = null;
-        }
-
-        try {
-            $user->save();
-        } catch (UniqueConstraintViolationException $exception) {
-            throw ValidationException::withMessages([
-                'phone' => [__('validation.unique', ['attribute' => 'phone'])],
-            ]);
-        } catch (QueryException $exception) {
-            if ($this->isDuplicatePhoneConstraint($exception)) {
-                throw ValidationException::withMessages([
-                    'phone' => [__('validation.unique', ['attribute' => 'phone'])],
-                ]);
-            }
-
-            throw $exception;
-        }
+        $user->save();
 
         return $this->profile($user->refresh());
     }
@@ -138,6 +123,51 @@ class UserService
             'email' => $confirmedEmail,
             'email_verified_at' => now(),
         ])->save();
+
+        return $this->profile($user->refresh());
+    }
+
+    /**
+     * @return array{expires_in_seconds: int, resend_after_seconds: int, channel: string, target: string}
+     */
+    public function requestPhoneChange(User $user, string $phone): array
+    {
+        return $this->profileOtpService->send(
+            $user,
+            ProfileOtpService::PURPOSE_PHONE_CHANGE,
+            $phone,
+        );
+    }
+
+    public function confirmPhoneChange(User $user, string $phone, string $otp): User
+    {
+        $confirmedPhone = $this->profileOtpService->consume(
+            $user,
+            ProfileOtpService::PURPOSE_PHONE_CHANGE,
+            $otp,
+            trim($phone),
+        );
+
+        $this->forgetTransientAttributes($user);
+
+        try {
+            $user->forceFill([
+                'phone' => $confirmedPhone,
+                'phone_verified_at' => now(),
+            ])->save();
+        } catch (UniqueConstraintViolationException $exception) {
+            throw ValidationException::withMessages([
+                'phone' => [__('validation.unique', ['attribute' => 'phone'])],
+            ]);
+        } catch (QueryException $exception) {
+            if ($this->isDuplicatePhoneConstraint($exception)) {
+                throw ValidationException::withMessages([
+                    'phone' => [__('validation.unique', ['attribute' => 'phone'])],
+                ]);
+            }
+
+            throw $exception;
+        }
 
         return $this->profile($user->refresh());
     }

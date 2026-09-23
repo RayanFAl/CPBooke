@@ -3,7 +3,9 @@
 namespace App\Modules\Api\User\Services;
 
 use App\Models\User;
+use App\Modules\Settings\Services\SystemSettingsService;
 use App\Notifications\ProfileOtpNotification;
+use App\Support\Http\HttpSsl;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -19,6 +21,12 @@ class ProfileOtpService
 
     public const PURPOSE_EMAIL_CHANGE = 'email_change';
 
+    public const PURPOSE_PHONE_CHANGE = 'phone_change';
+
+    public function __construct(
+        private readonly SystemSettingsService $systemSettingsService,
+    ) {
+    }
     /**
      * @return array{expires_in_seconds: int, resend_after_seconds: int, channel: string, target: string}
      */
@@ -43,6 +51,32 @@ class ProfileOtpService
 
         $otp = $this->generateOtp();
 
+        try {
+            if ($channel === 'email') {
+                $mailableUser = $user;
+                if ($purpose === self::PURPOSE_EMAIL_CHANGE) {
+                    // Send to the new email address.
+                    $mailableUser = (clone $user)->forceFill(['email' => $resolvedTarget]);
+                }
+                $mailableUser->notify(new ProfileOtpNotification($otp, $purpose, $expireMinutes));
+            } else {
+                $this->sendSms($resolvedTarget, $otp, $expireMinutes);
+            }
+        } catch (\Throwable $exception) {
+            Log::warning('Profile OTP delivery failed', [
+                'purpose' => $purpose,
+                'channel' => $channel,
+                'target' => $this->maskTarget($channel, $resolvedTarget),
+                'error' => $exception->getMessage(),
+            ]);
+
+            throw ValidationException::withMessages([
+                $channel === 'sms' ? 'phone' : 'email' => [
+                    'Unable to send the verification code. Please try again shortly.',
+                ],
+            ]);
+        }
+
         Cache::put($this->cacheKey($user->id, $purpose), [
             'otp_hash' => Hash::make($otp),
             'target' => $resolvedTarget,
@@ -51,17 +85,6 @@ class ProfileOtpService
             'expires_at' => now()->addMinutes($expireMinutes)->getTimestamp(),
             'last_sent_at' => now()->getTimestamp(),
         ], now()->addMinutes($expireMinutes + 5));
-
-        if ($channel === 'email') {
-            $mailableUser = $user;
-            if ($purpose === self::PURPOSE_EMAIL_CHANGE) {
-                // Send to the new email address.
-                $mailableUser = (clone $user)->forceFill(['email' => $resolvedTarget]);
-            }
-            $mailableUser->notify(new ProfileOtpNotification($otp, $purpose, $expireMinutes));
-        } else {
-            $this->sendSms($resolvedTarget, $otp, $expireMinutes);
-        }
 
         if (app()->runningUnitTests()) {
             Cache::put(
@@ -119,8 +142,14 @@ class ProfileOtpService
         }
 
         if ($expectedTarget !== null && strcasecmp((string) $payload['target'], $expectedTarget) !== 0) {
+            $field = ($payload['channel'] ?? null) === 'sms' ? 'phone' : 'email';
+
             throw ValidationException::withMessages([
-                'email' => ['The email does not match the pending change request.'],
+                $field => [
+                    $field === 'phone'
+                        ? 'The phone number does not match the pending change request.'
+                        : 'The email does not match the pending change request.',
+                ],
             ]);
         }
 
@@ -178,6 +207,26 @@ class ProfileOtpService
 
                 return ['email', $email];
             })(),
+            self::PURPOSE_PHONE_CHANGE => (function () use ($user, $target): array {
+                $phone = trim((string) $target);
+                if ($phone === '') {
+                    throw ValidationException::withMessages([
+                        'phone' => ['A valid phone number is required.'],
+                    ]);
+                }
+                if (strcasecmp($phone, trim((string) ($user->phone ?? ''))) === 0) {
+                    throw ValidationException::withMessages([
+                        'phone' => ['The new phone must be different from your current phone.'],
+                    ]);
+                }
+                if (User::query()->where('phone', $phone)->whereKeyNot($user->id)->exists()) {
+                    throw ValidationException::withMessages([
+                        'phone' => ['This phone number is already taken.'],
+                    ]);
+                }
+
+                return ['sms', $phone];
+            })(),
             default => throw ValidationException::withMessages([
                 'purpose' => ['Unsupported verification purpose.'],
             ]),
@@ -187,7 +236,7 @@ class ProfileOtpService
     private function sendSms(string $phone, string $otp, int $expireMinutes): void
     {
         $message = "Your Booke verification code is {$otp}. It expires in {$expireMinutes} minutes.";
-        $endpoint = config('services.notifications.sms_endpoint');
+        $endpoint = $this->systemSettingsService->smsEndpoint();
 
         if (! $endpoint) {
             Log::info('Profile phone OTP (simulated SMS)', [
@@ -198,12 +247,38 @@ class ProfileOtpService
             return;
         }
 
-        Http::withToken((string) config('services.notifications.sms_token'))
-            ->post((string) $endpoint, [
-                'to' => $phone,
+        $response = Http::withToken((string) ($this->systemSettingsService->smsToken() ?? ''))
+            ->withOptions(['verify' => HttpSsl::verifyOption()])
+            ->acceptJson()
+            ->asJson()
+            ->timeout(20)
+            ->post($endpoint, [
+                'recipient' => $phone,
                 'message' => $message,
-            ])
-            ->throw();
+            ]);
+
+        if ($response->status() === 402) {
+            Log::warning('SMS gateway insufficient balance', [
+                'endpoint' => $endpoint,
+                'body' => substr($response->body(), 0, 300),
+            ]);
+
+            throw ValidationException::withMessages([
+                'phone' => ['SMS provider balance is insufficient. Please top up the ADV account.'],
+            ]);
+        }
+
+        if ($response->failed()) {
+            Log::warning('SMS gateway rejected OTP send', [
+                'status' => $response->status(),
+                'body' => substr($response->body(), 0, 500),
+                'endpoint' => $endpoint,
+            ]);
+
+            throw ValidationException::withMessages([
+                'phone' => ['Unable to send the verification code. Please try again shortly.'],
+            ]);
+        }
     }
 
     private function generateOtp(): string

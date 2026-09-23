@@ -32,6 +32,8 @@ class UpdateSystemSettingsRequest extends FormRequest
             'feature_maintenance_mode',
             'feature_chat_enabled',
             'feature_legacy_order_create',
+            'clear_sms_token',
+            'clear_whatsapp_token',
         ] as $booleanField) {
             if ($this->has($booleanField)) {
                 $merge[$booleanField] = filter_var($this->input($booleanField), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)
@@ -54,6 +56,9 @@ class UpdateSystemSettingsRequest extends FormRequest
             'company_address' => ['sometimes', 'nullable', 'string', 'max:500'],
             'support_email' => ['sometimes', 'nullable', 'email', 'max:255'],
             'support_phone' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'noreply_email' => ['sometimes', 'nullable', 'email', 'max:255'],
+            'info_email' => ['sometimes', 'nullable', 'email', 'max:255'],
+            'feedback_email' => ['sometimes', 'nullable', 'email', 'max:255'],
             'tax_id' => ['sometimes', 'nullable', 'string', 'max:80'],
             'logo_path' => ['sometimes', 'nullable', 'string', 'max:255'],
             'default_currency' => ['sometimes', 'required', 'string', 'size:3'],
@@ -66,7 +71,13 @@ class UpdateSystemSettingsRequest extends FormRequest
             'channel_push_enabled' => ['sometimes', 'boolean'],
             'email_from_name' => ['sometimes', 'nullable', 'string', 'max:120'],
             'sms_sender_name' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'sms_endpoint' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'sms_token' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'clear_sms_token' => ['sometimes', 'boolean'],
             'whatsapp_sender_name' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'whatsapp_endpoint' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'whatsapp_token' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'clear_whatsapp_token' => ['sometimes', 'boolean'],
             'feature_maintenance_mode' => ['sometimes', 'boolean'],
             'feature_chat_enabled' => ['sometimes', 'boolean'],
             'feature_legacy_order_create' => ['sometimes', 'boolean'],
@@ -74,6 +85,7 @@ class UpdateSystemSettingsRequest extends FormRequest
             'updated_by_user_id' => ['prohibited'],
             'section' => ['sometimes', 'string', Rule::in([
                 'company',
+                'contact',
                 'localization',
                 'margins',
                 'channels',

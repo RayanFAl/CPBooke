@@ -17,6 +17,7 @@ const activeTab = ref('company');
 
 const tabs = [
     { id: 'company', label: 'Company' },
+    { id: 'contact', label: 'Contact & Emails' },
     { id: 'localization', label: 'Currency' },
     { id: 'margins', label: 'Margins' },
     { id: 'channels', label: 'Channels' },
@@ -29,6 +30,9 @@ const form = useForm({
     company_address: props.settings.company_address ?? '',
     support_email: props.settings.support_email ?? '',
     support_phone: props.settings.support_phone ?? '',
+    noreply_email: props.settings.noreply_email ?? '',
+    info_email: props.settings.info_email ?? '',
+    feedback_email: props.settings.feedback_email ?? '',
     tax_id: props.settings.tax_id ?? '',
     logo_path: props.settings.logo_path ?? '',
     default_currency: props.settings.default_currency ?? 'LYD',
@@ -41,12 +45,21 @@ const form = useForm({
     channel_push_enabled: Boolean(props.settings.channel_push_enabled),
     email_from_name: props.settings.email_from_name ?? '',
     sms_sender_name: props.settings.sms_sender_name ?? '',
+    sms_endpoint: props.settings.sms_endpoint ?? '',
+    sms_token: '',
+    clear_sms_token: false,
     whatsapp_sender_name: props.settings.whatsapp_sender_name ?? '',
+    whatsapp_endpoint: props.settings.whatsapp_endpoint ?? '',
+    whatsapp_token: '',
+    clear_whatsapp_token: false,
     feature_maintenance_mode: Boolean(props.settings.feature_maintenance_mode),
     feature_chat_enabled: Boolean(props.settings.feature_chat_enabled),
     feature_legacy_order_create: Boolean(props.settings.feature_legacy_order_create),
     section: 'company',
 });
+
+const smsTokenSet = computed(() => Boolean(props.settings.sms_token_set));
+const whatsappTokenSet = computed(() => Boolean(props.settings.whatsapp_token_set));
 
 const flashSuccess = computed(() => page.props.flash?.success ?? '');
 
@@ -59,6 +72,15 @@ const submit = () => {
                 ? null
                 : Number(data.default_commission_percent),
         logo_path: data.logo_path || null,
+        support_email: data.support_email || null,
+        support_phone: data.support_phone || null,
+        noreply_email: data.noreply_email || null,
+        info_email: data.info_email || null,
+        feedback_email: data.feedback_email || null,
+        sms_endpoint: data.sms_endpoint || null,
+        whatsapp_endpoint: data.whatsapp_endpoint || null,
+        sms_token: data.clear_sms_token ? null : (data.sms_token || null),
+        whatsapp_token: data.clear_whatsapp_token ? null : (data.whatsapp_token || null),
     })).put(props.update_url, {
         preserveScroll: true,
     });
@@ -80,14 +102,14 @@ const modeBadgeClass = (mode) => {
 <template>
     <AdminLayout
         title="Settings"
-        description="Platform configuration for company profile, currency, margins, channels, and feature flags."
+        description="Platform configuration for company profile, contact emails, currency, margins, channels, and feature flags."
     >
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Configuration') }}</p>
                 <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Settings') }}</h2>
                 <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                    {{ t('Editable operational settings. Secrets and API tokens remain in environment variables.') }}
+                    {{ t('Operational settings live here. SMTP host/user/password stay in environment variables.') }}
                 </p>
                 <p v-if="flashSuccess" class="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                     {{ flashSuccess }}
@@ -125,18 +147,55 @@ const modeBadgeClass = (mode) => {
                         <span class="mb-1 block font-medium text-slate-800">{{ t('Address') }}</span>
                         <textarea v-model="form.company_address" rows="2" class="w-full rounded-2xl border-slate-200" />
                     </label>
-                    <label class="block text-sm">
-                        <span class="mb-1 block font-medium text-slate-800">{{ t('Support email') }}</span>
-                        <input v-model="form.support_email" type="email" class="w-full rounded-2xl border-slate-200" />
-                    </label>
-                    <label class="block text-sm">
-                        <span class="mb-1 block font-medium text-slate-800">{{ t('Support phone') }}</span>
-                        <input v-model="form.support_phone" type="text" class="w-full rounded-2xl border-slate-200" />
-                    </label>
                     <label class="block text-sm md:col-span-2">
                         <span class="mb-1 block font-medium text-slate-800">{{ t('Logo path (optional)') }}</span>
                         <input v-model="form.logo_path" type="text" class="w-full rounded-2xl border-slate-200" placeholder="storage path or URL" />
                     </label>
+                </div>
+
+                <div v-show="activeTab === 'contact'" class="space-y-6">
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-900">{{ t('Customer contact') }}</h3>
+                        <p class="mt-1 text-sm text-slate-600">
+                            {{ t('Shown in the app, email footers, and Reply-To for notifications.') }}
+                        </p>
+                        <div class="mt-4 grid gap-4 md:grid-cols-2">
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('Support email') }}</span>
+                                <input v-model="form.support_email" type="email" class="w-full rounded-2xl border-slate-200" placeholder="support@booke.ly" />
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('Support phone') }}</span>
+                                <input v-model="form.support_phone" type="text" class="w-full rounded-2xl border-slate-200" placeholder="+218…" />
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-100 pt-6">
+                        <h3 class="text-sm font-semibold text-slate-900">{{ t('Notification & mailbox emails') }}</h3>
+                        <p class="mt-1 text-sm text-slate-600">
+                            {{ t('Managed here instead of .env. SMTP host/user/password remain in environment variables.') }}
+                        </p>
+                        <div class="mt-4 grid gap-4 md:grid-cols-2">
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('No-reply / From email') }}</span>
+                                <input v-model="form.noreply_email" type="email" class="w-full rounded-2xl border-slate-200" placeholder="no-reply@booke.ly" />
+                                <span class="mt-1 block text-xs text-slate-500">{{ t('Used as From for OTPs, bookings, and system notifications.') }}</span>
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('Email from name') }}</span>
+                                <input v-model="form.email_from_name" type="text" class="w-full rounded-2xl border-slate-200" />
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('Info email') }}</span>
+                                <input v-model="form.info_email" type="email" class="w-full rounded-2xl border-slate-200" placeholder="info@booke.ly" />
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('Feedback email') }}</span>
+                                <input v-model="form.feedback_email" type="email" class="w-full rounded-2xl border-slate-200" placeholder="feedback@booke.ly" />
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
                 <div v-show="activeTab === 'localization'" class="grid gap-4 md:grid-cols-3">
@@ -164,38 +223,99 @@ const modeBadgeClass = (mode) => {
                     </label>
                 </div>
 
-                <div v-show="activeTab === 'channels'" class="grid gap-4 md:grid-cols-2">
-                    <label class="flex items-center gap-3 text-sm text-slate-800">
-                        <input v-model="form.channel_email_enabled" type="checkbox" class="rounded border-slate-300" />
-                        {{ t('Email enabled') }}
-                    </label>
-                    <label class="block text-sm">
-                        <span class="mb-1 block font-medium text-slate-800">{{ t('Email from name') }}</span>
-                        <input v-model="form.email_from_name" type="text" class="w-full rounded-2xl border-slate-200" />
-                    </label>
-                    <label class="flex items-center gap-3 text-sm text-slate-800">
-                        <input v-model="form.channel_sms_enabled" type="checkbox" class="rounded border-slate-300" />
-                        {{ t('SMS enabled') }}
-                    </label>
-                    <label class="block text-sm">
-                        <span class="mb-1 block font-medium text-slate-800">{{ t('SMS sender name') }}</span>
-                        <input v-model="form.sms_sender_name" type="text" class="w-full rounded-2xl border-slate-200" />
-                    </label>
-                    <label class="flex items-center gap-3 text-sm text-slate-800">
-                        <input v-model="form.channel_whatsapp_enabled" type="checkbox" class="rounded border-slate-300" />
-                        {{ t('WhatsApp enabled') }}
-                    </label>
-                    <label class="block text-sm">
-                        <span class="mb-1 block font-medium text-slate-800">{{ t('WhatsApp sender name') }}</span>
-                        <input v-model="form.whatsapp_sender_name" type="text" class="w-full rounded-2xl border-slate-200" />
-                    </label>
-                    <label class="flex items-center gap-3 text-sm text-slate-800 md:col-span-2">
-                        <input v-model="form.channel_push_enabled" type="checkbox" class="rounded border-slate-300" />
-                        {{ t('Push enabled') }}
-                    </label>
-                    <p class="md:col-span-2 text-xs text-slate-500">
-                        {{ t('Gateway tokens stay in .env (SMS_*, WHATSAPP_*, FIREBASE_CREDENTIALS).') }}
-                    </p>
+                <div v-show="activeTab === 'channels'" class="space-y-6">
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <label class="flex items-center gap-3 text-sm text-slate-800">
+                            <input v-model="form.channel_email_enabled" type="checkbox" class="rounded border-slate-300" />
+                            {{ t('Email enabled') }}
+                        </label>
+                        <p class="text-sm text-slate-500">
+                            {{ t('From name and mailbox addresses are under Contact & Emails.') }}
+                        </p>
+                        <label class="flex items-center gap-3 text-sm text-slate-800 md:col-span-2">
+                            <input v-model="form.channel_push_enabled" type="checkbox" class="rounded border-slate-300" />
+                            {{ t('Push enabled') }}
+                        </label>
+                        <p class="md:col-span-2 text-xs text-slate-500">
+                            {{ t('Firebase credentials stay as a file / FIREBASE_CREDENTIALS path.') }}
+                        </p>
+                    </div>
+
+                    <div class="border-t border-slate-100 pt-6">
+                        <h3 class="text-sm font-semibold text-slate-900">{{ t('SMS gateway') }}</h3>
+                        <p class="mt-1 text-sm text-slate-600">
+                            {{ t('Needs an API endpoint and a bearer token. Leave the token blank to keep the current one.') }}
+                        </p>
+                        <div class="mt-4 grid gap-4 md:grid-cols-2">
+                            <label class="flex items-center gap-3 text-sm text-slate-800 md:col-span-2">
+                                <input v-model="form.channel_sms_enabled" type="checkbox" class="rounded border-slate-300" />
+                                {{ t('SMS enabled') }}
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('SMS sender name') }}</span>
+                                <input v-model="form.sms_sender_name" type="text" class="w-full rounded-2xl border-slate-200" />
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('SMS endpoint') }}</span>
+                                <input v-model="form.sms_endpoint" type="url" class="w-full rounded-2xl border-slate-200" placeholder="https://…" />
+                            </label>
+                            <label class="block text-sm md:col-span-2">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('SMS token') }}</span>
+                                <input
+                                    v-model="form.sms_token"
+                                    type="password"
+                                    autocomplete="new-password"
+                                    class="w-full rounded-2xl border-slate-200"
+                                    :placeholder="smsTokenSet ? '•••••••• (saved — enter new to replace)' : t('Paste token')"
+                                />
+                                <span v-if="smsTokenSet" class="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                    <span>{{ t('Token is saved.') }}</span>
+                                    <label class="inline-flex items-center gap-1.5 text-rose-700">
+                                        <input v-model="form.clear_sms_token" type="checkbox" class="rounded border-slate-300" />
+                                        {{ t('Clear token') }}
+                                    </label>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-100 pt-6">
+                        <h3 class="text-sm font-semibold text-slate-900">{{ t('WhatsApp gateway') }}</h3>
+                        <p class="mt-1 text-sm text-slate-600">
+                            {{ t('Needs an API endpoint and a bearer token. Leave the token blank to keep the current one.') }}
+                        </p>
+                        <div class="mt-4 grid gap-4 md:grid-cols-2">
+                            <label class="flex items-center gap-3 text-sm text-slate-800 md:col-span-2">
+                                <input v-model="form.channel_whatsapp_enabled" type="checkbox" class="rounded border-slate-300" />
+                                {{ t('WhatsApp enabled') }}
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('WhatsApp sender name') }}</span>
+                                <input v-model="form.whatsapp_sender_name" type="text" class="w-full rounded-2xl border-slate-200" />
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('WhatsApp endpoint') }}</span>
+                                <input v-model="form.whatsapp_endpoint" type="url" class="w-full rounded-2xl border-slate-200" placeholder="https://…" />
+                            </label>
+                            <label class="block text-sm md:col-span-2">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('WhatsApp token') }}</span>
+                                <input
+                                    v-model="form.whatsapp_token"
+                                    type="password"
+                                    autocomplete="new-password"
+                                    class="w-full rounded-2xl border-slate-200"
+                                    :placeholder="whatsappTokenSet ? '•••••••• (saved — enter new to replace)' : t('Paste token')"
+                                />
+                                <span v-if="whatsappTokenSet" class="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                    <span>{{ t('Token is saved.') }}</span>
+                                    <label class="inline-flex items-center gap-1.5 text-rose-700">
+                                        <input v-model="form.clear_whatsapp_token" type="checkbox" class="rounded border-slate-300" />
+                                        {{ t('Clear token') }}
+                                    </label>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
                 <div v-show="activeTab === 'features'" class="space-y-4">

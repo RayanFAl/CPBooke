@@ -122,11 +122,26 @@ class AppServiceProvider extends ServiceProvider
 
         try {
             $settings = app(SystemSettingsService::class);
+            $noreply = $settings->noreplyEmail();
+            $support = $settings->supportEmail();
+            $info = $settings->infoEmail();
+            $feedback = $settings->feedbackEmail();
+
             config([
                 'mail.from.name' => $settings->mailFromName(),
+                'mail.from.address' => $noreply !== '' ? $noreply : config('mail.from.address'),
+                'mail.addresses.noreply' => $noreply !== '' ? $noreply : config('mail.addresses.noreply'),
+                'mail.addresses.support' => $support !== '' ? $support : config('mail.addresses.support'),
+                'mail.addresses.info' => $info !== '' ? $info : config('mail.addresses.info'),
+                'mail.addresses.feedback' => $feedback !== '' ? $feedback : config('mail.addresses.feedback'),
+                'mail.names.noreply' => $settings->mailFromName(),
+                'mail.names.support' => $settings->companyName().' Support',
+                'services.notifications.sms_endpoint' => $settings->smsEndpoint() ?? config('services.notifications.sms_endpoint'),
+                'services.notifications.sms_token' => $settings->smsToken() ?? config('services.notifications.sms_token'),
+                'services.notifications.whatsapp_endpoint' => $settings->whatsappEndpoint() ?? config('services.notifications.whatsapp_endpoint'),
+                'services.notifications.whatsapp_token' => $settings->whatsappToken() ?? config('services.notifications.whatsapp_token'),
             ]);
 
-            $support = $settings->supportEmail();
             if ($support !== '') {
                 Mail::alwaysReplyTo($support, $settings->companyName());
             }

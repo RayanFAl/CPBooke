@@ -75,6 +75,26 @@ const crm = computed(() => props.user.crm ?? {
     ai_searches: [],
 });
 const activityFilter = ref('all');
+const expandedPassengerId = ref(null);
+
+const togglePassenger = (passengerId) => {
+    expandedPassengerId.value = expandedPassengerId.value === passengerId ? null : passengerId;
+};
+
+const formatPassengerGender = (gender) => {
+    const value = String(gender || '').trim().toUpperCase();
+
+    if (value === 'M') {
+        return t('Male');
+    }
+
+    if (value === 'F') {
+        return t('Female');
+    }
+
+    return gender ? formatValueLabel(gender) : '—';
+};
+
 const filteredTimeline = computed(() => {
     const events = crm.value.timeline ?? [];
 
@@ -1209,20 +1229,112 @@ onBeforeUnmount(() => {
             <div v-else-if="activeTab === 'profile'" class="grid gap-6 xl:grid-cols-2">
                 <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                     <h3 class="text-lg font-semibold text-slate-950">{{ t('Saved passengers') }}</h3>
+                    <p class="mt-1 text-sm text-slate-500">{{ t('Click a passenger to view full details. Passport numbers stay masked.') }}</p>
                     <div class="mt-5 space-y-4">
-                        <div
+                        <button
                             v-for="passenger in crm.saved_passengers"
                             :key="passenger.id"
-                            class="rounded-2xl border border-slate-200 p-4"
+                            type="button"
+                            class="w-full rounded-2xl border border-slate-200 p-4 text-left transition hover:border-slate-300 hover:bg-slate-50"
+                            @click="togglePassenger(passenger.id)"
                         >
                             <div class="flex flex-wrap items-start justify-between gap-4">
                                 <div>
                                     <p class="font-medium text-slate-900">{{ passenger.name }}</p>
-                                    <p class="mt-2 text-sm text-slate-600">{{ formatValueLabel(passenger.type) }} · {{ passenger.nationality || t('No nationality') }}</p>
+                                    <p class="mt-2 text-sm text-slate-600">
+                                        {{ formatValueLabel(passenger.type) }}
+                                        · {{ passenger.nationality || t('No nationality') }}
+                                        <span v-if="passenger.passport_number_masked"> · {{ passenger.passport_number_masked }}</span>
+                                    </p>
                                 </div>
-                                <span v-if="passenger.is_default" class="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">{{ t('Default') }}</span>
+                                <div class="flex items-center gap-2">
+                                    <span v-if="passenger.is_default" class="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">{{ t('Default') }}</span>
+                                    <span class="text-xs font-medium text-slate-500">
+                                        {{ expandedPassengerId === passenger.id ? t('Hide') : t('View details') }}
+                                    </span>
+                                </div>
                             </div>
-                        </div>
+
+                            <div
+                                v-if="expandedPassengerId === passenger.id"
+                                class="mt-4 grid gap-3 border-t border-slate-100 pt-4 text-sm text-slate-700 sm:grid-cols-2"
+                                @click.stop
+                            >
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('First name') }}</p>
+                                    <p class="mt-1">{{ passenger.first_name || '—' }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Last name') }}</p>
+                                    <p class="mt-1">{{ passenger.last_name || '—' }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Gender') }}</p>
+                                    <p class="mt-1">{{ formatPassengerGender(passenger.gender) }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Date of birth') }}</p>
+                                    <p class="mt-1">{{ passenger.date_of_birth || '—' }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Nationality') }}</p>
+                                    <p class="mt-1">{{ passenger.nationality || '—' }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Country of residence') }}</p>
+                                    <p class="mt-1">{{ passenger.country_of_residence || '—' }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Document type') }}</p>
+                                    <p class="mt-1">{{ passenger.document_type ? formatValueLabel(passenger.document_type) : '—' }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Passport number') }}</p>
+                                    <p class="mt-1 font-mono tracking-wide">{{ passenger.passport_number_masked || '—' }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Issue country') }}</p>
+                                    <p class="mt-1">{{ passenger.passport_issue_country || '—' }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Issue date') }}</p>
+                                    <p class="mt-1">{{ passenger.passport_issue_date || '—' }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Expiry date') }}</p>
+                                    <p class="mt-1">{{ passenger.passport_expiry || '—' }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Email') }}</p>
+                                    <p class="mt-1">{{ passenger.email_masked || '—' }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Phone') }}</p>
+                                    <p class="mt-1" dir="ltr">{{ passenger.phone_masked || '—' }}</p>
+                                </div>
+                                <div v-if="passenger.phone_2_masked">
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Phone') }} 2</p>
+                                    <p class="mt-1" dir="ltr">{{ passenger.phone_2_masked }}</p>
+                                </div>
+                                <div v-if="passenger.phone_3_masked">
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Phone') }} 3</p>
+                                    <p class="mt-1" dir="ltr">{{ passenger.phone_3_masked }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.16em] text-slate-400">{{ t('Created') }}</p>
+                                    <p class="mt-1">{{ formatDateTime(passenger.created_at) }}</p>
+                                </div>
+                                <div v-if="passenger.has_passport_image && passenger.passport_image_download_url" class="sm:col-span-2">
+                                    <a
+                                        :href="passenger.passport_image_download_url"
+                                        class="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white"
+                                        @click.stop
+                                    >
+                                        {{ t('View passport image') }}
+                                    </a>
+                                </div>
+                            </div>
+                        </button>
                         <p v-if="crm.saved_passengers.length === 0" class="text-sm text-slate-500">{{ t('No saved passengers yet.') }}</p>
                     </div>
                 </div>

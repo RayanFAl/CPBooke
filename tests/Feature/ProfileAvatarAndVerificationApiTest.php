@@ -121,7 +121,39 @@ class ProfileAvatarAndVerificationApiTest extends TestCase
             ->assertJsonPath('data.user.phone_verified', true);
     }
 
-    public function test_changing_phone_clears_phone_verification(): void
+    public function test_phone_change_otp_flow(): void
+    {
+        $user = User::factory()->create([
+            'phone' => '+218900000001',
+            'phone_verified_at' => now(),
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/users/phone/change-request', [
+            'phone' => '+218900000099',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.channel', 'sms');
+
+        $otp = app(ProfileOtpService::class)->debugOtpForTests($user, ProfileOtpService::PURPOSE_PHONE_CHANGE);
+        $this->assertNotNull($otp);
+
+        $this->postJson('/api/v1/users/phone/verify', [
+            'phone' => '+218900000099',
+            'otp' => $otp,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.user.phone', '+218900000099')
+            ->assertJsonPath('data.user.phone_verified', true);
+
+        $this->assertSame('+218900000099', $user->fresh()->phone);
+        $this->assertNotNull($user->fresh()->phone_verified_at);
+    }
+
+    public function test_profile_update_rejects_direct_phone_change(): void
     {
         $user = User::factory()->create([
             'name' => 'Rayan',
@@ -138,13 +170,17 @@ class ProfileAvatarAndVerificationApiTest extends TestCase
             'phone' => '+218900000099',
             'country' => 'LY',
         ])
-            ->assertOk()
-            ->assertJsonPath('data.user.phone_verified', false);
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonStructure([
+                'errors' => ['phone'],
+            ]);
 
-        $this->assertNull($user->fresh()->phone_verified_at);
+        $this->assertSame('+218900000001', $user->fresh()->phone);
+        $this->assertNotNull($user->fresh()->phone_verified_at);
     }
 
-    public function test_profile_update_accepts_name_and_phone_without_country(): void
+    public function test_profile_update_accepts_name_without_changing_phone(): void
     {
         $user = User::factory()->create([
             'name' => 'Fathi Hammel',
@@ -159,22 +195,24 @@ class ProfileAvatarAndVerificationApiTest extends TestCase
         Sanctum::actingAs($user);
 
         $this->putJson('/api/v1/users/profile', [
-            'name' => 'Fathi Hammel',
-            'phone' => '+21894321527',
+            'name' => 'Fathi Updated',
+            'phone' => '+218900000010',
         ])
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.user.phone', '+21894321527')
+            ->assertJsonPath('data.user.name', 'Fathi Updated')
+            ->assertJsonPath('data.user.phone', '+218900000010')
             ->assertJsonPath('data.user.country', 'LY')
-            ->assertJsonPath('data.user.phone_verified', false);
+            ->assertJsonPath('data.user.phone_verified', true);
 
         $fresh = $user->fresh();
-        $this->assertSame('+21894321527', $fresh->phone);
+        $this->assertSame('Fathi Updated', $fresh->name);
+        $this->assertSame('+218900000010', $fresh->phone);
         $this->assertSame('LY', $fresh->country);
-        $this->assertNull($fresh->phone_verified_at);
+        $this->assertNotNull($fresh->phone_verified_at);
     }
 
-    public function test_profile_update_returns_validation_error_for_taken_phone(): void
+    public function test_phone_change_request_returns_validation_error_for_taken_phone(): void
     {
         User::factory()->create([
             'phone' => '+21894321527',
@@ -191,8 +229,7 @@ class ProfileAvatarAndVerificationApiTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->putJson('/api/v1/users/profile', [
-            'name' => 'Fathi Hammel',
+        $this->postJson('/api/v1/users/phone/change-request', [
             'phone' => '+21894321527',
         ])
             ->assertUnprocessable()

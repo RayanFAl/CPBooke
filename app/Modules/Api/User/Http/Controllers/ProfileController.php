@@ -12,6 +12,8 @@ use App\Modules\Api\User\Http\Requests\ConfirmOtpRequest;
 use App\Modules\Api\User\Http\Requests\DeleteAccountRequest;
 use App\Modules\Api\User\Http\Requests\EmailChangeRequest;
 use App\Modules\Api\User\Http\Requests\EmailChangeVerifyRequest;
+use App\Modules\Api\User\Http\Requests\PhoneChangeRequest;
+use App\Modules\Api\User\Http\Requests\PhoneChangeVerifyRequest;
 use App\Modules\Api\User\Http\Requests\UpdateProfileRequest;
 use App\Modules\Api\User\Http\Requests\UploadAvatarRequest;
 use App\Modules\Api\User\Services\CustomerAccountDeletionService;
@@ -111,6 +113,31 @@ class ProfileController extends Controller
         return ApiResponse::success(
             ['user' => UserResource::make($user)->resolve($request)],
             'Email updated successfully.',
+        );
+    }
+
+    public function requestPhoneChange(PhoneChangeRequest $request): JsonResponse
+    {
+        return ApiResponse::success(
+            $this->userService->requestPhoneChange(
+                $request->user(),
+                $request->validated('phone'),
+            ),
+            'Verification code sent to the new phone number.',
+        );
+    }
+
+    public function verifyPhoneChange(PhoneChangeVerifyRequest $request): JsonResponse
+    {
+        $user = $this->userService->confirmPhoneChange(
+            $request->user(),
+            $request->validated('phone'),
+            $request->validated('otp'),
+        );
+
+        return ApiResponse::success(
+            ['user' => UserResource::make($user)->resolve($request)],
+            'Phone updated successfully.',
         );
     }
 

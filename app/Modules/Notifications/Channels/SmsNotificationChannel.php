@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Modules\Notifications\Contracts\NotificationChannel;
 use App\Modules\Notifications\Support\NotificationChannels;
 use App\Modules\Settings\Services\SystemSettingsService;
+use App\Support\Http\HttpSsl;
 use Illuminate\Support\Facades\Http;
 
 class SmsNotificationChannel implements NotificationChannel
@@ -45,16 +46,20 @@ class SmsNotificationChannel implements NotificationChannel
         }
 
         $payload = [
-            'to' => $user->phone,
+            'recipient' => $user->phone,
             'message' => $log->body,
             'template_code' => $template->code,
             'sender' => $this->systemSettingsService->current()->sms_sender_name,
         ];
 
-        $endpoint = config('services.notifications.sms_endpoint');
+        $endpoint = $this->systemSettingsService->smsEndpoint();
 
         if (is_string($endpoint) && trim($endpoint) !== '') {
-            $response = Http::withToken((string) config('services.notifications.sms_token'))
+            $response = Http::withToken((string) ($this->systemSettingsService->smsToken() ?? ''))
+                ->withOptions(['verify' => HttpSsl::verifyOption()])
+                ->acceptJson()
+                ->asJson()
+                ->timeout(20)
                 ->post($endpoint, $payload)
                 ->throw();
 

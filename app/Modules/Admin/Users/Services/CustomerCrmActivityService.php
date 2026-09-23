@@ -692,9 +692,25 @@ class CustomerCrmActivityService
             ->map(fn (SavedPassenger $passenger): array => [
                 'id' => $passenger->id,
                 'type' => $passenger->type,
+                'title' => $passenger->title,
+                'first_name' => $passenger->first_name,
+                'last_name' => $passenger->last_name,
                 'name' => trim(($passenger->first_name ?: '').' '.($passenger->last_name ?: '')) ?: $passenger->title,
+                'date_of_birth' => $passenger->date_of_birth?->format('Y-m-d'),
+                'gender' => $passenger->gender,
                 'nationality' => $passenger->nationality,
+                'country_of_residence' => $passenger->country_of_residence,
                 'document_type' => $passenger->document_type,
+                'passport_number_masked' => $this->maskPassportNumber($passenger->passport_number),
+                'passport_issue_country' => $passenger->passport_issue_country,
+                'passport_issue_date' => $passenger->passport_issue_date?->format('Y-m-d'),
+                'passport_expiry' => $passenger->passport_expiry?->format('Y-m-d'),
+                'email_masked' => $this->maskEmail($passenger->email),
+                'phone_masked' => $this->maskPhone($passenger->phone),
+                'phone_2_masked' => $this->maskPhone($passenger->phone_2),
+                'phone_3_masked' => $this->maskPhone($passenger->phone_3),
+                'seat_preference' => $passenger->seat_preference,
+                'meal_preference' => $passenger->meal_preference,
                 'is_default' => (bool) $passenger->is_default,
                 'has_passport_image' => $passenger->hasPassportImage(),
                 'passport_image_uploaded_at' => $passenger->passport_image_uploaded_at?->toIso8601String(),
@@ -705,9 +721,51 @@ class CustomerCrmActivityService
                     ])
                     : null,
                 'created_at' => $passenger->created_at?->toIso8601String(),
+                'updated_at' => $passenger->updated_at?->toIso8601String(),
             ])
             ->values()
             ->all();
+    }
+
+    private function maskPassportNumber(?string $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        $length = mb_strlen($value);
+        if ($length <= 4) {
+            return str_repeat('•', $length);
+        }
+
+        return str_repeat('•', max($length - 4, 4)).mb_substr($value, -4);
+    }
+
+    private function maskEmail(?string $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '' || ! str_contains($value, '@')) {
+            return $value !== '' ? $value : null;
+        }
+
+        [$local, $domain] = array_pad(explode('@', $value, 2), 2, '');
+        $visible = mb_substr($local, 0, 2);
+
+        return $visible.str_repeat('•', max(mb_strlen($local) - 2, 1)).'@'.$domain;
+    }
+
+    private function maskPhone(?string $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $value) ?? $value;
+        $suffix = substr($digits, -4);
+
+        return str_repeat('•', max(strlen($digits) - 4, 0)).$suffix;
     }
 
     /**

@@ -58,10 +58,13 @@ return [
         'fcm_sender_id' => env('FCM_SENDER_ID'),
         // Preferred: Firebase Admin service-account JSON (FCM HTTP v1)
         'firebase_credentials' => env('FIREBASE_CREDENTIALS', 'storage/app/firebase/firebase_credentials.json'),
-        'sms_endpoint' => env('SMS_ENDPOINT'),
-        'sms_token' => env('SMS_TOKEN'),
-        'whatsapp_endpoint' => env('WHATSAPP_ENDPOINT'),
-        'whatsapp_token' => env('WHATSAPP_TOKEN'),
+        // Prefer Admin → Settings → Channels. Env bootstrap: SMS_*/WHATSAPP_* or shared ADV_API_*.
+        'sms_endpoint' => env('SMS_ENDPOINT', env('ADV_API_URL')),
+        'sms_token' => env('SMS_TOKEN', env('ADV_API_TOKEN')),
+        'whatsapp_endpoint' => env('WHATSAPP_ENDPOINT', env('ADV_API_URL')),
+        'whatsapp_token' => env('WHATSAPP_TOKEN', env('ADV_API_TOKEN')),
+        'adv_api_url' => env('ADV_API_URL'),
+        'adv_api_token' => env('ADV_API_TOKEN'),
     ],
 
 ];

@@ -3,6 +3,8 @@
 namespace App\Support\Mail;
 
 use App\Modules\Notifications\Support\NotificationLocales;
+use App\Modules\Settings\Services\SystemSettingsService;
+use Throwable;
 
 /**
  * Booke email theme — mirrors Flutter AppColors for consistent branding.
@@ -66,14 +68,28 @@ final class BookeMailTheme
         $locale = NotificationLocales::normalize($locale);
         $rtl = self::isRtl($locale);
 
+        $supportEmail = '';
+        $supportPhone = null;
+        $brandName = (string) config('mail.from.name', config('app.name', 'Booke'));
+
+        try {
+            $settings = app(SystemSettingsService::class);
+            $supportEmail = $settings->supportEmail();
+            $supportPhone = $settings->supportPhone();
+            $brandName = $settings->mailFromName();
+        } catch (Throwable) {
+            $supportEmail = trim((string) config('mail.addresses.support', ''));
+        }
+
         return [
             'locale' => $locale,
             'rtl' => $rtl,
             'dir' => $rtl ? 'rtl' : 'ltr',
             'align' => $rtl ? 'right' : 'left',
-            'brandName' => (string) config('mail.from.name', config('app.name', 'Booke')),
+            'brandName' => $brandName,
             'logoUrl' => rtrim((string) config('app.url'), '/').'/images/app_logo.png',
-            'supportEmail' => trim((string) config('mail.addresses.support', '')),
+            'supportEmail' => $supportEmail,
+            'supportPhone' => $supportPhone,
             'colors' => self::colors(),
             'footerHelp' => $rtl
                 ? 'هل تحتاج مساعدة؟ تواصل معنا على'

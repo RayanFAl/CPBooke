@@ -93,19 +93,100 @@ class SystemSettingsService
 
     public function supportEmail(): string
     {
-        $email = trim((string) ($this->current()->support_email ?: ''));
+        return $this->resolvedEmail(
+            $this->current()->support_email,
+            (string) config('mail.addresses.support'),
+        );
+    }
 
-        return $email !== '' ? $email : (string) config('mail.addresses.support');
+    public function noreplyEmail(): string
+    {
+        return $this->resolvedEmail(
+            $this->current()->noreply_email,
+            (string) config('mail.addresses.noreply', config('mail.from.address')),
+        );
     }
 
     public function infoEmail(): string
     {
-        return (string) config('mail.addresses.info');
+        return $this->resolvedEmail(
+            $this->current()->info_email,
+            (string) config('mail.addresses.info'),
+        );
     }
 
     public function feedbackEmail(): string
     {
-        return (string) config('mail.addresses.feedback');
+        return $this->resolvedEmail(
+            $this->current()->feedback_email,
+            (string) config('mail.addresses.feedback'),
+        );
+    }
+
+    public function supportPhone(): ?string
+    {
+        $phone = trim((string) ($this->current()->support_phone ?: ''));
+
+        return $phone !== '' ? $phone : null;
+    }
+
+    public function smsEndpoint(): ?string
+    {
+        return $this->resolvedCredential(
+            $this->current()->sms_endpoint ?? null,
+            (string) config('services.notifications.sms_endpoint', ''),
+        );
+    }
+
+    public function smsToken(): ?string
+    {
+        return $this->resolvedCredential(
+            $this->current()->sms_token ?? null,
+            (string) config('services.notifications.sms_token', ''),
+        );
+    }
+
+    public function whatsappEndpoint(): ?string
+    {
+        return $this->resolvedCredential(
+            $this->current()->whatsapp_endpoint ?? null,
+            (string) config('services.notifications.whatsapp_endpoint', ''),
+        );
+    }
+
+    public function whatsappToken(): ?string
+    {
+        return $this->resolvedCredential(
+            $this->current()->whatsapp_token ?? null,
+            (string) config('services.notifications.whatsapp_token', ''),
+        );
+    }
+
+    public function isSmsGatewayConfigured(): bool
+    {
+        return $this->smsEndpoint() !== null;
+    }
+
+    public function isWhatsAppGatewayConfigured(): bool
+    {
+        return $this->whatsappEndpoint() !== null;
+    }
+
+    private function resolvedCredential(mixed $value, string $fallback): ?string
+    {
+        $resolved = trim((string) ($value ?: ''));
+        if ($resolved === '') {
+            $resolved = trim($fallback);
+        }
+
+        return $resolved !== '' ? $resolved : null;
+    }
+
+    private function resolvedEmail(mixed $value, string $fallback): string
+    {
+        $email = trim((string) ($value ?: ''));
+
+        return $email !== '' ? $email : trim($fallback);
     }
 
     public function defaultCommissionPercent(): ?float
@@ -152,9 +233,10 @@ class SystemSettingsService
             'company_name' => $this->companyName(),
             'company_address' => $settings->company_address,
             'support_email' => $this->supportEmail(),
+            'noreply_email' => $this->noreplyEmail(),
             'info_email' => $this->infoEmail(),
             'feedback_email' => $this->feedbackEmail(),
-            'support_phone' => $settings->support_phone,
+            'support_phone' => $this->supportPhone(),
             'tax_id' => $settings->tax_id,
             'default_currency' => $this->defaultCurrency(),
             'timezone' => $settings->timezone ?: config('app.timezone'),

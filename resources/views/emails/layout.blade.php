@@ -62,10 +62,18 @@
                 {{-- Footer --}}
                 <tr>
                     <td style="padding:24px 32px;background-color:{{ $colors['background'] }};border-top:1px solid {{ $colors['border'] }};text-align:{{ $align ?? (($rtl ?? false) ? 'right' : 'left') }};">
-                        @if(!empty($supportEmail))
+                        @if(!empty($supportEmail) || !empty($supportPhone))
                             <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:{{ $colors['textSecondary'] }};">
                                 {{ $footerHelp ?? 'Need help? Contact us at' }}
-                                <a href="mailto:{{ $supportEmail }}" style="color:{{ $colors['primary'] }};text-decoration:none;font-weight:600;">{{ $supportEmail }}</a>
+                                @if(!empty($supportEmail))
+                                    <a href="mailto:{{ $supportEmail }}" style="color:{{ $colors['primary'] }};text-decoration:none;font-weight:600;">{{ $supportEmail }}</a>
+                                @endif
+                                @if(!empty($supportEmail) && !empty($supportPhone))
+                                    <span> · </span>
+                                @endif
+                                @if(!empty($supportPhone))
+                                    <a href="tel:{{ preg_replace('/\s+/', '', $supportPhone) }}" style="color:{{ $colors['primary'] }};text-decoration:none;font-weight:600;">{{ $supportPhone }}</a>
+                                @endif
                             </p>
                         @endif
                         <p style="margin:0;font-size:12px;line-height:1.5;color:{{ $colors['textSecondary'] }};">

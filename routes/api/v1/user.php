@@ -33,6 +33,13 @@ Route::middleware('auth:sanctum')
             ->middleware('throttle:10,1')
             ->name('email.verify-change');
 
+        Route::post('/phone/change-request', 'requestPhoneChange')
+            ->middleware('throttle:5,1')
+            ->name('phone.change-request');
+        Route::post('/phone/verify', 'verifyPhoneChange')
+            ->middleware('throttle:10,1')
+            ->name('phone.verify-change');
+
         Route::post('/verify/email/send', 'sendEmailVerification')
             ->middleware('throttle:5,1')
             ->name('verify.email.send');

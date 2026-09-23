@@ -9,6 +9,7 @@ use App\Modules\Notifications\Contracts\NotificationChannel;
 use App\Modules\Notifications\Support\NotificationChannels;
 use App\Modules\Notifications\Support\WhatsAppSandboxInbox;
 use App\Modules\Settings\Services\SystemSettingsService;
+use App\Support\Http\HttpSsl;
 use Illuminate\Support\Facades\Http;
 
 class WhatsAppNotificationChannel implements NotificationChannel
@@ -47,16 +48,22 @@ class WhatsAppNotificationChannel implements NotificationChannel
         }
 
         $payload = [
+            'phone' => $user->phone,
             'to' => $user->phone,
+            'message' => $log->body,
             'body' => $log->body,
             'template_code' => $template->code,
             'sender' => $this->systemSettingsService->current()->whatsapp_sender_name,
         ];
 
-        $endpoint = config('services.notifications.whatsapp_endpoint');
+        $endpoint = $this->systemSettingsService->whatsappEndpoint();
 
         if (is_string($endpoint) && trim($endpoint) !== '') {
-            $response = Http::withToken((string) config('services.notifications.whatsapp_token'))
+            $response = Http::withToken((string) ($this->systemSettingsService->whatsappToken() ?? ''))
+                ->withOptions(['verify' => HttpSsl::verifyOption()])
+                ->acceptJson()
+                ->asJson()
+                ->timeout(20)
                 ->post($endpoint, $payload)
                 ->throw();
 

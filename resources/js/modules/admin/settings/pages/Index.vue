@@ -9,6 +9,8 @@ const props = defineProps({
     channel_statuses: { type: Array, default: () => [] },
     can_manage_sensitive_flags: { type: Boolean, default: false },
     update_url: { type: String, required: true },
+    test_mail_url: { type: String, required: true },
+    notifications_url: { type: String, required: true },
 });
 
 const { t } = useAdminLocale();
@@ -44,6 +46,13 @@ const form = useForm({
     channel_whatsapp_enabled: Boolean(props.settings.channel_whatsapp_enabled),
     channel_push_enabled: Boolean(props.settings.channel_push_enabled),
     email_from_name: props.settings.email_from_name ?? '',
+    mail_mailer: props.settings.mail_mailer ?? '',
+    mail_host: props.settings.mail_host ?? '',
+    mail_port: props.settings.mail_port ?? '',
+    mail_encryption: props.settings.mail_encryption ?? '',
+    mail_username: props.settings.mail_username ?? '',
+    mail_password: '',
+    clear_mail_password: false,
     sms_sender_name: props.settings.sms_sender_name ?? '',
     sms_endpoint: props.settings.sms_endpoint ?? '',
     sms_token: '',
@@ -60,8 +69,14 @@ const form = useForm({
 
 const smsTokenSet = computed(() => Boolean(props.settings.sms_token_set));
 const whatsappTokenSet = computed(() => Boolean(props.settings.whatsapp_token_set));
+const mailPasswordSet = computed(() => Boolean(props.settings.mail_password_set));
 
 const flashSuccess = computed(() => page.props.flash?.success ?? '');
+const flashError = computed(() => page.props.flash?.error ?? '');
+
+const testMailForm = useForm({
+    recipient: '',
+});
 
 const submit = () => {
     form.section = activeTab.value;
@@ -81,7 +96,20 @@ const submit = () => {
         whatsapp_endpoint: data.whatsapp_endpoint || null,
         sms_token: data.clear_sms_token ? null : (data.sms_token || null),
         whatsapp_token: data.clear_whatsapp_token ? null : (data.whatsapp_token || null),
+        mail_mailer: data.mail_mailer || null,
+        mail_host: data.mail_host || null,
+        mail_port:
+            data.mail_port === '' || data.mail_port === null ? null : Number(data.mail_port),
+        mail_encryption: data.mail_encryption || null,
+        mail_username: data.mail_username || null,
+        mail_password: data.clear_mail_password ? null : (data.mail_password || null),
     })).put(props.update_url, {
+        preserveScroll: true,
+    });
+};
+
+const sendTestMail = () => {
+    testMailForm.post(props.test_mail_url, {
         preserveScroll: true,
     });
 };
@@ -109,10 +137,13 @@ const modeBadgeClass = (mode) => {
                 <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Configuration') }}</p>
                 <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Settings') }}</h2>
                 <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                    {{ t('Operational settings live here. SMTP host/user/password stay in environment variables.') }}
+                    {{ t('Operational settings live here: company profile, mailboxes, SMTP, SMS/WhatsApp gateways, and feature flags.') }}
                 </p>
                 <p v-if="flashSuccess" class="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                     {{ flashSuccess }}
+                </p>
+                <p v-if="flashError" class="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                    {{ flashError }}
                 </p>
                 <p class="mt-3 text-xs text-slate-500">
                     {{ t('Version') }}: {{ settings.settings_version }}
@@ -174,7 +205,7 @@ const modeBadgeClass = (mode) => {
                     <div class="border-t border-slate-100 pt-6">
                         <h3 class="text-sm font-semibold text-slate-900">{{ t('Notification & mailbox emails') }}</h3>
                         <p class="mt-1 text-sm text-slate-600">
-                            {{ t('Managed here instead of .env. SMTP host/user/password remain in environment variables.') }}
+                            {{ t('Mailbox roles and display names used as From/Reply-To across the app.') }}
                         </p>
                         <div class="mt-4 grid gap-4 md:grid-cols-2">
                             <label class="block text-sm">
@@ -195,6 +226,83 @@ const modeBadgeClass = (mode) => {
                                 <input v-model="form.feedback_email" type="email" class="w-full rounded-2xl border-slate-200" placeholder="feedback@booke.ly" />
                             </label>
                         </div>
+                    </div>
+
+                    <div class="border-t border-slate-100 pt-6">
+                        <h3 class="text-sm font-semibold text-slate-900">{{ t('SMTP delivery') }}</h3>
+                        <p class="mt-1 text-sm text-slate-600">
+                            {{ t('Configure the outbound mail server here. Leave mailer empty to keep using .env defaults until you save SMTP values.') }}
+                        </p>
+                        <div class="mt-4 grid gap-4 md:grid-cols-2">
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('Mailer') }}</span>
+                                <select v-model="form.mail_mailer" class="w-full rounded-2xl border-slate-200">
+                                    <option value="">{{ t('Use .env default') }}</option>
+                                    <option value="smtp">SMTP</option>
+                                    <option value="log">{{ t('Log only (dev)') }}</option>
+                                </select>
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('SMTP host') }}</span>
+                                <input v-model="form.mail_host" type="text" class="w-full rounded-2xl border-slate-200" placeholder="smtp.example.com" />
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('SMTP port') }}</span>
+                                <input v-model="form.mail_port" type="number" min="1" max="65535" class="w-full rounded-2xl border-slate-200" placeholder="587" />
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('Encryption') }}</span>
+                                <select v-model="form.mail_encryption" class="w-full rounded-2xl border-slate-200">
+                                    <option value="">{{ t('Auto / none') }}</option>
+                                    <option value="tls">TLS</option>
+                                    <option value="ssl">SSL</option>
+                                    <option value="none">{{ t('None') }}</option>
+                                </select>
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('SMTP username') }}</span>
+                                <input v-model="form.mail_username" type="text" class="w-full rounded-2xl border-slate-200" autocomplete="off" />
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('SMTP password') }}</span>
+                                <input
+                                    v-model="form.mail_password"
+                                    type="password"
+                                    autocomplete="new-password"
+                                    class="w-full rounded-2xl border-slate-200"
+                                    :placeholder="mailPasswordSet ? '•••••••• (saved — enter new to replace)' : t('Paste password')"
+                                />
+                                <span v-if="mailPasswordSet" class="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                    <span>{{ t('Password is saved.') }}</span>
+                                    <label class="inline-flex items-center gap-1.5 text-rose-700">
+                                        <input v-model="form.clear_mail_password" type="checkbox" class="rounded border-slate-300" />
+                                        {{ t('Clear password') }}
+                                    </label>
+                                </span>
+                            </label>
+                        </div>
+                        <div class="mt-4 flex flex-wrap items-end gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                            <label class="block flex-1 min-w-[200px] text-sm">
+                                <span class="mb-1 block font-medium text-slate-800">{{ t('Test recipient (optional)') }}</span>
+                                <input
+                                    v-model="testMailForm.recipient"
+                                    type="email"
+                                    class="w-full rounded-2xl border-slate-200 bg-white"
+                                    :placeholder="t('Defaults to your admin email')"
+                                />
+                            </label>
+                            <button
+                                type="button"
+                                class="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 disabled:opacity-60"
+                                :disabled="testMailForm.processing"
+                                @click="sendTestMail"
+                            >
+                                {{ testMailForm.processing ? t('Sending…') : t('Send test email') }}
+                            </button>
+                        </div>
+                        <p v-if="testMailForm.errors.recipient" class="mt-2 text-sm text-rose-700">
+                            {{ testMailForm.errors.recipient }}
+                        </p>
                     </div>
                 </div>
 
@@ -237,7 +345,8 @@ const modeBadgeClass = (mode) => {
                             {{ t('Push enabled') }}
                         </label>
                         <p class="md:col-span-2 text-xs text-slate-500">
-                            {{ t('Firebase credentials stay as a file / FIREBASE_CREDENTIALS path.') }}
+                            {{ t('Upload Firebase service account JSON under Admin → Notifications.') }}
+                            <a :href="notifications_url" class="font-medium text-cyan-700 underline">{{ t('Open notifications setup') }}</a>
                         </p>
                     </div>
 

@@ -343,6 +343,77 @@ class ApiAirportsTest extends TestCase
             ->assertSessionHasErrors('airports');
     }
 
+    public function test_customer_can_fetch_nearby_airports_by_gps(): void
+    {
+        DB::table('booknow_airports')->where('iata_code', 'TIP')->update([
+            'latitude_deg' => 32.6635,
+            'longitude_deg' => 13.1590,
+        ]);
+        DB::table('booknow_airports')->where('iata_code', 'DAM')->update([
+            'latitude_deg' => 33.4110,
+            'longitude_deg' => 36.5156,
+        ]);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $nearby = $this->getJson('/api/v1/airports/nearby?lat=32.6700&lng=13.1600&radius_km=40')
+            ->assertOk()
+            ->assertJsonPath('data.source', 'nearby')
+            ->assertJsonPath('data.airports.0.code', 'TIP');
+
+        $this->assertLessThan(40, (float) $nearby->json('data.airports.0.distance_km'));
+
+        $this->getJson('/api/v1/airports/nearby?lat=0&lng=0&radius_km=40')
+            ->assertOk()
+            ->assertJsonPath('data.source', 'featured')
+            ->assertJsonPath('data.airports', []);
+    }
+
+    public function test_nearby_airports_fall_back_to_featured_when_nothing_is_in_range(): void
+    {
+        DB::table('booknow_airports')->where('iata_code', 'TIP')->update([
+            'latitude_deg' => 32.6635,
+            'longitude_deg' => 13.1590,
+        ]);
+
+        FeaturedAirport::query()->create([
+            'airport_key' => 'IATA:TIP',
+            'sort_order' => 1,
+        ]);
+
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->getJson('/api/v1/airports/nearby?lat=0&lng=0')
+            ->assertOk()
+            ->assertJsonPath('data.source', 'featured')
+            ->assertJsonPath('data.airports.0.code', 'TIP')
+            ->assertJsonPath('data.airports.0.iata_code', 'TIP');
+    }
+
+    public function test_nearby_airports_require_coordinates(): void
+    {
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->getJson('/api/v1/airports/nearby')
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false);
+    }
+
     private function adminUser(): User
     {
         $admin = User::factory()->create([

@@ -68,6 +68,89 @@ class SystemSettingsTest extends TestCase
         $this->assertSame('noreply@booke.test', $payload['noreply_email']);
     }
 
+    public function test_super_admin_can_configure_smtp_from_settings(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $actor = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+        $actor->syncRolesByName([RbacRegistry::ROLE_SUPER_ADMIN]);
+
+        SystemSetting::query()->create([
+            ...SystemSetting::defaultAttributes(),
+            'mail_password' => 'old-smtp-pass',
+        ]);
+
+        $this->actingAs($actor)
+            ->put(route('admin.settings.update'), [
+                'section' => 'contact',
+                'mail_mailer' => 'smtp',
+                'mail_host' => 'smtp.booke.test',
+                'mail_port' => 587,
+                'mail_encryption' => 'tls',
+                'mail_username' => 'mailer@booke.test',
+                'mail_password' => 'new-smtp-pass',
+                'default_currency' => 'LYD',
+                'timezone' => 'UTC',
+                'locale' => 'en',
+            ])
+            ->assertRedirect(route('admin.settings.index'));
+
+        $settings = SystemSetting::query()->firstOrFail();
+        $this->assertSame('smtp.booke.test', $settings->mail_host);
+        $this->assertSame('new-smtp-pass', $settings->mail_password);
+
+        $service = app(SystemSettingsService::class);
+        $service->forgetCache();
+        $service->applyMailConfiguration();
+
+        $this->assertSame('smtp.booke.test', config('mail.mailers.smtp.host'));
+        $this->assertSame('new-smtp-pass', config('mail.mailers.smtp.password'));
+        $this->assertTrue($service->isMailDeliveryConfigured());
+
+        $this->actingAs($actor)
+            ->put(route('admin.settings.update'), [
+                'section' => 'contact',
+                'mail_mailer' => 'smtp',
+                'mail_host' => 'smtp.booke.test',
+                'mail_port' => 587,
+                'mail_password' => '',
+                'default_currency' => 'LYD',
+                'timezone' => 'UTC',
+                'locale' => 'en',
+            ])
+            ->assertRedirect(route('admin.settings.index'));
+
+        $this->assertSame('new-smtp-pass', SystemSetting::query()->firstOrFail()->mail_password);
+        $this->assertTrue(app(SystemSettingsService::class)->mailPasswordIsSet());
+    }
+
+    public function test_super_admin_can_send_test_mail_when_log_mailer_configured(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $actor = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+            'email' => 'admin@booke.test',
+        ]);
+        $actor->syncRolesByName([RbacRegistry::ROLE_SUPER_ADMIN]);
+
+        SystemSetting::query()->create([
+            ...SystemSetting::defaultAttributes(),
+            'mail_mailer' => 'log',
+        ]);
+
+        app(SystemSettingsService::class)->forgetCache();
+
+        $this->actingAs($actor)
+            ->post(route('admin.settings.test-mail'))
+            ->assertRedirect(route('admin.settings.index'))
+            ->assertSessionHas('success');
+    }
+
     public function test_super_admin_can_update_sms_and_whatsapp_gateway_credentials(): void
     {
         $this->seed(RolesAndPermissionsSeeder::class);

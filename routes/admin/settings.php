@@ -10,3 +10,7 @@ Route::get('/settings', [SettingsController::class, 'index'])
 Route::match(['put', 'patch'], '/settings', [SettingsController::class, 'update'])
     ->middleware('permission:settings.manage')
     ->name('settings.update');
+
+Route::post('/settings/test-mail', [SettingsController::class, 'testMail'])
+    ->middleware('permission:settings.manage')
+    ->name('settings.test-mail');

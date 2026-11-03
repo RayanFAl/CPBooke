@@ -26,7 +26,7 @@ const selectedFileName = computed(() => {
     return '';
 });
 
-const previewSrc = computed(() => localPreview.value || props.currentImageUrl || '');
+const previewSrc = computed(() => localPreview.value || props.imageUrl || props.currentImageUrl || '');
 
 watch(
     () => props.image,

@@ -29,6 +29,10 @@ class Favorite extends Model
 
     public const TYPE_HOTEL = 'hotel';
 
+    public const TYPE_INSURANCE = 'insurance';
+
+    public const TYPE_ESIM = 'esim';
+
     public const STATUS_ACTIVE = 'active';
 
     public const STATUS_EXPIRED = 'expired';
@@ -77,6 +81,8 @@ class Favorite extends Model
         return [
             self::TYPE_FLIGHT,
             self::TYPE_HOTEL,
+            self::TYPE_INSURANCE,
+            self::TYPE_ESIM,
         ];
     }
 

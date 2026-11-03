@@ -2,8 +2,30 @@
 
 > **الغرض:** ملف مرجعي واحد لفريق الباكند لتجهيز كل أنظمة الإشعارات (Push, Email, SMS/OTP).  
 > **الجمهور:** Backend / DevOps  
-> **آخر تحديث:** 18 أغسطس 2026  
-> **حالة تطبيق الموبايل:** جاهز لاستقبال Push + Inbox + Preferences. إنشاء الأحداث والإرسال من الباكند فقط.
+> **آخر تحديث:** 1 نوفمبر 2026  
+> **حالة تطبيق الموبايل:** جاهز لاستقبال Push + Inbox + Preferences. إنشاء الأحداث والإرسال من الباكند فقط.  
+> **مرجع API للموبايل:** [`docs/api-notifications-mobile.md`](api-notifications-mobile.md) (Inbox موسّع، Price/Seat alerts، `app_version_code`).
+
+---
+
+## 0. حالة التنفيذ في CPBooke (2026-11-01)
+
+| المنطقة | الحالة | ملاحظة |
+|---------|--------|--------|
+| Inbox + Preferences + Devices API | ✅ منفّذ | `routes/api/v1/notifications.php` — يشمل `POST /notifications/push-test` |
+| قوالب + محرك إشعارات | ✅ منفّذ | `app/Modules/Notifications/*` — Push/InApp/Email/SMS/WhatsApp channels |
+| FCM (`cpbooke_default`) | ✅ كود | يحتاج `FIREBASE_CREDENTIALS` (أو رفع JSON من لوحة Admin) على السيرفر |
+| Email معاملات + OTP بريد | ⚠️ كود + لوحة | **Admin → Settings → Contact & Emails → SMTP** (يُخزَّن في `system_settings`، كلمة المرور مشفّرة)؛ `.env` احتياطي قبل أول حفظ؛ زر **Send test email** |
+| SMS OTP (تحقق هاتف) | ⚠️ كود + مسارات | `POST /api/v1/users/verify/phone/send|confirm` — يحتاج `SMS_*` أو إعدادات Admin |
+| WhatsApp | ⏸ اختياري | قناة `WhatsAppNotificationChannel` + `WHATSAPP_*` / Admin؛ **غير** جزء من عقد الموبايل |
+| Scheduler (15 دقيقة) | ✅ | `SendBookingReminderNotificationsJob` + Journey campaigns (تذكيرات رحلة/فندق/eSIM/جواز…) |
+| أحداث MVP (دفع، تذكرة، فندق، تأمين…) | ✅ | اختبارات: `NotificationSystemTest`, `NotificationMvpEventsTest` |
+| ربط حسابات + طلبات دفع | ✅ جزئي | رموز مثل `LINK_REQUEST_*`, `PAYMENT_REQUEST_*` — أسماء بعض القوالب تختلف عن جدول §6.3 |
+| `PAYMENT_REQUEST_EXPIRY_REMINDER` | ⬜ | غير موجود كرمز مستقل؛ يُراجع مع انتهاء الصلاحية + `PAYMENT_REQUEST_EXPIRED` |
+| `PROMO_OFFER` | ⬜ | غير مفعّل |
+| Idempotency | ✅ | عبر `notification_logs` + مراجع الأحداث (راجع `NotificationEngine`) |
+
+**جداول Laravel الفعلية** (بديل §12): `user_notifications` (Inbox)، `user_notification_devices`، `user_notification_preferences`، `notification_logs`، `notification_templates`، `password_reset_otps` (استعادة كلمة المرور).
 
 ---
 
@@ -14,7 +36,7 @@
 | **Push (FCM)** | إشعارات تفاعلية داخل التطبيق | القناة الرئيسية — مع Inbox داخلي |
 | **Email** | إشعارات معاملات + OTP للبريد | يُحترم تفضيل `email` |
 | **SMS** | **OTP فقط** | لا يُستخدم لإشعارات الحجز/الدفع/التذكيرات |
-| **WhatsApp** | **غير مدعوم من الباكند** | المستخدم يشارك الروابط يدوياً من التطبيق فقط |
+| **WhatsApp** | **اختياري — غير مطلوب للموبايل** | لا يستهلكه التطبيق؛ قناة اختيارية في CPBooke عند تهيئة Gateway (§9) |
 
 ### قاعدة ذهبية
 
@@ -40,6 +62,10 @@
 ### تسجيل الجهاز (FCM)
 
 يُستدعى من الموبايل بعد Login:
+
+مسارات OTP والتحقق (Sanctum حيث يلزم):  
+`POST /api/v1/users/verify/phone/send|confirm` · `POST /api/v1/users/verify/email/send|confirm` ·  
+`POST /api/v1/auth/forgot-password` · `POST /api/v1/auth/verify-reset-otp`
 
 ```http
 POST /api/v1/notifications/devices
@@ -438,9 +464,11 @@ Valid for 10 minutes. Do not share it.
 
 | البند | الحالة |
 |-------|--------|
-| تكامل WhatsApp Business API | **غير مطلوب حالياً** |
-| إرسال تلقائي من الباكند | **لا** |
-| المشاركة اليدوية | المستخدم يشارك روابط طلبات الدفع/الرحلات عبر share sheet في الموبايل |
+| عقد الموبايل / Push+Inbox | **لا يستخدم WhatsApp** — مشاركة يدوية من التطبيق فقط |
+| CPBooke (اختياري) | `WhatsAppNotificationChannel` — يرسل عند تفعيل القناة في Admin ووجود `WHATSAPP_ENDPOINT` + token |
+| Meta Cloud API مباشرة | **غير مدمج** — يُتوقع Gateway HTTP (مثل ADV API) وليس `phone_number_id` في الكود |
+| Production بدون endpoint | `delivered: false`, `reason: channel_not_configured` |
+| Non-production | Sandbox inbox في Admin للمعاينة |
 
 ---
 
@@ -600,22 +628,24 @@ CREATE TABLE otp_challenges (
 ## 13. متغيرات البيئة المطلوبة (Backend / DevOps)
 
 ```env
-# Firebase
-FIREBASE_PROJECT_ID=
-FIREBASE_CLIENT_EMAIL=
-FIREBASE_PRIVATE_KEY=
+# Firebase (FCM HTTP v1 — preferred)
+FIREBASE_CREDENTIALS=storage/app/firebase/firebase_credentials.json
+# Legacy (if used): FCM_SERVER_KEY, FCM_SENDER_ID
 
-# Email provider (SendGrid / SES / Mailgun)
-MAIL_FROM_ADDRESS=noreply@booke.app
+# Email (Laravel mailer — prefer Admin → Settings → SMTP; env is fallback)
+MAIL_MAILER=smtp
+MAIL_FROM_ADDRESS=noreply@booke.ly
 MAIL_FROM_NAME=Booke
-MAIL_PROVIDER_API_KEY=
+# Provider-specific when not saved in system_settings: MAIL_HOST, MAIL_USERNAME, MAIL_PASSWORD, etc.
 
-# SMS provider (OTP only — Twilio / Unifonic / etc.)
-SMS_PROVIDER_API_KEY=
-SMS_SENDER_ID=Booke
-SMS_OTP_ENABLED=true
+# SMS / WhatsApp gateway (OTP SMS + optional WhatsApp — also configurable in Admin → Settings)
+SMS_ENDPOINT=
+SMS_TOKEN=
+WHATSAPP_ENDPOINT=
+WHATSAPP_TOKEN=
+# Shared fallback: ADV_API_URL, ADV_API_TOKEN
 
-# App
+# App links (optional overrides)
 APP_DEEP_LINK_BASE=https://app.booke.app
 APP_WEB_URL=https://booke.app
 ```
@@ -626,40 +656,39 @@ APP_WEB_URL=https://booke.app
 
 ### المرحلة 1 — الأساس (MVP)
 
-- [ ] جداول: `notifications`, `notification_devices`, `notification_preferences`
-- [ ] APIs: Inbox CRUD + Preferences + Device register/delete
-- [ ] FCM integration + Android channel `cpbooke_default`
-- [ ] أحداث: `PAYMENT_SUCCEEDED`, `PAYMENT_FAILED`, `FLIGHT_TICKET_ISSUED`
-- [ ] OTP هاتف: `/users/verify/phone/send` + confirm
-- [ ] Email provider + قوالب OTP بريد واستعادة كلمة المرور
+- [x] جداول Inbox / devices / preferences (+ `notification_logs`, templates)
+- [x] APIs: Inbox CRUD + Preferences + Device register/delete
+- [x] FCM integration + Android channel `cpbooke_default`
+- [x] أحداث: `PAYMENT_SUCCEEDED`, `PAYMENT_FAILED`, `FLIGHT_TICKET_ISSUED`
+- [x] OTP هاتف: `/api/v1/users/verify/phone/send` + confirm
+- [ ] **DevOps:** Email provider فعّال + اختبار OTP بريد واستعادة كلمة المرور على staging
 
 ### المرحلة 2 — التذكيرات
 
-- [ ] Scheduler كل 15 دقيقة
-- [ ] `FLIGHT_REMINDER_24H`, `FLIGHT_REMINDER_3H`
-- [ ] `HOTEL_CHECKIN_REMINDER_24H`
-- [ ] Idempotency keys
-- [ ] `FLIGHT_STATUS_UPDATED`
+- [x] Scheduler كل 15 دقيقة
+- [x] `FLIGHT_REMINDER_24H`, `FLIGHT_REMINDER_3H` (+ `FLIGHT_REMINDER_1H` في CPBooke)
+- [x] `HOTEL_CHECKIN_REMINDER_24H`
+- [x] Idempotency keys
+- [x] `FLIGHT_STATUS_UPDATED`
 
 ### المرحلة 3 — طلبات الدفع
 
-- [ ] أحداث 11–18 (Payment Requests)
-- [ ] Email للمستلم عند وجود `recipient_email`
-- [ ] تذكير انتهاء الصلاحية + تحديث status
+- [x] أحداث طلبات الدفع/الربط (رموز CPBooke — راجع `NotificationActionCatalog`)
+- [ ] Email للمستلم عند وجود `recipient_email` (تحقق على staging)
+- [ ] `PAYMENT_REQUEST_EXPIRY_REMINDER` صريح + تحديث status → `expired`
 
 ### المرحلة 4 — الحسابات المرتبطة
 
-- [ ] أحداث 19–22 (Linked Accounts)
-- [ ] Push in-app لطلبات الدفع من حساب مرتبط
+- [x] `LINK_REQUEST_*` + إشعارات دفع مرتبطة (Push + Inbox)
+- [x] Push in-app لطلبات الدفع من حساب مرتبط
 
 ### المرحلة 5 — إضافات
 
-- [ ] `LOGIN_ALERT`
-- [ ] `HOTEL_BOOKING_CONFIRMED`, `INSURANCE_POLICY_ISSUED`
+- [x] `LOGIN_ALERT`
+- [x] `HOTEL_BOOKING_CONFIRMED`, `INSURANCE_POLICY_ISSUED`
 - [ ] `PROMO_OFFER` (ترويجي)
-- [ ] `notification_delivery_log`
-- [ ] دعم لغتين في القوالب (ar/en)
-- [ ] `POST /notifications/push-test`
+- [x] سجل التسليم (`notification_logs`) + i18n في القوالب
+- [x] `POST /notifications/push-test`
 
 ---
 
@@ -682,11 +711,12 @@ APP_WEB_URL=https://booke.app
 
 | الملف | المحتوى |
 |-------|---------|
-| `docs/api-notifications-mobile.md` | عقد API الإشعارات + أحداث MVP |
-| `docs/payment-request-api.md` | API طلبات الدفع |
-| `docs/payment-request-summary.md` | سيناريوهات الإشعارات لطلبات الدفع |
-| `docs/linked-accounts-api.md` | إشعارات ربط الحسابات |
-| `lib/features/notification/` | كود الموبايل (FCM + Inbox) |
+| [`docs/api-notifications-mobile.md`](api-notifications-mobile.md) | عقد API للموبايل + خريطة الأحداث |
+| [`docs/mobile-notifications-handover.md`](mobile-notifications-handover.md) | Handover مختصر |
+| `app/Modules/Notifications/` | محرك الإشعارات، FCM، القنوات، Scheduler |
+| `routes/api/v1/notifications.php` | مسارات Passenger API |
+| `tests/Feature/NotificationSystemTest.php` | اختبارات تكامل |
+| تطبيق Flutter (repo منفصل) | `lib/features/notification/` |
 
 ---
 
@@ -699,4 +729,4 @@ APP_WEB_URL=https://booke.app
 
 ---
 
-*تم إعداد هذا الملف من تطبيق Booke Mobile — آخر مراجعة: 18 أغسطس 2026*
+*تم إعداد هذا الملف من تطبيق Booke Mobile — آخر مراجعة مواصفات: 18 أغسطس 2026 · آخر مواءمة مع CPBooke: 1 نوفمبر 2026*

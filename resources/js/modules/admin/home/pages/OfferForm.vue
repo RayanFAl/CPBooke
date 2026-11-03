@@ -37,7 +37,7 @@ const form = useForm({
 });
 
 const needsRouteOrUrl = computed(() => ['route', 'url'].includes(form.action_type));
-const needsPayload = computed(() => form.action_type.startsWith('search_'));
+const needsPayload = computed(() => form.action_type.startsWith('search_') || form.action_type === 'open_hotel');
 
 const actionTypeLabel = (type) => t(`home.action.${type}`);
 
@@ -58,6 +58,13 @@ const knownPathsHint = computed(() => KNOWN_ROUTE_EXAMPLES.join(' · '));
 
 const fillActionValueExample = () => {
     form.action_value = actionValuePlaceholder.value;
+};
+
+const onHotelImage = (url) => {
+    const imageUrl = String(url || '').trim();
+    if (!imageUrl) return;
+    form.image = null;
+    form.image_url = imageUrl;
 };
 
 const submit = () => {
@@ -185,6 +192,7 @@ const submit = () => {
                         v-model="form.action_payload"
                         :action-type="form.action_type"
                         :error="form.errors.action_payload || ''"
+                        @hotel-image="onHotelImage"
                     />
                 </div>
 

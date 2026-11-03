@@ -9,6 +9,7 @@ use App\Modules\Api\AI\Http\Requests\TravelAssistantRequest;
 use App\Modules\Api\Support\Http\Responses\ApiResponse;
 use App\Services\AI\GeminiRecommendationService;
 use App\Services\AI\GeminiTravelAssistantService;
+use App\Services\AI\VoiceActionService;
 use Illuminate\Http\JsonResponse;
 use Throwable;
 
@@ -17,6 +18,7 @@ class TravelAssistantController extends Controller
     public function __construct(
         private readonly GeminiTravelAssistantService $travelAssistant,
         private readonly GeminiRecommendationService $recommendationService,
+        private readonly VoiceActionService $voiceActionService,
         private readonly AiSettingsService $aiSettings,
         private readonly AiTravelAssistantLogService $logService,
     ) {
@@ -32,8 +34,13 @@ class TravelAssistantController extends Controller
 
         $isRecommend = $mode === 'recommend'
             || ($mode === null && is_array($offers) && $offers !== [] && $message === '');
+        $isVoiceAction = $mode === 'voice_action';
 
         try {
+            if ($isVoiceAction) {
+                return $this->voiceAction($request, $validated, $started);
+            }
+
             if ($isRecommend) {
                 return $this->recommend($request, $validated, $started);
             }
@@ -42,7 +49,7 @@ class TravelAssistantController extends Controller
         } catch (Throwable $exception) {
             $this->logService->record(
                 $request,
-                $isRecommend ? 'recommend' : 'interpret',
+                $isVoiceAction ? 'voice_action' : ($isRecommend ? 'recommend' : 'interpret'),
                 [
                     'message' => $message,
                     'model' => $this->aiSettings->model(),
@@ -125,6 +132,40 @@ class TravelAssistantController extends Controller
             $result['fallback'] ?? false
                 ? 'AI unavailable; client should use Rules NLU fallback.'
                 : 'Travel intent extracted.',
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function voiceAction(TravelAssistantRequest $request, array $validated, int $started): JsonResponse
+    {
+        $message = trim((string) ($validated['message'] ?? ''));
+        $actionContext = is_array($validated['action_context'] ?? null)
+            ? $validated['action_context']
+            : [];
+
+        $result = $this->voiceActionService->interpret($message, $actionContext);
+        $data = $result['data'];
+
+        $this->logService->record(
+            $request,
+            'voice_action',
+            array_merge($data, [
+                'message' => $message,
+                'model' => $this->aiSettings->model(),
+                'product' => $data['service_type'] ?? ($data['product'] ?? null),
+            ]),
+            $this->elapsedMs($started),
+            success: ! $result['fallback'],
+            errorMessage: $result['reason'],
+        );
+
+        return ApiResponse::success(
+            $data,
+            $result['fallback']
+                ? 'AI unavailable; client should use Rules NLU fallback.'
+                : 'Voice action parsed.',
         );
     }
 

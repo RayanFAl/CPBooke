@@ -34,6 +34,7 @@ class UpdateSystemSettingsRequest extends FormRequest
             'feature_legacy_order_create',
             'clear_sms_token',
             'clear_whatsapp_token',
+            'clear_mail_password',
         ] as $booleanField) {
             if ($this->has($booleanField)) {
                 $merge[$booleanField] = filter_var($this->input($booleanField), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)
@@ -70,6 +71,13 @@ class UpdateSystemSettingsRequest extends FormRequest
             'channel_whatsapp_enabled' => ['sometimes', 'boolean'],
             'channel_push_enabled' => ['sometimes', 'boolean'],
             'email_from_name' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'mail_mailer' => ['sometimes', 'nullable', 'string', Rule::in(['smtp', 'log'])],
+            'mail_host' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'mail_port' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:65535'],
+            'mail_encryption' => ['sometimes', 'nullable', 'string', Rule::in(['tls', 'ssl', 'none', ''])],
+            'mail_username' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'mail_password' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'clear_mail_password' => ['sometimes', 'boolean'],
             'sms_sender_name' => ['sometimes', 'nullable', 'string', 'max:40'],
             'sms_endpoint' => ['sometimes', 'nullable', 'string', 'max:500'],
             'sms_token' => ['sometimes', 'nullable', 'string', 'max:2000'],

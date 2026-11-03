@@ -213,4 +213,110 @@ class TravelAssistantApiTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('success', false);
     }
+
+    public function test_voice_action_mode_is_accepted_and_returns_parser_json(): void
+    {
+        config()->set('ai.enabled', true);
+        config()->set('ai.gemini.api_key', 'test-key');
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                [
+                                    'text' => json_encode([
+                                        'intent' => 'result_action',
+                                        'confidence' => 0.91,
+                                        'service_type' => 'flight',
+                                        'slots' => [
+                                            'origin' => null,
+                                            'destination' => null,
+                                            'raw_date' => null,
+                                            'passengers' => null,
+                                            'notes' => null,
+                                        ],
+                                        'action' => [
+                                            'type' => 'select_result',
+                                            'target_index' => 2,
+                                            'target_indices' => null,
+                                            'criteria' => 'price',
+                                        ],
+                                        'clarify_reason' => null,
+                                    ], JSON_UNESCAPED_UNICODE),
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $this->postJson('/api/v1/ai/travel-assistant', [
+            'mode' => 'voice_action',
+            'message' => 'اختار الثانية الأرخص',
+            'forceGemini' => true,
+            'action_context' => [
+                'current_screen' => 'flight_results',
+                'service_type' => 'flight',
+                'displayed_results' => [
+                    ['index' => 1, 'id' => 'a', 'summary' => 'First'],
+                    ['index' => 2, 'id' => 'b', 'summary' => 'Second'],
+                ],
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.intent', 'result_action')
+            ->assertJsonPath('data.service_type', 'flight')
+            ->assertJsonPath('data.action.type', 'select_result')
+            ->assertJsonPath('data.action.target_index', 2)
+            ->assertJsonPath('data.action.criteria', 'price');
+    }
+
+    public function test_voice_action_rejects_payment_and_falls_back_when_gemini_is_down(): void
+    {
+        config()->set('ai.enabled', true);
+        config()->set('ai.gemini.api_key', 'test-key');
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                [
+                                    'text' => json_encode([
+                                        'intent' => 'result_action',
+                                        'confidence' => 0.8,
+                                        'service_type' => 'flight',
+                                        'action' => ['type' => 'pay'],
+                                    ]),
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $this->postJson('/api/v1/ai/travel-assistant', [
+            'mode' => 'voice_action',
+            'message' => 'ادفع الحين',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.intent', 'clarify')
+            ->assertJsonPath('data.action.type', 'none');
+
+        config()->set('ai.gemini.api_key', '');
+
+        $this->postJson('/api/v1/ai/travel-assistant', [
+            'mode' => 'voice_action',
+            'message' => 'اختار الأرخص',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.fallback', true)
+            ->assertJsonPath('data.intent', 'unknown');
+    }
 }

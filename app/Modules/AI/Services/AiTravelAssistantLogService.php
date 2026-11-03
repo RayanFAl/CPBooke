@@ -109,7 +109,7 @@ class AiTravelAssistantLogService
                 'success' => (string) ($filters['success'] ?? ''),
             ],
             'sources' => ['gemini', 'rules_hint', 'fallback', 'gemini_or_local'],
-            'modes' => ['interpret', 'recommend', 'rules_hint'],
+            'modes' => ['interpret', 'recommend', 'rules_hint', 'voice_action'],
         ];
     }
 

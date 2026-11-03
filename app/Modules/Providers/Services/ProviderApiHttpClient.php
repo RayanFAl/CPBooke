@@ -8,18 +8,42 @@ use Illuminate\Support\Facades\Http;
 
 class ProviderApiHttpClient
 {
-    public function get(ProviderApiConfig $config, string $path): Response
+    /**
+     * @param  array<string, mixed>  $query
+     */
+    public function get(ProviderApiConfig $config, string $path, array $query = []): Response
     {
-        $url = rtrim((string) $config->base_url, '/').'/'.ltrim($path, '/');
+        $pending = $this->pending($config);
+
+        return $query === []
+            ? $pending->get($this->url($config, $path))
+            : $pending->get($this->url($config, $path), $query);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function post(ProviderApiConfig $config, string $path, array $data = []): Response
+    {
+        return $this->pending($config)->post($this->url($config, $path), $data);
+    }
+
+    private function pending(ProviderApiConfig $config): \Illuminate\Http\Client\PendingRequest
+    {
         $timeout = max(1, (int) ($config->timeout ?? config('provider_api.default_timeout', 30)));
 
         $pending = Http::timeout($timeout)
+            ->acceptJson()
+            ->asJson()
             ->withOptions(['verify' => $this->sslVerifyOption()])
             ->withHeaders($this->buildHeaders($config));
 
-        $pending = $this->applyAuthentication($pending, $config);
+        return $this->applyAuthentication($pending, $config);
+    }
 
-        return $pending->get($url);
+    private function url(ProviderApiConfig $config, string $path): string
+    {
+        return rtrim((string) $config->base_url, '/').'/'.ltrim($path, '/');
     }
 
     /**

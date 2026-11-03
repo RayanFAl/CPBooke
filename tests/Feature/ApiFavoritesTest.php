@@ -322,4 +322,60 @@ class ApiFavoritesTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.status', 'expired');
     }
+
+    public function test_customer_can_save_check_and_delete_an_insurance_favorite(): void
+    {
+        $this->actingAsCustomer();
+
+        $payload = [
+            'type' => Favorite::TYPE_INSURANCE,
+            'item_key' => 'insurance_travel_ly_2026',
+            'snapshot' => [
+                'product' => 'travel',
+                'zone' => 'Schengen',
+                'price_total' => 45,
+                'currency' => 'LYD',
+            ],
+            'search_context' => [
+                'zone' => 'Schengen',
+                'start_date' => '2026-12-01',
+            ],
+        ];
+
+        $this->postJson('/api/v1/favorites', $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.type', 'insurance')
+            ->assertJsonPath('data.item_key', 'insurance_travel_ly_2026');
+
+        $this->getJson('/api/v1/favorites/check?type=insurance&item_key=insurance_travel_ly_2026')
+            ->assertOk()
+            ->assertJsonPath('data.is_favorite', true);
+
+        $this->getJson('/api/v1/favorites?type=insurance')
+            ->assertOk()
+            ->assertJsonPath('data.0.type', 'insurance');
+
+        $this->deleteJson('/api/v1/favorites?type=insurance&item_key=insurance_travel_ly_2026')
+            ->assertOk();
+
+        $this->assertDatabaseCount('favorites', 0);
+    }
+
+    public function test_customer_can_save_an_esim_favorite(): void
+    {
+        $this->actingAsCustomer();
+
+        $this->postJson('/api/v1/favorites', [
+            'type' => Favorite::TYPE_ESIM,
+            'item_key' => 'esim_tn_3gb',
+            'snapshot' => [
+                'country' => 'TN',
+                'title' => 'Tunisia 3GB',
+                'price_total' => 12,
+                'currency' => 'USD',
+            ],
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.type', 'esim');
+    }
 }

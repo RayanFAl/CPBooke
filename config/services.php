@@ -67,4 +67,9 @@ return [
         'adv_api_token' => env('ADV_API_TOKEN'),
     ],
 
+    'shared_flight' => [
+        'url_base' => env('SHARED_FLIGHT_URL_BASE', 'https://booknow.app/s'),
+        'ttl_days' => (int) env('SHARED_FLIGHT_TTL_DAYS', 14),
+    ],
+
 ];

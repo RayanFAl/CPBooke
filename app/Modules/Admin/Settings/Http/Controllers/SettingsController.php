@@ -8,8 +8,10 @@ use App\Modules\Notifications\Services\NotificationChannelManager;
 use App\Modules\Settings\Services\SystemSettingsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class SettingsController
 {
@@ -44,6 +46,12 @@ class SettingsController
                 'channel_whatsapp_enabled' => (bool) $settings->channel_whatsapp_enabled,
                 'channel_push_enabled' => (bool) $settings->channel_push_enabled,
                 'email_from_name' => $settings->email_from_name,
+                'mail_mailer' => $settings->mail_mailer ?? '',
+                'mail_host' => $settings->mail_host ?? '',
+                'mail_port' => $settings->mail_port ?? '',
+                'mail_encryption' => $settings->mail_encryption ?? '',
+                'mail_username' => $settings->mail_username ?? '',
+                'mail_password_set' => $this->systemSettingsService->mailPasswordIsSet(),
                 'sms_sender_name' => $settings->sms_sender_name,
                 'sms_endpoint' => $settings->sms_endpoint ?: $this->systemSettingsService->smsEndpoint(),
                 'sms_token_set' => $this->systemSettingsService->smsToken() !== null,
@@ -59,6 +67,8 @@ class SettingsController
             'channel_statuses' => $this->integrationStatuses(),
             'can_manage_sensitive_flags' => $request->user()?->hasRole('super_admin') ?? false,
             'update_url' => route('admin.settings.update', absolute: false),
+            'test_mail_url' => route('admin.settings.test-mail', absolute: false),
+            'notifications_url' => route('admin.notifications.index', absolute: false),
         ]);
     }
 
@@ -69,6 +79,46 @@ class SettingsController
         return redirect()
             ->route('admin.settings.index')
             ->with('success', 'Settings saved successfully.');
+    }
+
+    public function testMail(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'recipient' => ['nullable', 'email', 'max:255'],
+        ]);
+
+        if (! $this->systemSettingsService->isMailDeliveryConfigured()) {
+            return redirect()
+                ->route('admin.settings.index')
+                ->with('error', 'Configure SMTP or choose the log mailer before sending a test email.');
+        }
+
+        $recipient = trim((string) ($request->input('recipient') ?: $request->user()?->email ?: ''));
+
+        if ($recipient === '') {
+            return redirect()
+                ->route('admin.settings.index')
+                ->with('error', 'Provide a recipient email or sign in with an account that has one.');
+        }
+
+        try {
+            Mail::raw(
+                'This is a test message from '.config('app.name').' (admin settings).',
+                static function ($message) use ($recipient): void {
+                    $message->to($recipient)->subject('Booke SMTP test');
+                },
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('admin.settings.index')
+                ->with('error', 'Test email failed: '.$exception->getMessage());
+        }
+
+        return redirect()
+            ->route('admin.settings.index')
+            ->with('success', 'Test email sent to '.$recipient.'.');
     }
 
     /**

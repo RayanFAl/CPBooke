@@ -183,4 +183,78 @@ class HomeContentApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.id', $banner->public_id);
     }
+
+    public function test_open_hotel_offer_returns_hotel_and_offer_ids(): void
+    {
+        HomeOffer::query()->create([
+            'public_id' => 'off_hotel_direct',
+            'title_en' => 'Four Seasons offer',
+            'title_ar' => 'عرض فور سيزونز',
+            'category' => 'hotels',
+            'action_type' => 'open_hotel',
+            'action_value' => '/hotel-details',
+            'action_payload' => [
+                'hotel_id' => 'h_1001',
+                'hotel_name' => 'Four Seasons',
+                'city' => 'Istanbul',
+                'city_id' => '42',
+                'check_in' => '2026-11-10',
+                'check_out' => '2026-11-12',
+                'offer_id' => 'rate_88',
+            ],
+            'sort_order' => 1,
+            'is_active' => true,
+            'starts_at' => now()->subDay(),
+        ]);
+
+        $this->getJson('/api/v1/home/offers?locale=en')
+            ->assertOk()
+            ->assertJsonPath('data.0.action_type', 'open_hotel')
+            ->assertJsonPath('data.0.action_value', '/hotel-details')
+            ->assertJsonPath('data.0.action_payload.hotel_id', 'h_1001')
+            ->assertJsonPath('data.0.action_payload.city_id', '42')
+            ->assertJsonPath('data.0.action_payload.offer_id', 'rate_88');
+    }
+
+    public function test_admin_open_hotel_offer_requires_hotel_and_city_ids(): void
+    {
+        $admin = \App\Models\User::factory()->create([
+            'account_type' => \App\Models\User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
+        $admin->refresh()->syncRolesByName(['super_admin']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.home.offers.create'))
+            ->post(route('admin.home.offers.store'), [
+                'title_en' => 'Direct hotel',
+                'category' => 'hotels',
+                'action_type' => 'open_hotel',
+                'action_payload' => json_encode(['hotel_name' => 'Missing ids']),
+                'is_active' => 1,
+            ])
+            ->assertRedirect(route('admin.home.offers.create'))
+            ->assertSessionHasErrors('action_payload');
+
+        $this->actingAs($admin)
+            ->post(route('admin.home.offers.store'), [
+                'title_en' => 'Direct hotel',
+                'category' => 'hotels',
+                'action_type' => 'open_hotel',
+                'action_payload' => json_encode([
+                    'hotel_id' => 'h_1001',
+                    'city_id' => '42',
+                    'offer_id' => 'rate_88',
+                ]),
+                'is_active' => 1,
+            ])
+            ->assertRedirect(route('admin.home.index', ['tab' => 'offers']));
+
+        $this->assertDatabaseHas('home_offers', [
+            'title_en' => 'Direct hotel',
+            'action_type' => 'open_hotel',
+            'action_value' => '/hotel-details',
+        ]);
+    }
 }

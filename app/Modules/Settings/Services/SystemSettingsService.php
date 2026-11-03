@@ -172,6 +172,28 @@ class SystemSettingsService
         return $this->whatsappEndpoint() !== null;
     }
 
+    public function isMailDeliveryConfigured(): bool
+    {
+        return app(MailSettingsConfigurator::class)->isDeliveryConfigured($this->current());
+    }
+
+    public function applyMailConfiguration(): void
+    {
+        app(MailSettingsConfigurator::class)->apply($this->current());
+    }
+
+    public function resolvedMailMailer(): string
+    {
+        return app(MailSettingsConfigurator::class)->resolvedMailer($this->current());
+    }
+
+    public function mailPasswordIsSet(): bool
+    {
+        $password = $this->current()->mail_password;
+
+        return is_string($password) && $password !== '';
+    }
+
     private function resolvedCredential(mixed $value, string $fallback): ?string
     {
         $resolved = trim((string) ($value ?: ''));

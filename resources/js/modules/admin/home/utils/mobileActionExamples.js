@@ -5,6 +5,7 @@
 export const MOBILE_SCREEN_PATHS = {
     flights: '/flight-search',
     hotels: '/hotel-search',
+    hotelDetails: '/hotel-details',
     esim: '/esim-countries',
     travelInsurance: '/travel-insurance',
     orangeInsurance: '/orange-insurance',
@@ -41,12 +42,8 @@ export function actionValueExample({ actionType, category = null, catalogKey = n
         return MOBILE_SCREEN_PATHS.flights;
     }
 
-    if (actionType === 'search_hotels') {
-        return MOBILE_SCREEN_PATHS.hotels;
-    }
-
-    if (actionType === 'search_insurance') {
-        return MOBILE_SCREEN_PATHS.travelInsurance;
+    if (actionType === 'open_hotel') {
+        return MOBILE_SCREEN_PATHS.hotelDetails;
     }
 
     if (actionType === 'search_esim') {
@@ -71,6 +68,7 @@ export function actionValueExample({ actionType, category = null, catalogKey = n
 export const KNOWN_ROUTE_EXAMPLES = [
     MOBILE_SCREEN_PATHS.flights,
     MOBILE_SCREEN_PATHS.hotels,
+    MOBILE_SCREEN_PATHS.hotelDetails,
     MOBILE_SCREEN_PATHS.esim,
     MOBILE_SCREEN_PATHS.travelInsurance,
     MOBILE_SCREEN_PATHS.orangeInsurance,

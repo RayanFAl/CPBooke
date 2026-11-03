@@ -175,13 +175,20 @@ class HomeAdminService
             $platforms = null;
         }
 
+        $actionType = $data['action_type'] ?? 'none';
+        $actionValue = $data['action_value'] ?? null;
+
+        if ($actionType === 'open_hotel') {
+            $actionValue = '/hotel-details';
+        }
+
         return [
             'title_en' => $data['title_en'],
             'title_ar' => $data['title_ar'] ?? null,
             'subtitle_en' => $data['subtitle_en'] ?? null,
             'subtitle_ar' => $data['subtitle_ar'] ?? null,
-            'action_type' => $data['action_type'] ?? 'none',
-            'action_value' => $data['action_value'] ?? null,
+            'action_type' => $actionType,
+            'action_value' => $actionValue,
             'action_payload' => $payload,
             'sort_order' => (int) ($data['sort_order'] ?? 0),
             'is_active' => (bool) ($data['is_active'] ?? true),

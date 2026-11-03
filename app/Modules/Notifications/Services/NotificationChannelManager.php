@@ -58,10 +58,8 @@ class NotificationChannelManager
             [
                 'channel' => NotificationChannels::EMAIL,
                 'healthy' => true,
-                'provider' => config('mail.default', 'mail'),
-                'configured' => filled(config('mail.mailers.'.config('mail.default').'.transport'))
-                    || config('mail.default') === 'log'
-                    || config('mail.default') === 'array',
+                'provider' => $this->systemSettingsService->resolvedMailMailer(),
+                'configured' => $this->systemSettingsService->isMailDeliveryConfigured(),
                 'enabled' => $this->systemSettingsService->isChannelEnabled(NotificationChannels::EMAIL),
             ],
             [

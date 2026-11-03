@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Home\Http\Requests;
 
 use App\Models\HomeBanner;
+use App\Support\Home\HomeOpenHotelPayload;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -25,7 +26,10 @@ class StoreHomeBannerRequest extends FormRequest
             'subtitle_ar' => ['nullable', 'string', 'max:255'],
             'image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:5120'],
             'image_url' => ['nullable', 'url', 'max:500'],
-            'action_type' => ['required', Rule::in(HomeBanner::ACTION_TYPES)],
+            'action_type' => ['required', Rule::in([
+                ...HomeBanner::ACTION_TYPES,
+                ...HomeBanner::LEGACY_ACTION_TYPES,
+            ])],
             'action_value' => ['nullable', 'string', 'max:500'],
             'action_payload' => ['nullable'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
@@ -42,5 +46,12 @@ class StoreHomeBannerRequest extends FormRequest
         $this->merge([
             'is_active' => $this->boolean('is_active'),
         ]);
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator): void {
+            HomeOpenHotelPayload::validate($validator);
+        });
     }
 }

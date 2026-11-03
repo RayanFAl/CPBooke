@@ -150,7 +150,11 @@ class HomeContentService
      */
     private function withActionPayload(array $item, string $actionType, ?array $payload): array
     {
-        if (str_starts_with($actionType, 'search_') && is_array($payload) && $payload !== []) {
+        if (
+            (str_starts_with($actionType, 'search_') || $actionType === 'open_hotel')
+            && is_array($payload)
+            && $payload !== []
+        ) {
             $item['action_payload'] = $payload;
         }
 

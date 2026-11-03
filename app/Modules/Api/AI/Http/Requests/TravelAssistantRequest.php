@@ -63,8 +63,22 @@ class TravelAssistantRequest extends ApiFormRequest
             'offers.*.departure' => ['nullable', 'string', 'max:32'],
             'offers.*.arrival' => ['nullable', 'string', 'max:32'],
             'offers.*.duration' => ['nullable', 'string', 'max:32'],
-            'mode' => ['nullable', 'string', 'in:interpret,recommend'],
+            'mode' => ['nullable', 'string', 'in:interpret,recommend,voice_action'],
             'forceGemini' => ['nullable', 'boolean'],
+            'schema_version' => ['nullable', 'string', 'max:16'],
+            'instructions' => ['nullable', 'string', 'max:20000'],
+            'response_schema' => ['nullable', 'string', 'max:8000'],
+            'action_context' => ['nullable', 'array'],
+            'action_context.current_screen' => ['nullable', 'string', 'max:80'],
+            'action_context.service_type' => ['nullable', 'string', 'max:32'],
+            'action_context.displayed_results' => ['nullable', 'array', 'max:30'],
+            'action_context.displayed_results.*.index' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'action_context.displayed_results.*.id' => ['nullable', 'string', 'max:120'],
+            'action_context.displayed_results.*.summary' => ['nullable', 'string', 'max:500'],
+            'action_context.displayed_results.*.price' => ['nullable', 'numeric'],
+            'action_context.displayed_results.*.duration_minutes' => ['nullable', 'integer', 'min:0'],
+            'action_context.displayed_results.*.rating' => ['nullable', 'numeric'],
+            'action_context.active_slots' => ['nullable', 'array'],
         ];
     }
 
@@ -74,6 +88,14 @@ class TravelAssistantRequest extends ApiFormRequest
             $mode = $this->input('mode');
             $hasOffers = is_array($this->input('offers')) && $this->input('offers') !== [];
             $message = trim((string) $this->input('message', ''));
+
+            if ($mode === 'voice_action') {
+                if ($message === '') {
+                    $validator->errors()->add('message', 'A message is required for voice actions.');
+                }
+
+                return;
+            }
 
             if ($mode === 'recommend' || ($mode === null && $hasOffers && $message === '')) {
                 if (! $hasOffers) {

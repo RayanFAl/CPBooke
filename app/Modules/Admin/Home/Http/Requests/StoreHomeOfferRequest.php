@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Home\Http\Requests;
 
 use App\Models\HomeOffer;
+use App\Support\Home\HomeOpenHotelPayload;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -29,7 +30,10 @@ class StoreHomeOfferRequest extends FormRequest
             'image_url' => ['nullable', 'url', 'max:500'],
             'accent_color' => ['nullable', 'string', 'max:20'],
             'category' => ['required', Rule::in(HomeOffer::CATEGORIES)],
-            'action_type' => ['required', Rule::in(HomeOffer::ACTION_TYPES)],
+            'action_type' => ['required', Rule::in([
+                ...HomeOffer::ACTION_TYPES,
+                ...HomeOffer::LEGACY_ACTION_TYPES,
+            ])],
             'action_value' => ['nullable', 'string', 'max:500'],
             'action_payload' => ['nullable'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
@@ -46,5 +50,12 @@ class StoreHomeOfferRequest extends FormRequest
         $this->merge([
             'is_active' => $this->boolean('is_active'),
         ]);
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator): void {
+            HomeOpenHotelPayload::validate($validator);
+        });
     }
 }

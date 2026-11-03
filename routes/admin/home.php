@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Admin\Home\Http\Controllers\HomeContentController;
+use App\Modules\Admin\Home\Http\Controllers\HomeHotelLookupController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('permission:settings.manage')->prefix('home')->as('home.')->group(function (): void {
@@ -17,4 +18,11 @@ Route::middleware('permission:settings.manage')->prefix('home')->as('home.')->gr
     Route::get('/offers/{offer}/edit', [HomeContentController::class, 'editOffer'])->name('offers.edit');
     Route::post('/offers/{offer}', [HomeContentController::class, 'updateOffer'])->name('offers.update');
     Route::delete('/offers/{offer}', [HomeContentController::class, 'destroyOffer'])->name('offers.destroy');
+
+    Route::prefix('hotel-lookup')->as('hotel-lookup.')->group(function (): void {
+        Route::get('/status', [HomeHotelLookupController::class, 'status'])->name('status');
+        Route::get('/cities', [HomeHotelLookupController::class, 'cities'])->name('cities');
+        Route::post('/hotels', [HomeHotelLookupController::class, 'hotels'])->name('hotels');
+        Route::get('/offers', [HomeHotelLookupController::class, 'offers'])->name('offers');
+    });
 });

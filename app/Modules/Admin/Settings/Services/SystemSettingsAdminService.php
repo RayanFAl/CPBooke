@@ -12,7 +12,7 @@ use Illuminate\Support\Arr;
 
 class SystemSettingsAdminService
 {
-    private const SECRET_FIELDS = ['sms_token', 'whatsapp_token'];
+    private const SECRET_FIELDS = ['sms_token', 'whatsapp_token', 'mail_password'];
 
     public function __construct(
         private readonly SystemSettingsService $systemSettingsService,
@@ -69,6 +69,11 @@ class SystemSettingsAdminService
             'channel_whatsapp_enabled',
             'channel_push_enabled',
             'email_from_name',
+            'mail_mailer',
+            'mail_host',
+            'mail_port',
+            'mail_encryption',
+            'mail_username',
             'sms_sender_name',
             'sms_endpoint',
             'whatsapp_sender_name',
@@ -89,13 +94,21 @@ class SystemSettingsAdminService
             'sms_endpoint',
             'whatsapp_sender_name',
             'whatsapp_endpoint',
+            'mail_mailer',
+            'mail_host',
+            'mail_encryption',
+            'mail_username',
         ] as $nullableField) {
             if (array_key_exists($nullableField, $fillable) && $fillable[$nullableField] === '') {
                 $fillable[$nullableField] = null;
             }
         }
 
-        foreach (['sms_token', 'whatsapp_token'] as $tokenField) {
+        if (array_key_exists('mail_port', $fillable) && ($fillable['mail_port'] === '' || $fillable['mail_port'] === null)) {
+            $fillable['mail_port'] = null;
+        }
+
+        foreach (['sms_token', 'whatsapp_token', 'mail_password'] as $tokenField) {
             $clearFlag = 'clear_'.$tokenField;
             if (! empty($payload[$clearFlag])) {
                 $fillable[$tokenField] = null;

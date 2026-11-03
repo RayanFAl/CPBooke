@@ -9,5 +9,6 @@ Route::middleware('auth:sanctum')
     ->controller(AirportController::class)
     ->group(function (): void {
         Route::get('/featured', 'featured')->name('featured');
+        Route::get('/nearby', 'nearby')->name('nearby');
         Route::get('/', 'index')->name('index');
     });

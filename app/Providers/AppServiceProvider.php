@@ -142,6 +142,8 @@ class AppServiceProvider extends ServiceProvider
                 'services.notifications.whatsapp_token' => $settings->whatsappToken() ?? config('services.notifications.whatsapp_token'),
             ]);
 
+            $settings->applyMailConfiguration();
+
             if ($support !== '') {
                 Mail::alwaysReplyTo($support, $settings->companyName());
             }

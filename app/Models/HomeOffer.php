@@ -16,9 +16,14 @@ class HomeOffer extends Model
         'route',
         'url',
         'search_flights',
+        'open_hotel',
+        'search_esim',
+    ];
+
+    /** Kept for existing rows / API payloads; not shown in new admin forms. */
+    public const LEGACY_ACTION_TYPES = [
         'search_hotels',
         'search_insurance',
-        'search_esim',
     ];
 
     public const CATEGORIES = [

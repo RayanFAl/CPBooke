@@ -382,6 +382,10 @@ class SupportService
     /**
      * Mark customer-visible agent messages as seen.
      *
+     * Opening the chat must clear the customer badge: always mark every unseen
+     * agent message on the ticket. Optional message_ids are accepted for API
+     * compatibility / client logging but do not leave other agent messages unread.
+     *
      * @param  array<int, int|string>|null  $messageIds
      */
     public function markMessagesSeenForCustomer(SupportTicket $ticket, User $customer, ?array $messageIds = null): int
@@ -394,17 +398,26 @@ class SupportService
             return 0;
         }
 
-        $query = SupportMessage::query()
+        // message_ids kept in the signature for the mobile contract; badge clear
+        // requires marking the full agent unread set for this ticket.
+        return SupportMessage::query()
             ->where('support_ticket_id', $ticket->id)
             ->where('is_internal', false)
-            ->where('sender_type', 'agent')
-            ->whereNull('seen_at');
-
-        if (is_array($messageIds) && $messageIds !== []) {
-            $query->whereIn('id', array_map('intval', $messageIds));
-        }
-
-        return $query->update(['seen_at' => now()]);
+            ->whereNull('seen_at')
+            ->where(function ($query): void {
+                $query->where('sender_type', 'agent')
+                    ->orWhere(function ($legacy): void {
+                        // Older rows may lack sender_type — treat admin authors as agents.
+                        $legacy->where(function ($emptySender): void {
+                            $emptySender->whereNull('sender_type')
+                                ->orWhere('sender_type', '');
+                        })->whereHas('user', function ($user): void {
+                            $user->where('is_admin', true)
+                                ->orWhere('account_type', User::ACCOUNT_TYPE_ADMIN);
+                        });
+                    });
+            })
+            ->update(['seen_at' => now()]);
     }
 
     /**

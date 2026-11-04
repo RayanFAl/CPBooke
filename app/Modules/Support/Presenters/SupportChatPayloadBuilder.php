@@ -114,16 +114,23 @@ class SupportChatPayloadBuilder
 
     private function unreadCount(SupportTicket $ticket, ?string $viewerType): int
     {
-        if ($viewerType === null) {
+        $normalizedViewer = $this->normalizeViewerType($viewerType);
+
+        if ($normalizedViewer === null) {
             return $this->supportsSeenAtColumn()
-                ? $ticket->messages()->whereNull('seen_at')->count()
+                ? $ticket->messages()
+                    ->where('is_internal', false)
+                    ->whereNull('seen_at')
+                    ->count()
                 : 0;
         }
 
         if ($this->supportsSeenAtColumn() && $this->supportsSenderTypeColumn()) {
-            $targetSenderType = $viewerType === 'customer' ? 'agent' : 'customer';
+            // Customer badge = unseen agent messages. Agent badge = unseen customer messages.
+            $targetSenderType = $normalizedViewer === 'customer' ? 'agent' : 'customer';
 
             return $ticket->messages()
+                ->where('is_internal', false)
                 ->whereNull('seen_at')
                 ->where('sender_type', $targetSenderType)
                 ->count();
@@ -133,16 +140,35 @@ class SupportChatPayloadBuilder
 
         $lastMessage = $ticket->latestMessage;
 
-        if ($lastMessage === null) {
+        if ($lastMessage === null || $lastMessage->is_internal) {
             return 0;
         }
 
         $lastSenderType = $this->resolveSenderType($lastMessage);
 
-        return ($viewerType === 'customer' && $lastSenderType === 'agent')
-            || ($viewerType === 'agent' && $lastSenderType === 'customer')
+        return ($normalizedViewer === 'customer' && $lastSenderType === 'agent')
+            || ($normalizedViewer === 'agent' && $lastSenderType === 'customer')
                 ? 1
                 : 0;
+    }
+
+    /**
+     * Controllers historically passed "user" for the customer app viewer.
+     * Normalize aliases so unread_count counts the opposite party's messages.
+     */
+    private function normalizeViewerType(?string $viewerType): ?string
+    {
+        if ($viewerType === null || $viewerType === '') {
+            return null;
+        }
+
+        $viewerType = strtolower(trim($viewerType));
+
+        return match ($viewerType) {
+            'customer', 'user', 'client' => 'customer',
+            'agent', 'admin', 'staff', 'support' => 'agent',
+            default => $viewerType,
+        };
     }
 
     private function resolveSenderType(SupportMessage $message): string

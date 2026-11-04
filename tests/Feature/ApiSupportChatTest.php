@@ -126,6 +126,84 @@ class ApiSupportChatTest extends TestCase
             ->assertJsonPath('data.ticket.unread_count', 0);
 
         $this->assertNotNull($message->fresh()->seen_at);
+
+        // Badge must stay cleared after a fresh tickets list fetch (not only in /seen response).
+        $this->getJson('/api/v1/support/chat/tickets')
+            ->assertOk()
+            ->assertJsonPath('data.tickets.0.unread_count', 0);
+    }
+
+    public function test_seen_clears_all_agent_unread_even_when_message_ids_are_partial(): void
+    {
+        $customer = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_CUSTOMER,
+            'is_admin' => false,
+        ]);
+        $agent = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+        ]);
+
+        $ticket = SupportTicket::query()->create([
+            'ticket_number' => 'SUP-CHAT-1003',
+            'user_id' => $customer->id,
+            'order_id' => null,
+            'category' => 'payment_issue',
+            'priority' => 'high',
+            'status' => 'open',
+            'assigned_to' => $agent->id,
+            'subject' => 'Partial seen ids',
+            'description' => 'Unread ticket.',
+        ]);
+
+        $first = SupportMessage::query()->create([
+            'support_ticket_id' => $ticket->id,
+            'user_id' => $agent->id,
+            'message' => 'Agent message one.',
+            'is_internal' => false,
+            'sender_type' => 'agent',
+            'message_type' => 'text',
+            'delivered_at' => now(),
+            'seen_at' => null,
+        ]);
+        SupportMessage::query()->create([
+            'support_ticket_id' => $ticket->id,
+            'user_id' => $agent->id,
+            'message' => 'Agent message two.',
+            'is_internal' => false,
+            'sender_type' => 'agent',
+            'message_type' => 'text',
+            'delivered_at' => now(),
+            'seen_at' => null,
+        ]);
+        SupportMessage::query()->create([
+            'support_ticket_id' => $ticket->id,
+            'user_id' => $customer->id,
+            'message' => 'Customer reply.',
+            'is_internal' => false,
+            'sender_type' => 'customer',
+            'message_type' => 'text',
+            'delivered_at' => now(),
+            'seen_at' => null,
+        ]);
+
+        Sanctum::actingAs($customer);
+
+        $this->getJson('/api/v1/support/chat/tickets')
+            ->assertOk()
+            ->assertJsonPath('data.tickets.0.unread_count', 2);
+
+        // Client may only send currently visible message ids — badge must still clear.
+        $this->postJson("/api/v1/support/chat/tickets/{$ticket->id}/seen", [
+            'message_ids' => [$first->id],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.seen_count', 2)
+            ->assertJsonPath('data.ticket.unread_count', 0);
+
+        $this->getJson('/api/v1/support/chat/tickets')
+            ->assertOk()
+            ->assertJsonPath('data.tickets.0.unread_count', 0);
     }
 
     public function test_customer_can_send_chat_pdf_attachment_without_text(): void

@@ -44,7 +44,7 @@ class SupportChatApiController extends Controller
         return ApiResponse::success(
             [
                 'tickets' => collect($tickets->items())
-                    ->map(fn ($ticket): array => $this->payloadBuilder->ticket($ticket, 'user'))
+                    ->map(fn ($ticket): array => $this->payloadBuilder->ticket($ticket, 'customer'))
                     ->values()
                     ->all(),
             ],
@@ -70,7 +70,7 @@ class SupportChatApiController extends Controller
 
         return ApiResponse::success(
             [
-                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'user'),
+                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'customer'),
             ],
             'Support chat ticket fetched successfully.',
         );
@@ -90,7 +90,7 @@ class SupportChatApiController extends Controller
 
         return ApiResponse::success(
             [
-                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'user'),
+                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'customer'),
                 'messages' => $this->payloadBuilder->messages($messages->items()),
             ],
             'Support chat messages fetched successfully.',
@@ -139,7 +139,7 @@ class SupportChatApiController extends Controller
 
         return ApiResponse::success(
             [
-                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'user'),
+                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'customer'),
                 'message' => $message ? $this->payloadBuilder->message($message) : null,
             ],
             'Support chat message sent successfully.',
@@ -194,7 +194,7 @@ class SupportChatApiController extends Controller
         return ApiResponse::success(
             [
                 'is_typing' => (bool) $typingPayload['typing'],
-                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'user'),
+                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'customer'),
                 'typing' => $typingPayload,
             ],
             'Support typing state updated successfully.',
@@ -224,7 +224,7 @@ class SupportChatApiController extends Controller
 
         return ApiResponse::success(
             [
-                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'user'),
+                'ticket' => $this->payloadBuilder->ticket($supportTicket, 'customer'),
                 'seen_count' => $seenCount,
             ],
             'Support messages marked as seen successfully.',

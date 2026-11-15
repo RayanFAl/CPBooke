@@ -85,7 +85,7 @@ const submit = () => {
 
         <section class="mx-auto max-w-3xl space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <Link :href="route('admin.home.index', { tab: 'offers' })" class="text-sm text-cyan-700 hover:underline">
+                <Link :href="route('admin.home.index', { tab: 'offers' })" class="text-sm text-[#2f6db8] hover:underline">
                     {{ backArrow }} {{ t('Back to home content') }}
                 </Link>
                 <h2 class="mt-3 text-2xl font-semibold text-slate-950">
@@ -165,7 +165,7 @@ const submit = () => {
                             <label class="block text-sm font-medium">{{ actionValueLabel }}</label>
                             <button
                                 type="button"
-                                class="text-xs font-medium text-cyan-700 hover:underline"
+                                class="text-xs font-medium text-[#2f6db8] hover:underline"
                                 @click="fillActionValueExample"
                             >
                                 {{ t('Insert example') }}

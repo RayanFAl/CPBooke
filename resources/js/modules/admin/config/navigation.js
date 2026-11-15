@@ -1,7 +1,8 @@
 /**
  * Admin sidebar navigation.
  *
- * Daily work first, then money and providers, then content, then system tools.
+ * Clear daily flow:
+ * 1) Work  2) People  3) Money  4) Providers  5) Content  6) Marketing  7) App  8) Admin tools
  */
 export const navigationItems = [
     {
@@ -9,6 +10,34 @@ export const navigationItems = [
         route: 'admin.dashboard',
         startsWith: '/admin/dashboard',
         icon: 'dashboard',
+    },
+    {
+        label: 'Operations',
+        icon: 'orders',
+        children: [
+            {
+                label: 'Orders',
+                route: 'admin.orders.index',
+                startsWith: '/admin/orders',
+                inactiveWhenStartsWith: '/admin/orders/book',
+                permission: 'orders.view',
+                icon: 'orders',
+            },
+            {
+                label: 'Book for customer',
+                route: 'admin.orders.book',
+                startsWith: '/admin/orders/book',
+                permission: 'orders.agent-book',
+                icon: 'orders',
+            },
+            {
+                label: 'Support',
+                route: 'admin.support.index',
+                startsWith: '/admin/support',
+                permission: 'support.view',
+                icon: 'support',
+            },
+        ],
     },
     {
         label: 'People',
@@ -27,26 +56,6 @@ export const navigationItems = [
                 startsWith: '/admin/team',
                 permission: 'users.view',
                 icon: 'team',
-            },
-        ],
-    },
-    {
-        label: 'Operations',
-        icon: 'orders',
-        children: [
-            {
-                label: 'Orders',
-                route: 'admin.orders.index',
-                startsWith: '/admin/orders',
-                permission: 'orders.view',
-                icon: 'orders',
-            },
-            {
-                label: 'Support',
-                route: 'admin.support.index',
-                startsWith: '/admin/support',
-                permission: 'support.view',
-                icon: 'support',
             },
         ],
     },
@@ -74,6 +83,21 @@ export const navigationItems = [
                 startsWith: '/admin/approvals',
                 permission: 'approvals.view',
                 icon: 'governance',
+            },
+            {
+                label: 'Exchange Rates',
+                route: 'admin.exchange-rates.index',
+                startsWith: '/admin/exchange-rates',
+                permission: 'exchange-rates.view',
+                icon: 'settings',
+                matchExact: true,
+            },
+            {
+                label: 'Daily FX report',
+                route: 'admin.exchange-rates.daily-report',
+                startsWith: '/admin/exchange-rates/daily-report',
+                permission: 'exchange-rates.view',
+                icon: 'finance',
             },
         ],
     },
@@ -108,6 +132,13 @@ export const navigationItems = [
                 startsWith: '/admin/provider-health',
                 permission: 'provider-health.view',
                 icon: 'health',
+            },
+            {
+                label: 'Partners',
+                route: 'admin.partners.index',
+                startsWith: '/admin/partners',
+                permission: 'partners.view',
+                icon: 'governance',
             },
         ],
     },
@@ -146,7 +177,7 @@ export const navigationItems = [
         ],
     },
     {
-        label: 'Engage',
+        label: 'Marketing',
         icon: 'notifications',
         children: [
             {
@@ -169,6 +200,33 @@ export const navigationItems = [
                 startsWith: '/admin/notifications',
                 permission: 'notifications.view',
                 icon: 'notifications',
+            },
+        ],
+    },
+    {
+        label: 'Platform',
+        icon: 'governance',
+        children: [
+            {
+                label: 'Mobile App',
+                route: 'admin.mobile-app.index',
+                startsWith: '/admin/mobile-app',
+                permission: 'settings.manage',
+                icon: 'governance',
+            },
+            {
+                label: 'AI Assistant',
+                route: 'admin.ai.settings.index',
+                startsWith: '/admin/ai/settings',
+                permission: 'settings.manage',
+                icon: 'governance',
+            },
+            {
+                label: 'AI Request Logs',
+                route: 'admin.ai.logs.index',
+                startsWith: '/admin/ai/logs',
+                permission: 'settings.manage',
+                icon: 'governance',
             },
         ],
     },
@@ -198,54 +256,11 @@ export const navigationItems = [
                 icon: 'governance',
             },
             {
-                label: 'Partners',
-                route: 'admin.partners.index',
-                startsWith: '/admin/partners',
-                permission: 'partners.view',
-                icon: 'governance',
-            },
-            {
                 label: 'Settings',
                 route: 'admin.settings.index',
                 startsWith: '/admin/settings',
                 permission: 'settings.manage',
                 icon: 'settings',
-            },
-            {
-                label: 'Exchange Rates',
-                route: 'admin.exchange-rates.index',
-                startsWith: '/admin/exchange-rates',
-                permission: 'exchange-rates.view',
-                icon: 'settings',
-                matchExact: true,
-            },
-            {
-                label: 'Daily FX report',
-                route: 'admin.exchange-rates.daily-report',
-                startsWith: '/admin/exchange-rates/daily-report',
-                permission: 'exchange-rates.view',
-                icon: 'finance',
-            },
-            {
-                label: 'Mobile App',
-                route: 'admin.mobile-app.index',
-                startsWith: '/admin/mobile-app',
-                permission: 'settings.manage',
-                icon: 'governance',
-            },
-            {
-                label: 'AI Assistant',
-                route: 'admin.ai.settings.index',
-                startsWith: '/admin/ai/settings',
-                permission: 'settings.manage',
-                icon: 'governance',
-            },
-            {
-                label: 'AI Request Logs',
-                route: 'admin.ai.logs.index',
-                startsWith: '/admin/ai/logs',
-                permission: 'settings.manage',
-                icon: 'governance',
             },
         ],
     },

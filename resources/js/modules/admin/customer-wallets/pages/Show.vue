@@ -317,7 +317,7 @@ watch(
                     <div>
                         <Link
                             :href="route('admin.customer-wallets.index')"
-                            class="text-sm font-medium text-cyan-700 hover:text-cyan-800"
+                            class="text-sm font-medium text-[#2f6db8] hover:text-[#255991]"
                         >
                             {{ backArrow }} {{ t('Back to customer wallets') }}
                         </Link>
@@ -325,7 +325,7 @@ watch(
                             <Link
                                 v-if="can_view_user"
                                 :href="route('admin.users.show', wallet.user_id)"
-                                class="hover:text-cyan-800"
+                                class="hover:text-[#255991]"
                             >
                                 {{ wallet.user_name }}
                             </Link>
@@ -533,7 +533,7 @@ watch(
                                         {{ t('Order') }}:
                                         <Link
                                             :href="route('admin.orders.show', tx.order.id)"
-                                            class="font-medium text-cyan-700 hover:text-cyan-800"
+                                            class="font-medium text-[#2f6db8] hover:text-[#255991]"
                                         >
                                             {{ tx.order.booking_reference || tx.order.external_booking_id }}
                                         </Link>
@@ -546,7 +546,7 @@ watch(
                                         :href="tx.print_url"
                                         target="_blank"
                                         rel="noopener"
-                                        class="text-sm font-medium text-cyan-700 hover:text-cyan-800"
+                                        class="text-sm font-medium text-[#2f6db8] hover:text-[#255991]"
                                     >
                                         {{ t('Print') }}
                                     </a>

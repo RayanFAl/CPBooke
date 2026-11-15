@@ -663,6 +663,19 @@ class SupportService
     }
 
     /**
+     * Locate the latest reusable ticket linked to an order.
+     */
+    public function findOpenTicketForOrder(int $orderId): ?SupportTicket
+    {
+        return SupportTicket::query()
+            ->where('order_id', $orderId)
+            ->whereIn('status', self::REUSABLE_CONVERSATION_STATUSES)
+            ->latest('updated_at')
+            ->latest('id')
+            ->first();
+    }
+
+    /**
      * Locate the latest open ticket matching the same order first, then the same subject.
      */
     private function findOpenConversationTicket(int $userId, ?string $subject = null, ?int $orderId = null): ?SupportTicket

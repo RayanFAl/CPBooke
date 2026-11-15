@@ -11,7 +11,7 @@ const palette = {
     completed: 'bg-emerald-100 text-emerald-800',
     pending: 'bg-amber-100 text-amber-800',
     failed: 'bg-rose-100 text-rose-800',
-    reversed: 'bg-violet-100 text-violet-800',
+    reversed: 'bg-[#2f6db8]/10 text-[#255991]',
 };
 
 const label = {

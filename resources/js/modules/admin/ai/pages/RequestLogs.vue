@@ -44,7 +44,7 @@ const formatTime = (value) => {
 
 const badgeClass = (source) => {
     if (source === 'gemini' || source === 'gemini_or_local') {
-        return 'bg-cyan-100 text-cyan-800';
+        return 'bg-[#2f6db8]/10 text-[#255991]';
     }
     if (source === 'rules_hint') {
         return 'bg-slate-200 text-slate-700';
@@ -75,7 +75,7 @@ const slotsText = (summary) => {
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div class="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Platform') }}</p>
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">{{ t('Platform') }}</p>
                         <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('AI Request Logs') }}</h2>
                         <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
                             {{ t('User messages sent to /api/v1/ai/travel-assistant. Conversation and offers payloads are not stored.') }}

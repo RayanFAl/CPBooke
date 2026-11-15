@@ -137,7 +137,7 @@ const submitReleaseSettings = () => {
     >
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Platform') }}</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">{{ t('Platform') }}</p>
                 <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Mobile App') }}</h2>
                 <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
                     {{ t('Upload APK builds for Android sideloading. The latest version_code is served automatically to the mobile app update API and the public download page.') }}
@@ -176,10 +176,10 @@ const submitReleaseSettings = () => {
                         <p v-if="release.sha256" class="break-all text-xs text-slate-500"><span class="font-medium text-slate-700">SHA-256:</span> {{ release.sha256 }}</p>
 
                         <div class="space-y-2 pt-2">
-                            <a :href="download_page_url" target="_blank" rel="noopener noreferrer" class="block text-cyan-700 hover:underline">
+                            <a :href="download_page_url" target="_blank" rel="noopener noreferrer" class="block text-[#2f6db8] hover:underline">
                                 {{ t('Public download page') }} {{ forwardArrow }}
                             </a>
-                            <a :href="download_file_url" target="_blank" rel="noopener noreferrer" class="block text-cyan-700 hover:underline">
+                            <a :href="download_file_url" target="_blank" rel="noopener noreferrer" class="block text-[#2f6db8] hover:underline">
                                 {{ t('Direct APK download') }} {{ forwardArrow }}
                             </a>
                             <p class="text-xs text-slate-500">{{ t('Update API') }}: {{ update_check_url }}</p>
@@ -242,7 +242,7 @@ const submitReleaseSettings = () => {
                             <input
                                 v-model="uploadForm.notify_users"
                                 type="checkbox"
-                                class="mt-0.5 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                                class="mt-0.5 rounded border-slate-300 text-[#2f6db8] focus:ring-[#2f6db8]"
                             >
                             <span>
                                 <span class="font-medium">{{ t('Notify users') }}</span>
@@ -301,7 +301,7 @@ const submitReleaseSettings = () => {
                         <input
                             v-model="releaseForm.force_update"
                             type="checkbox"
-                            class="mt-0.5 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                            class="mt-0.5 rounded border-slate-300 text-[#2f6db8] focus:ring-[#2f6db8]"
                         >
                         <span>
                             <span class="font-medium">{{ t('Force update') }}</span>
@@ -314,7 +314,7 @@ const submitReleaseSettings = () => {
                         <input
                             v-model="releaseForm.notify_users"
                             type="checkbox"
-                            class="mt-0.5 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                            class="mt-0.5 rounded border-slate-300 text-[#2f6db8] focus:ring-[#2f6db8]"
                         >
                         <span>
                             <span class="font-medium">{{ t('Notify users') }}</span>
@@ -375,7 +375,7 @@ const submitReleaseSettings = () => {
                                 <td class="px-3 py-3 text-end">
                                     <button
                                         type="button"
-                                        class="text-cyan-700 hover:underline"
+                                        class="text-[#2f6db8] hover:underline"
                                         @click="useApkInSettings(file)"
                                     >
                                         {{ t('Use in release settings') }}

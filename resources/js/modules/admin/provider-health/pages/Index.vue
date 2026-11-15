@@ -47,7 +47,7 @@ const formatTime = (value) => {
 
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Operations') }}</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">{{ t('Operations') }}</p>
                 <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Provider Health') }}</h2>
                 <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
                     {{ t('Network operations center for suppliers: API status, wallets, settlements, approvals, and live alerts before customers notice.') }}

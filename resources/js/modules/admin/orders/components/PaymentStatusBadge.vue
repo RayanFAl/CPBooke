@@ -15,7 +15,7 @@ const paletteByStatus = {
     pending_payment: 'bg-amber-100 text-amber-800',
     paid: 'bg-emerald-100 text-emerald-800',
     partially_refunded: 'bg-orange-100 text-orange-800',
-    refunded: 'bg-violet-100 text-violet-800',
+    refunded: 'bg-[#2f6db8]/10 text-[#255991]',
     failed: 'bg-rose-100 text-rose-800',
 };
 

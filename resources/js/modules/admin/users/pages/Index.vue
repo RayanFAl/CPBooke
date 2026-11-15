@@ -268,7 +268,7 @@ const users = computed(() => props.users);
             <div class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 text-slate-900 shadow-sm">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">
                             {{ t('Admin Smart Grid') }}
                         </p>
                         <h2 class="mt-2 text-2xl font-semibold text-slate-950">
@@ -288,7 +288,7 @@ const users = computed(() => props.users);
                         <Link
                             v-if="canCreateUsers"
                             :href="route('admin.team.create')"
-                            class="inline-flex items-center justify-center rounded-2xl bg-cyan-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-cyan-700"
+                            class="inline-flex items-center justify-center rounded-2xl bg-[#2f6db8] px-4 py-3 text-sm font-medium text-white transition hover:bg-[#255991]"
                         >
                             {{ t('Add team member') }}
                         </Link>
@@ -367,13 +367,13 @@ const users = computed(() => props.users);
                             <input
                                 v-model="filterForm.created_from"
                                 type="date"
-                                class="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
+                                class="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]"
                             >
                             <span class="text-sm text-slate-300">-</span>
                             <input
                                 v-model="filterForm.created_to"
                                 type="date"
-                                class="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
+                                class="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]"
                             >
                         </div>
                     </div>
@@ -422,7 +422,7 @@ const users = computed(() => props.users);
                             <tr
                                 v-for="user in displayedUsers"
                                 :key="user.id"
-                                class="group cursor-pointer bg-white align-top transition duration-200 hover:bg-cyan-50/50"
+                                class="group cursor-pointer bg-white align-top transition duration-200 hover:bg-[#2f6db8]/5"
                                 role="link"
                                 :aria-label="`${t('Open profile for')} ${user.full_name || user.email}`"
                                 tabindex="0"
@@ -484,7 +484,7 @@ const users = computed(() => props.users);
                         v-for="user in displayedUsers"
                         :key="`mobile-${user.id}`"
                         type="button"
-                        class="block w-full px-4 py-4 text-start transition hover:bg-cyan-50/50"
+                        class="block w-full px-4 py-4 text-start transition hover:bg-[#2f6db8]/5"
                         @click="openUserPage(user)"
                     >
                         <div class="flex items-start gap-3">

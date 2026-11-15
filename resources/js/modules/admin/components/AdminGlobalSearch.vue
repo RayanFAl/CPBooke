@@ -286,7 +286,7 @@ defineExpose({ openPalette });
                                     type="button"
                                     class="block w-full rounded-2xl px-4 py-3 text-start transition"
                                     :class="flatResults[activeIndex]?.id === item.id && flatResults[activeIndex]?.type === item.type
-                                        ? 'bg-cyan-50 text-slate-950'
+                                        ? 'bg-[#2f6db8]/10 text-slate-950'
                                         : 'hover:bg-slate-50'"
                                     @click="activateResult(item)"
                                 >
@@ -301,7 +301,7 @@ defineExpose({ openPalette });
                         <span>{{ t('Use arrow keys to navigate, Enter to open') }}</span>
                         <button
                             type="button"
-                            class="font-medium text-cyan-700 transition hover:text-cyan-800"
+                            class="font-medium text-[#2f6db8] transition hover:text-[#255991]"
                             @click="openFullSearch"
                         >
                             {{ t('View all results') }}

@@ -257,7 +257,7 @@ const statusClass = (status) => {
         <section class="space-y-6">
             <section class="grid gap-4 xl:grid-cols-[1.25fr,0.75fr]">
                 <article class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Governance overview') }}</p>
+                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">{{ t('Governance overview') }}</p>
                     <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('One screen for risk and control') }}</h2>
                     <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
                         {{ t('Track permissions, financial anomalies, notification delivery, and loyalty changes without jumping between modules.') }}

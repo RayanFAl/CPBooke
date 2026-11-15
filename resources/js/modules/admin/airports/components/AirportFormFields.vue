@@ -10,7 +10,7 @@ defineProps({
 
 const { t } = useAdminLocale();
 
-const fieldClass = 'mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600';
+const fieldClass = 'mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]';
 const labelClass = 'text-sm font-medium text-slate-700';
 const sectionClass = 'space-y-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-5';
 </script>

@@ -101,7 +101,7 @@ const submit = () => {
     >
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Settings') }}</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">{{ t('Settings') }}</p>
                 <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Exchange Rates') }}</h2>
                 <p class="mt-3 max-w-3xl text-base leading-7 text-slate-700">
                     {{ t('Enter buy and sell prices in Libyan Dinars for 1 USD and 1 EUR. LYD stays fixed at 1.') }}
@@ -212,8 +212,8 @@ const submit = () => {
 
                 <!-- SELL TAB -->
                 <div v-show="activeTab === 'sell'" class="mt-6 grid gap-5 lg:grid-cols-2">
-                    <div class="rounded-3xl border border-sky-100 bg-sky-50/50 p-5">
-                        <p class="text-sm font-semibold text-sky-900">{{ t('US Dollar (USD)') }}</p>
+                    <div class="rounded-3xl border border-[#2f6db8]/20 bg-[#2f6db8]/5 p-5">
+                        <p class="text-sm font-semibold text-[#255991]">{{ t('US Dollar (USD)') }}</p>
                         <label class="mt-4 block text-sm">
                             <span class="mb-2 flex flex-wrap items-center gap-2 font-medium text-slate-800">
                                 <span class="rounded-full bg-white px-3 py-1 text-slate-900 shadow-sm">1 USD</span>
@@ -241,8 +241,8 @@ const submit = () => {
                         </p>
                     </div>
 
-                    <div class="rounded-3xl border border-sky-100 bg-sky-50/50 p-5">
-                        <p class="text-sm font-semibold text-sky-900">{{ t('Euro (EUR)') }}</p>
+                    <div class="rounded-3xl border border-[#2f6db8]/20 bg-[#2f6db8]/5 p-5">
+                        <p class="text-sm font-semibold text-[#255991]">{{ t('Euro (EUR)') }}</p>
                         <label class="mt-4 block text-sm">
                             <span class="mb-2 flex flex-wrap items-center gap-2 font-medium text-slate-800">
                                 <span class="rounded-full bg-white px-3 py-1 text-slate-900 shadow-sm">1 EUR</span>

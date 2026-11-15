@@ -12,7 +12,7 @@ const { t } = useAdminLocale();
 
 const paletteByPriority = {
     low: 'bg-slate-200 text-slate-700',
-    medium: 'bg-cyan-100 text-cyan-800',
+    medium: 'bg-[#2f6db8]/10 text-[#255991]',
     high: 'bg-amber-100 text-amber-800',
     urgent: 'bg-rose-100 text-rose-800',
 };

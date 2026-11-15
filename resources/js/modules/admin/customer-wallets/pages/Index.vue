@@ -134,7 +134,7 @@ const openWallet = (wallet) => {
                                 <td class="px-4 py-3 text-right">
                                     <Link
                                         :href="route('admin.customer-wallets.show', wallet.id)"
-                                        class="text-sm font-medium text-cyan-700 hover:text-cyan-800"
+                                        class="text-sm font-medium text-[#2f6db8] hover:text-[#255991]"
                                     >
                                         {{ t('View') }}
                                     </Link>

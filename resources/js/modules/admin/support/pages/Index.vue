@@ -368,63 +368,60 @@ onBeforeUnmount(() => {
 
     <AdminLayout
         title="Support"
-        description="Review support tickets in an inbox tuned for chat workflows, unread triage, and fast thread handoff."
+        description="Triage tickets and open live chat threads."
     >
-        <section class="space-y-6">
-            <div class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 text-slate-900 shadow-sm">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <section class="space-y-5">
+            <div class="admin-panel p-5 sm:p-6 text-slate-900">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
+                        <p class="admin-eyebrow">
                             {{ t('Care Desk') }}
                         </p>
-                        <h2 class="mt-2 text-2xl font-semibold text-slate-950">{{ t('Support inbox') }}</h2>
-                        <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                            {{ t('Prioritize unread conversations, scan the latest reply instantly, and jump into live chat threads with less cognitive overhead.') }}
-                        </p>
+                        <h2 class="mt-1.5 text-xl font-semibold tracking-tight text-slate-950">{{ t('Support inbox') }}</h2>
                     </div>
 
-                    <div class="flex flex-wrap items-center gap-3">
-                        <div class="rounded-2xl bg-slate-950 px-4 py-3 text-sm text-white">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <div class="rounded-xl bg-[#2f6db8] px-3.5 py-2 text-sm font-medium text-white">
                             {{ ticketsCountLabel }}
                         </div>
                         <Link
                             :href="route('admin.support.reports.index')"
-                            class="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                            class="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                         >
                             {{ t('Support reports') }}
                         </Link>
                         <Link
                             :href="route('admin.support.create')"
-                            class="inline-flex items-center justify-center rounded-2xl bg-cyan-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-cyan-700"
+                            class="inline-flex items-center justify-center rounded-xl bg-[#2f6db8] px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-[#255991]"
                         >
                             {{ t('Create ticket') }}
                         </Link>
                     </div>
                 </div>
 
-                <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <button
                         v-for="metric in summaryMetrics"
                         :key="metric.label"
                         type="button"
-                        class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left transition hover:bg-slate-100"
-                        :class="filterForm.status === metric.status ? 'border-cyan-600 ring-1 ring-cyan-600/30' : ''"
+                        class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-left transition hover:bg-slate-100"
+                        :class="filterForm.status === metric.status ? 'border-[#2f6db8] ring-1 ring-[#2f6db8]/30' : ''"
                         @click="applyStatusFromMetric(metric.status)"
                     >
-                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ metric.label }}</p>
-                        <p class="mt-2 text-2xl font-semibold text-slate-950">{{ metric.value }}</p>
+                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ metric.label }}</p>
+                        <p class="mt-1.5 text-2xl font-semibold text-slate-950">{{ metric.value }}</p>
                     </button>
                 </div>
             </div>
 
-            <div class="sticky top-0 z-20 overflow-hidden rounded-[2rem] border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur">
+            <div class="admin-panel sticky top-0 z-20 overflow-hidden bg-white/95 p-3 backdrop-blur">
                 <div class="mb-3 flex flex-wrap gap-2">
                     <button
                         v-for="queue in queueOptions"
                         :key="queue.name"
                         type="button"
                         class="inline-flex h-10 items-center gap-2 rounded-2xl border px-4 text-sm font-medium transition"
-                        :class="filterForm.queue === queue.name ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-200 text-slate-700 hover:bg-slate-50'"
+                        :class="filterForm.queue === queue.name ? 'border-[#2f6db8] bg-[#2f6db8] text-white' : 'border-slate-200 text-slate-700 hover:bg-slate-50'"
                         @click="applyQueue(queue.name)"
                     >
                         <span>{{ queue.label }}</span>
@@ -515,7 +512,7 @@ onBeforeUnmount(() => {
 
                     <button
                         type="submit"
-                        class="inline-flex h-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 px-5 text-sm font-medium text-white transition hover:bg-slate-800"
+                        class="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[#2f6db8] px-5 text-sm font-semibold text-white transition hover:bg-[#255991]"
                     >
                         {{ t('Apply') }}
                     </button>
@@ -543,7 +540,7 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-            <div class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+            <div class="admin-panel overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-slate-200">
                         <thead class="bg-slate-50">
@@ -565,7 +562,7 @@ onBeforeUnmount(() => {
                             <tr
                                 v-for="ticket in tickets.data"
                                 :key="ticket.id"
-                                class="group cursor-pointer bg-white align-top transition duration-200 hover:bg-cyan-50/50"
+                                class="admin-row-hover group cursor-pointer bg-white align-top transition duration-150"
                                 :class="ticket.has_unread_for_admin ? 'bg-rose-50/50 hover:bg-rose-50/70' : ''"
                                 role="link"
                                 :aria-label="`${t('Open full ticket')} ${ticket.ticket_number}`"
@@ -661,7 +658,7 @@ onBeforeUnmount(() => {
                             :key="`${link.label}-${link.url}`"
                             :href="link.url"
                             class="rounded-xl px-3 py-2 text-sm font-medium transition"
-                            :class="link.active ? 'bg-slate-950 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'"
+                            :class="link.active ? 'bg-[#2f6db8] text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'"
                             v-html="paginationLabel(link.label)"
                         />
                     </nav>

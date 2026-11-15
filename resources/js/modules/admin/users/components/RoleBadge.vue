@@ -13,7 +13,7 @@ const { t } = useAdminLocale();
 
 const paletteByRole = {
     super_admin: 'bg-rose-100 text-rose-800',
-    admin: 'bg-cyan-100 text-cyan-800',
+    admin: 'bg-[#2f6db8]/10 text-[#255991]',
     team_member: 'bg-amber-100 text-amber-800',
     none: 'bg-slate-100 text-slate-700',
 };

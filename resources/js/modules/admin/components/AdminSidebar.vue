@@ -49,6 +49,13 @@ const userInitials = computed(() => {
 const isActive = (item) => {
     const url = page.url.split('?')[0];
 
+    if (item.inactiveWhenStartsWith && (
+        url === item.inactiveWhenStartsWith
+        || url.startsWith(`${item.inactiveWhenStartsWith}/`)
+    )) {
+        return false;
+    }
+
     if (item.matchExact) {
         return url === item.startsWith;
     }
@@ -154,9 +161,9 @@ const handleNavigate = () => {
 </script>
 
 <template>
-    <aside class="flex h-full min-h-0 w-full flex-col bg-slate-950 text-slate-100">
+    <aside class="flex h-full min-h-0 w-full flex-col bg-[#0b1220] text-slate-100">
         <div
-            class="flex items-start gap-2 border-b border-slate-800 px-3 py-4"
+            class="flex items-start gap-2 border-b border-white/10 px-3 py-4"
             :class="collapsed ? 'justify-center' : 'px-4'"
         >
             <div
@@ -166,19 +173,19 @@ const handleNavigate = () => {
                 <img
                     src="/images/app_logo.png"
                     alt="Booke"
-                    class="h-10 w-10 shrink-0 rounded-xl object-contain shadow-sm shadow-slate-950/40"
+                    class="h-10 w-10 shrink-0 rounded-xl object-contain shadow-sm shadow-black/30"
                 >
                 <div class="min-w-0" :class="collapsed ? 'sr-only' : ''">
-                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-400">
+                    <p class="text-[0.7rem] font-semibold uppercase tracking-[0.28em] text-[#f0b429]">
                         {{ companyName }}
                     </p>
-                    <h1 class="mt-1 truncate text-lg font-semibold">{{ t('Control Panel') }}</h1>
+                    <h1 class="mt-1 truncate text-lg font-semibold tracking-tight">{{ t('Control Panel') }}</h1>
                 </div>
             </div>
 
             <button
                 type="button"
-                class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-900 hover:text-white"
+                class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/5 hover:text-white"
                 :title="collapsed ? t('Expand sidebar') : t('Collapse sidebar')"
                 :aria-label="collapsed ? t('Expand sidebar') : t('Collapse sidebar')"
                 @click="emit('toggle-collapse')"
@@ -211,8 +218,8 @@ const handleNavigate = () => {
                     :class="[
                         collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
                         isActive(item)
-                            ? 'bg-slate-800 text-white shadow-lg shadow-slate-950/30'
-                            : 'text-slate-300 hover:bg-slate-900 hover:text-white',
+                            ? 'bg-[#2f6db8] text-white shadow-lg shadow-black/20'
+                            : 'text-slate-300 hover:bg-white/5 hover:text-white',
                     ]"
                     :title="collapsed ? t(item.label) : undefined"
                     @click="handleNavigate"
@@ -226,7 +233,7 @@ const handleNavigate = () => {
                 <div v-else class="space-y-1">
                     <button
                         type="button"
-                        class="flex w-full items-center rounded-xl text-sm font-medium text-slate-300 transition hover:bg-slate-900 hover:text-white"
+                        class="flex w-full items-center rounded-xl text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
                         :class="[
                             collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
                             groupHasActiveChild(item) ? 'text-white' : '',
@@ -257,7 +264,7 @@ const handleNavigate = () => {
 
                     <div
                         v-if="!collapsed && isGroupOpen(item)"
-                        class="ms-3 space-y-1 border-s border-slate-800 ps-2"
+                        class="ms-3 space-y-1 border-s border-white/10 ps-2"
                     >
                         <Link
                             v-for="child in item.children"
@@ -265,8 +272,8 @@ const handleNavigate = () => {
                             :href="route(child.route)"
                             class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition"
                             :class="isActive(child)
-                                ? 'bg-slate-800 text-white'
-                                : 'text-slate-400 hover:bg-slate-900 hover:text-white'"
+                                ? 'bg-[#2f6db8]/20 text-white ring-1 ring-[#2f6db8]/40'
+                                : 'text-slate-400 hover:bg-white/5 hover:text-white'"
                             @click="handleNavigate"
                         >
                             <svg class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -279,12 +286,12 @@ const handleNavigate = () => {
             </template>
         </nav>
 
-        <div class="border-t border-slate-800 p-2">
+        <div class="border-t border-white/10 p-2">
             <Link
                 :href="route('logout')"
                 method="post"
                 as="button"
-                class="flex w-full items-center rounded-xl text-sm font-medium text-slate-300 transition hover:bg-slate-900 hover:text-white"
+                class="flex w-full items-center rounded-xl text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
                 :class="collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'"
                 :title="collapsed ? t('Logout') : undefined"
             >

@@ -113,7 +113,7 @@ const snapshotLine = (approval) => {
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Governance') }}</p>
+                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">{{ t('Governance') }}</p>
                     <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Approvals') }}</h2>
                     <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                         {{ t('Review pending refunds, cancellations, and wallet movements before they affect ledgers and provider balances.') }}

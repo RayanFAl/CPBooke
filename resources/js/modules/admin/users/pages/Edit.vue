@@ -73,7 +73,7 @@ const submit = () => {
         <section class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
+                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">
                         {{ t('User Editor') }}
                     </p>
                     <h2 class="mt-2 text-2xl font-semibold text-slate-950">{{ user.full_name }}</h2>
@@ -124,7 +124,7 @@ const submit = () => {
                         <select
                             id="role"
                             v-model="form.role"
-                            class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2f6db8] focus:ring-[#2f6db8]"
                             required
                         >
                             <option value="" disabled>{{ t('Select a role') }}</option>

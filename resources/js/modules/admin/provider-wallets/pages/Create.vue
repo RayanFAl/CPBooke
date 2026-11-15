@@ -55,7 +55,7 @@ const submitWallet = () => {
 
         <section class="mx-auto max-w-2xl space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Step 2') }}</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">{{ t('Step 2') }}</p>
                 <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Create ledger wallet') }}</h2>
                 <p class="mt-2 text-sm text-slate-600">{{ t('Choose a provider, then create their ledger wallet.') }}</p>
             </div>

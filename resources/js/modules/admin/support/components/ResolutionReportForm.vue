@@ -59,7 +59,7 @@ const submit = () => {
                 <h3 class="text-lg font-semibold text-slate-950">{{ t('Resolution Report Form') }}</h3>
                 <p class="mt-1 text-sm text-slate-500">{{ t('Capture the real cause, final actions, and ticket outcome before marking the case complete.') }}</p>
             </div>
-            <span class="inline-flex rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">
+            <span class="inline-flex rounded-full bg-[#2f6db8]/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#2f6db8]">
                 {{ report ? t('Update') : t('Required For Close') }}
             </span>
         </div>
@@ -67,14 +67,14 @@ const submit = () => {
         <div class="grid gap-4 sm:grid-cols-2">
             <div>
                 <label class="text-sm font-medium text-slate-700">{{ t('Resolution Type') }}</label>
-                <select v-model="form.resolution_type" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600">
+                <select v-model="form.resolution_type" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]">
                     <option v-for="option in resolutionTypeOptions" :key="option.name" :value="option.name">{{ t(option.label) }}</option>
                 </select>
                 <p v-if="form.errors.resolution_type" class="mt-2 text-sm text-rose-600">{{ form.errors.resolution_type }}</p>
             </div>
             <div>
                 <label class="text-sm font-medium text-slate-700">{{ t('Status After') }}</label>
-                <select v-model="form.status_after" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600">
+                <select v-model="form.status_after" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]">
                     <option v-for="option in resolutionStatusOptions" :key="option.name" :value="option.name">{{ t(option.label) }}</option>
                 </select>
                 <p v-if="form.errors.status_after" class="mt-2 text-sm text-rose-600">{{ form.errors.status_after }}</p>
@@ -83,42 +83,42 @@ const submit = () => {
 
         <div>
             <label class="text-sm font-medium text-slate-700">{{ t('Root Cause') }}</label>
-            <textarea v-model="form.root_cause" rows="4" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600" />
+            <textarea v-model="form.root_cause" rows="4" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]" />
             <p v-if="form.errors.root_cause" class="mt-2 text-sm text-rose-600">{{ form.errors.root_cause }}</p>
         </div>
 
         <div>
             <label class="text-sm font-medium text-slate-700">{{ t('Actions Taken') }}</label>
-            <textarea v-model="form.actions_taken" rows="4" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600" />
+            <textarea v-model="form.actions_taken" rows="4" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]" />
             <p v-if="form.errors.actions_taken" class="mt-2 text-sm text-rose-600">{{ form.errors.actions_taken }}</p>
         </div>
 
         <div>
             <label class="text-sm font-medium text-slate-700">{{ t('Resolution Summary') }}</label>
-            <textarea v-model="form.resolution_summary" rows="4" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600" />
+            <textarea v-model="form.resolution_summary" rows="4" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]" />
             <p v-if="form.errors.resolution_summary" class="mt-2 text-sm text-rose-600">{{ form.errors.resolution_summary }}</p>
         </div>
 
         <div class="grid gap-4 lg:grid-cols-2">
             <div>
                 <label class="text-sm font-medium text-slate-700">{{ t('Internal Notes') }}</label>
-                <textarea v-model="form.internal_notes" rows="4" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600" />
+                <textarea v-model="form.internal_notes" rows="4" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]" />
                 <p v-if="form.errors.internal_notes" class="mt-2 text-sm text-rose-600">{{ form.errors.internal_notes }}</p>
             </div>
             <div>
                 <label class="text-sm font-medium text-slate-700">{{ t('Customer Visible Notes') }}</label>
-                <textarea v-model="form.customer_visible_notes" rows="4" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600" />
+                <textarea v-model="form.customer_visible_notes" rows="4" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]" />
                 <p v-if="form.errors.customer_visible_notes" class="mt-2 text-sm text-rose-600">{{ form.errors.customer_visible_notes }}</p>
             </div>
         </div>
 
         <div class="flex flex-wrap gap-6 rounded-2xl bg-slate-50 px-4 py-4">
             <label class="inline-flex items-center gap-3 text-sm text-slate-700">
-                <input v-model="form.escalated" type="checkbox" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
+                <input v-model="form.escalated" type="checkbox" class="rounded border-slate-300 text-[#2f6db8] focus:ring-[#2f6db8]">
                 <span>{{ t('Escalated') }}</span>
             </label>
             <label class="inline-flex items-center gap-3 text-sm text-slate-700">
-                <input v-model="form.satisfaction_requested" type="checkbox" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
+                <input v-model="form.satisfaction_requested" type="checkbox" class="rounded border-slate-300 text-[#2f6db8] focus:ring-[#2f6db8]">
                 <span>{{ t('Satisfaction Requested') }}</span>
             </label>
         </div>

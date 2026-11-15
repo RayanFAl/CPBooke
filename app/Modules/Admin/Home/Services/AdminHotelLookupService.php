@@ -102,7 +102,7 @@ class AdminHotelLookupService
                     'children' => [],
                 ],
             ],
-            'language' => 'en',
+            'language' => 'fr-FR',
             'page' => 1,
         ];
 
@@ -118,9 +118,15 @@ class AdminHotelLookupService
                 ];
             }
 
+            $searchUuid = $this->firstString($body, ['search_uuid', 'searchUuid']);
+            if ($searchUuid === '' && isset($body['data']) && is_array($body['data'])) {
+                $searchUuid = $this->firstString($body['data'], ['search_uuid', 'searchUuid']);
+            }
+
             return [
                 'ok' => true,
-                'hotels' => $this->normalizeHotels($body, $city, $cityId),
+                'search_uuid' => $searchUuid !== '' ? $searchUuid : null,
+                'hotels' => $this->normalizeHotels($body, $city, $cityId, $searchUuid !== '' ? $searchUuid : null),
                 'error' => null,
             ];
         } catch (\Throwable $exception) {
@@ -132,6 +138,239 @@ class AdminHotelLookupService
                 'ok' => false,
                 'hotels' => [],
                 'error' => 'Unable to reach the hotel provider for search.',
+            ];
+        }
+    }
+
+    /**
+     * Reserve an offer session with the provider (`POST /hotels/select`).
+     *
+     * @param  array<string, mixed>  $input
+     * @return array{ok: bool, booking_uuid: string|null, payload: array<string, mixed>, error: string|null}
+     */
+    public function selectOffer(array $input): array
+    {
+        $config = $this->resolveApiConfig();
+
+        if ($config === null) {
+            return [
+                'ok' => false,
+                'booking_uuid' => null,
+                'payload' => [],
+                'error' => 'Hotel provider is not configured.',
+            ];
+        }
+
+        $searchUuid = trim((string) ($input['search_uuid'] ?? ''));
+        $rateKey = trim((string) ($input['rate_key'] ?? ''));
+        $offerId = trim((string) ($input['offer_id'] ?? ''));
+        if ($rateKey === '') {
+            $rateKey = $offerId;
+        }
+        $searchCode = trim((string) ($input['search_code'] ?? ''));
+        $city = trim((string) ($input['city'] ?? $input['city_name'] ?? ''));
+        $cityId = trim((string) ($input['city_id'] ?? ''));
+        $hotelId = trim((string) ($input['hotel_id'] ?? ''));
+        $checkIn = $this->dateOnly($input['check_in'] ?? null);
+        $checkOut = $this->dateOnly($input['check_out'] ?? null);
+        $adults = max(1, (int) ($input['adults'] ?? 2));
+        $rooms = max(1, (int) ($input['rooms'] ?? 1));
+
+        if ($searchUuid === '' || $rateKey === '') {
+            return [
+                'ok' => false,
+                'booking_uuid' => null,
+                'payload' => [],
+                'error' => 'search_uuid and rate_key are required to select a hotel offer.',
+            ];
+        }
+
+        // Mobile contract + Postman collection fields for /hotels/select.
+        $payload = array_filter([
+            'search_uuid' => $searchUuid,
+            'rate_key' => $rateKey,
+            'search_code' => $searchCode,
+            'language' => 'fr-FR',
+            'city' => $city !== '' ? $city : null,
+            'city_id' => $cityId !== ''
+                ? (ctype_digit($cityId) ? (int) $cityId : $cityId)
+                : null,
+            'hotel_id' => $hotelId !== '' ? $hotelId : null,
+            'offer_id' => $offerId !== '' ? $offerId : null,
+            'check_in' => $checkIn,
+            'check_out' => $checkOut,
+            'adults' => $adults,
+            'rooms' => $rooms,
+        ], static fn ($value) => $value !== null && $value !== '');
+
+        try {
+            $response = $this->httpClient->post($config, '/hotels/select', $payload);
+            $body = $response->json();
+
+            if (! $response->successful() || ! is_array($body)) {
+                return [
+                    'ok' => false,
+                    'booking_uuid' => null,
+                    'payload' => is_array($body) ? $body : [],
+                    'error' => $this->providerErrorMessage($body, 'Hotel offer select failed (HTTP '.$response->status().').'),
+                ];
+            }
+
+            $data = isset($body['data']) && is_array($body['data']) ? $body['data'] : $body;
+            $bookingUuid = $this->firstString($data, ['booking_uuid', 'bookingUuid', 'uuid']);
+            if ($bookingUuid === '') {
+                $bookingUuid = $this->firstString($body, ['booking_uuid', 'bookingUuid', 'uuid']);
+            }
+
+            if ($bookingUuid === '') {
+                return [
+                    'ok' => false,
+                    'booking_uuid' => null,
+                    'payload' => $body,
+                    'error' => 'Provider select did not return a booking_uuid.',
+                ];
+            }
+
+            return [
+                'ok' => true,
+                'booking_uuid' => $bookingUuid,
+                'payload' => $body,
+                'error' => null,
+            ];
+        } catch (\Throwable $exception) {
+            Log::warning('admin.hotel_lookup.select_failed', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [
+                'ok' => false,
+                'booking_uuid' => null,
+                'payload' => [],
+                'error' => 'Unable to reach the hotel provider to select the offer.',
+            ];
+        }
+    }
+
+    /**
+     * Confirm a hotel booking with the provider (`POST /hotels/book`).
+     *
+     * @param  array<string, mixed>  $input
+     * @return array{ok: bool, booking: array<string, mixed>, error: string|null}
+     */
+    public function book(array $input): array
+    {
+        $config = $this->resolveApiConfig();
+
+        if ($config === null) {
+            return [
+                'ok' => false,
+                'booking' => [],
+                'error' => 'Hotel provider is not configured.',
+            ];
+        }
+
+        $bookingUuid = trim((string) ($input['booking_uuid'] ?? ''));
+        if ($bookingUuid === '') {
+            return [
+                'ok' => false,
+                'booking' => [],
+                'error' => 'booking_uuid is required to book a hotel.',
+            ];
+        }
+
+        $firstName = trim((string) ($input['contact_first_name'] ?? $input['first_name'] ?? 'Guest'));
+        $lastName = trim((string) ($input['contact_last_name'] ?? $input['last_name'] ?? $firstName));
+        $email = trim((string) ($input['contact_email'] ?? $input['email'] ?? ''));
+        $phone = trim((string) ($input['contact_phone'] ?? $input['phone'] ?? ''));
+        $country = trim((string) ($input['customer_country'] ?? $input['country'] ?? 'Libya'));
+        $city = trim((string) ($input['customer_city'] ?? $input['city_name'] ?? $input['city'] ?? 'Tripoli'));
+        $civility = $this->normalizeCivility($input['guest_civility'] ?? $input['civility'] ?? 'Mr');
+        $roomsCount = max(1, (int) ($input['rooms'] ?? 1));
+        $adults = max(1, (int) ($input['adults'] ?? $roomsCount));
+        $hotelId = trim((string) ($input['hotel_id'] ?? ''));
+        $cityId = trim((string) ($input['city_id'] ?? ''));
+        $offerId = trim((string) ($input['offer_id'] ?? ''));
+        $checkIn = $this->dateOnly($input['check_in'] ?? null);
+        $checkOut = $this->dateOnly($input['check_out'] ?? null);
+        $amount = isset($input['total_amount']) && is_numeric($input['total_amount'])
+            ? (float) $input['total_amount']
+            : null;
+        $currency = strtoupper(trim((string) ($input['currency'] ?? 'LYD'))) ?: 'LYD';
+
+        $guest = [
+            'civility' => $civility,
+            'first_name' => $firstName !== '' ? $firstName : 'Guest',
+            'last_name' => $lastName !== '' ? $lastName : 'Guest',
+        ];
+
+        $roomsPayload = [];
+        for ($i = 0; $i < $roomsCount; $i++) {
+            $roomsPayload[] = ['guests' => [$guest]];
+        }
+
+        // Mobile contract (booking_uuid + rooms[].guests + customer) plus
+        // Postman collection fields used by agency docs.
+        $payload = array_filter([
+            'booking_uuid' => $bookingUuid,
+            'rooms' => $roomsPayload,
+            'customer' => array_filter([
+                'first_name' => $guest['first_name'],
+                'last_name' => $guest['last_name'],
+                'email' => $email,
+                'phone' => $phone,
+                'country' => $country !== '' ? $country : null,
+                'city' => $city !== '' ? $city : null,
+            ], static fn ($value) => $value !== null && $value !== ''),
+            'hotel_id' => $hotelId !== ''
+                ? (ctype_digit($hotelId) ? (int) $hotelId : $hotelId)
+                : null,
+            'city_id' => $cityId !== ''
+                ? (ctype_digit($cityId) ? (int) $cityId : $cityId)
+                : null,
+            'offer_id' => $offerId !== '' ? $offerId : null,
+            'check_in' => $checkIn,
+            'check_out' => $checkOut,
+            'adults' => $adults,
+            'payment_method' => $input['payment_method'] ?? 'wallet',
+            'amount' => $amount,
+            'currency' => $currency,
+            'guests' => [[
+                'title' => $civility === 'Mme' ? 'Mrs.' : 'Mr.',
+                'first_name' => $guest['first_name'],
+                'last_name' => $guest['last_name'],
+                'email' => $email,
+                'phone' => $phone,
+            ]],
+        ], static fn ($value) => $value !== null && $value !== '');
+
+        try {
+            $response = $this->httpClient->post($config, '/hotels/book', $payload);
+            $body = $response->json();
+
+            if (! $response->successful() || ! is_array($body)) {
+                return [
+                    'ok' => false,
+                    'booking' => is_array($body) ? $body : [],
+                    'error' => $this->providerErrorMessage($body, 'Hotel book failed (HTTP '.$response->status().').'),
+                ];
+            }
+
+            $data = isset($body['data']) && is_array($body['data']) ? $body['data'] : $body;
+
+            return [
+                'ok' => true,
+                'booking' => is_array($data) ? $data : $body,
+                'error' => null,
+            ];
+        } catch (\Throwable $exception) {
+            Log::warning('admin.hotel_lookup.book_failed', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [
+                'ok' => false,
+                'booking' => [],
+                'error' => 'Unable to reach the hotel provider to confirm the booking.',
             ];
         }
     }
@@ -473,10 +712,13 @@ class AdminHotelLookupService
     /**
      * @return list<array<string, mixed>>
      */
-    private function normalizeHotels(array $payload, string $city, string $cityId): array
+    private function normalizeHotels(array $payload, string $city, string $cityId, ?string $searchUuid = null): array
     {
         $rows = $this->extractList($payload, ['hotels', 'results', 'items', 'data']);
         $out = [];
+        $rootSearchUuid = $searchUuid
+            ?: $this->firstString($payload, ['search_uuid', 'searchUuid'])
+            ?: null;
 
         foreach ($rows as $row) {
             if (! is_array($row)) {
@@ -494,8 +736,12 @@ class AdminHotelLookupService
                 continue;
             }
 
+            $hotelSearchUuid = $this->firstString($merged, ['search_uuid', 'searchUuid'])
+                ?: $rootSearchUuid;
+
             $offers = $this->normalizeOffers(
                 $row['rooms'] ?? $merged['rooms'] ?? $row['offers'] ?? $row['rates'] ?? [],
+                $hotelSearchUuid,
             );
 
             $out[] = [
@@ -503,7 +749,10 @@ class AdminHotelLookupService
                 'hotel_name' => $name,
                 'city' => $this->firstString($merged, ['city', 'city_name', 'cityName']) ?: $city,
                 'city_id' => $this->firstString($merged, ['city_id', 'cityId']) ?: $cityId,
+                'country' => $this->firstString($merged, ['country', 'country_name', 'countryName']) ?: null,
                 'source' => $this->firstString($merged, ['source', 'supplierSourceId']) ?: null,
+                'search_uuid' => $hotelSearchUuid,
+                'search_code' => $this->firstString($merged, ['search_code', 'searchCode']) ?: '',
                 'image_url' => $this->normalizeImageUrl($this->firstString($merged, [
                     'image_url', 'imageUrl', 'image', 'thumbImage', 'thumb_image', 'thumbnail',
                 ])),
@@ -515,9 +764,9 @@ class AdminHotelLookupService
     }
 
     /**
-     * @return list<array{offer_id: string, label: string, price: float|null, currency: string|null}>
+     * @return list<array<string, mixed>>
      */
-    private function normalizeOffers(mixed $raw): array
+    private function normalizeOffers(mixed $raw, ?string $searchUuid = null): array
     {
         if (! is_array($raw)) {
             return [];
@@ -553,6 +802,7 @@ class AdminHotelLookupService
         $seen = [];
 
         foreach ($flat as $row) {
+            $rateKey = $this->firstString($row, ['rate_key', 'rateKey', 'key']);
             $offerId = $this->firstString($row, [
                 'offer_id', 'offerId', 'associationId', 'rate_key', 'rateKey', 'id', 'code',
             ]);
@@ -562,21 +812,66 @@ class AdminHotelLookupService
             }
 
             $seen[$offerId] = true;
-            $roomName = $this->firstString($row, ['name', 'type', 'room_type', 'roomType']);
-            $board = $this->firstString($row, ['boardName', 'board_name']);
+            $roomName = $this->firstString($row, ['name', 'type', 'room_type', 'roomType', 'room_name']);
+            $board = $this->firstString($row, ['boardName', 'board_name', 'board']);
             $label = trim($roomName.($board !== '' ? ' · '.$board : ''));
             $price = $row['price'] ?? $row['amount'] ?? $row['total'] ?? null;
             $priceFloat = is_numeric($price) ? (float) $price : null;
+            $rowSearchUuid = $this->firstString($row, ['search_uuid', 'searchUuid']) ?: $searchUuid;
 
             $out[] = [
                 'offer_id' => $offerId,
+                'rate_key' => $rateKey !== '' ? $rateKey : $offerId,
+                'search_uuid' => $rowSearchUuid,
+                'search_code' => $this->firstString($row, ['search_code', 'searchCode']) ?: '',
                 'label' => $label !== '' ? $label : $offerId,
+                'room_name' => $roomName !== '' ? $roomName : null,
+                'board' => $board !== '' ? $board : null,
                 'price' => $priceFloat,
                 'currency' => $this->firstString($row, ['currency']) ?: null,
             ];
         }
 
         return array_slice($out, 0, 60);
+    }
+
+    private function normalizeCivility(mixed $raw): string
+    {
+        $value = strtolower(trim((string) $raw));
+        $value = str_replace('.', '', $value);
+
+        return match ($value) {
+            'mrs', 'ms', 'miss', 'mme', 'madame', 'mademoiselle' => 'Mme',
+            default => 'Mr',
+        };
+    }
+
+    /**
+     * @param  mixed  $body
+     */
+    private function providerErrorMessage(mixed $body, string $fallback): string
+    {
+        if (! is_array($body)) {
+            return $fallback;
+        }
+
+        foreach (['message', 'error', 'detail'] as $key) {
+            if (! empty($body[$key]) && is_scalar($body[$key])) {
+                return (string) $body[$key];
+            }
+        }
+
+        if (isset($body['errors']) && is_array($body['errors'])) {
+            $first = reset($body['errors']);
+            if (is_string($first) && $first !== '') {
+                return $first;
+            }
+            if (is_array($first) && isset($first[0]) && is_string($first[0])) {
+                return $first[0];
+            }
+        }
+
+        return $fallback;
     }
 
     /**

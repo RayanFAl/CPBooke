@@ -45,12 +45,34 @@ class BooknowOrderSyncService
      */
     public function upsert(User $authenticatedUser, SyncBooknowOrderDTO $data): array
     {
+        return $this->upsertInternal($data, $this->resolveCustomerFromToken($authenticatedUser));
+    }
+
+    /**
+     * Staff-assisted sync: persist a provider booking against an explicit customer account.
+     *
+     * @return array{order: Order, created: bool}
+     */
+    public function upsertForCustomer(User $customer, SyncBooknowOrderDTO $data): array
+    {
+        if (! $customer->isCustomerAccount()) {
+            throw new AuthorizationException('Only customer accounts can receive synced booking orders.');
+        }
+
+        return $this->upsertInternal($data, $customer);
+    }
+
+    /**
+     * @return array{order: Order, created: bool}
+     */
+    private function upsertInternal(SyncBooknowOrderDTO $data, User $customer): array
+    {
         $started = microtime(true);
         $provider = $this->resolveProvider($data);
         $correlationId = $this->buildCorrelationId($data->externalBookingId());
 
         try {
-            $result = $this->upsertOrder($authenticatedUser, $data, $provider);
+            $result = $this->upsertOrder($customer, $data, $provider);
             $latencyMs = (int) max(0, round((microtime(true) - $started) * 1000));
             $this->apiEventRecorder->recordSyncSuccess($provider, $latencyMs, $result['order']->id);
             $this->providerApiLogService->record(
@@ -116,9 +138,8 @@ class BooknowOrderSyncService
     /**
      * @return array{order: Order, created: bool}
      */
-    private function upsertOrder(User $authenticatedUser, SyncBooknowOrderDTO $data, Provider $provider): array
+    private function upsertOrder(User $customer, SyncBooknowOrderDTO $data, Provider $provider): array
     {
-        $customer = $this->resolveCustomerFromToken($authenticatedUser);
         $bookingId = $data->externalBookingId();
 
         if ($bookingId === '') {

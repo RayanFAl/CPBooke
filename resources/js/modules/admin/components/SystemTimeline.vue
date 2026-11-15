@@ -17,8 +17,8 @@ const toneClass = (tone) => {
         slate: 'bg-slate-100 text-slate-700',
         emerald: 'bg-emerald-50 text-emerald-700',
         amber: 'bg-amber-50 text-amber-800',
-        violet: 'bg-violet-50 text-violet-700',
-        cyan: 'bg-cyan-50 text-cyan-700',
+        violet: 'bg-[#2f6db8]/5 text-[#2f6db8]',
+        cyan: 'bg-[#2f6db8]/5 text-[#2f6db8]',
         rose: 'bg-rose-50 text-rose-700',
     };
 
@@ -66,7 +66,7 @@ const formatTime = (value) => {
                 <input
                     v-model="query"
                     type="search"
-                    class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-cyan-600 focus:ring-2"
+                    class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-[#2f6db8] focus:ring-2"
                     :placeholder="t('Search timeline, actor, event, or description')"
                 >
             </label>

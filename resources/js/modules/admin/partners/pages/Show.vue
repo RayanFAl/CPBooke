@@ -125,7 +125,7 @@ const deleteWebhook = async (webhook) => {
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Partner') }}</p>
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">{{ t('Partner') }}</p>
                         <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ partner.name }}</h2>
                         <p class="mt-2 text-sm text-slate-600">{{ partner.slug }} · {{ statusLabel(partner.status) }}</p>
                         <p v-if="partner.contact_email" class="mt-1 text-sm text-slate-500">{{ partner.contact_email }}</p>

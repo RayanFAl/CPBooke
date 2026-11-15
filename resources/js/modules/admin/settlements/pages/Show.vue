@@ -193,12 +193,12 @@ const workflowSteps = [
 
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <Link :href="route('admin.settlements.index')" class="text-sm font-medium text-cyan-700 hover:text-cyan-800">
+                <Link :href="route('admin.settlements.index')" class="text-sm font-medium text-[#2f6db8] hover:text-[#255991]">
                     {{ backArrow }} {{ t('Settlements') }}
                 </Link>
                 <div class="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ settlement.provider_name }}</p>
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">{{ settlement.provider_name }}</p>
                         <h2 class="mt-2 text-2xl font-semibold text-slate-950">
                             {{ settlement.period_start }} {{ forwardArrow }} {{ settlement.period_end }}
                         </h2>
@@ -237,7 +237,7 @@ const workflowSteps = [
                         v-for="step in workflowSteps"
                         :key="step.n"
                         class="rounded-xl border px-3 py-2 text-center text-xs"
-                        :class="workflowStep >= step.n ? 'border-cyan-300 bg-cyan-50 text-cyan-950' : 'border-slate-200 bg-slate-50 text-slate-500'"
+                        :class="workflowStep >= step.n ? 'border-[#2f6db8]/30 bg-[#2f6db8]/5 text-[#0f172a]' : 'border-slate-200 bg-slate-50 text-slate-500'"
                     >
                         <span class="font-semibold">{{ step.n }}.</span> {{ t(step.label) }}
                     </div>
@@ -262,13 +262,13 @@ const workflowSteps = [
                 </div>
             </div>
 
-            <div class="rounded-3xl border border-cyan-200 bg-cyan-50 p-5 shadow-sm">
+            <div class="rounded-3xl border border-[#2f6db8]/20 bg-[#2f6db8]/5 p-5 shadow-sm">
                 <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <h3 class="text-sm font-semibold text-cyan-950">{{ t('Supplier portal balance (reference)') }}</h3>
-                        <p class="mt-1 text-xs text-cyan-900">{{ t('For settlement comparison only — not stored in Booke.') }}</p>
+                        <h3 class="text-sm font-semibold text-[#0f172a]">{{ t('Supplier portal balance (reference)') }}</h3>
+                        <p class="mt-1 text-xs text-[#255991]">{{ t('For settlement comparison only — not stored in Booke.') }}</p>
                     </div>
-                    <p v-if="provider_api_wallets.fetched_at" class="text-xs text-cyan-800">
+                    <p v-if="provider_api_wallets.fetched_at" class="text-xs text-[#255991]">
                         {{ t('Fetched at') }}: {{ formatFetchedAt(provider_api_wallets.fetched_at) }}
                     </p>
                 </div>
@@ -279,15 +279,15 @@ const workflowSteps = [
                 >
                     {{ t('Connected to supplier portal. Atom returned 0 wallets for this tenant.') }}
                 </p>
-                <p v-else-if="provider_api_wallets.wallet_count === 0" class="mt-3 text-sm text-cyan-900">
+                <p v-else-if="provider_api_wallets.wallet_count === 0" class="mt-3 text-sm text-[#255991]">
                     {{ t('No provider wallets returned by the API.') }}
                 </p>
                 <div v-else class="mt-3 flex flex-wrap gap-3">
-                    <div v-for="wallet in provider_api_wallets.wallets" :key="wallet.currency" class="rounded-xl border border-cyan-200 bg-white px-4 py-3">
+                    <div v-for="wallet in provider_api_wallets.wallets" :key="wallet.currency" class="rounded-xl border border-[#2f6db8]/20 bg-white px-4 py-3">
                         <p class="text-xs text-slate-500">{{ wallet.currency }}</p>
                         <p class="text-lg font-semibold">{{ formatMoney(wallet.balance, wallet.currency) }}</p>
                     </div>
-                    <p class="self-center text-xs text-cyan-800">
+                    <p class="self-center text-xs text-[#255991]">
                         {{ provider_api_wallets.wallet_count }} {{ provider_api_wallets.wallet_count === 1 ? t('wallet') : t('wallets') }}
                     </p>
                 </div>
@@ -305,7 +305,7 @@ const workflowSteps = [
                     />
                     <input type="file" accept=".csv,.txt,.xlsx,.xlsm" class="block w-full text-sm" @change="invoiceForm.invoice_file = $event.target.files[0]">
                     <div class="flex gap-2">
-                        <button type="submit" class="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-800" :disabled="invoiceForm.processing">
+                        <button type="submit" class="rounded-xl bg-[#255991] px-4 py-2 text-sm font-medium text-white hover:bg-[#1e4a75]" :disabled="invoiceForm.processing">
                             {{ t('Import & compare') }}
                         </button>
                         <button type="button" class="rounded-xl border border-slate-300 px-4 py-2 text-sm" @click="compare">
@@ -355,7 +355,7 @@ const workflowSteps = [
                                     <button
                                         v-if="canMutate && item.needs_review && !item.pending_approval_id"
                                         type="button"
-                                        class="text-xs font-medium text-cyan-700 hover:text-cyan-800"
+                                        class="text-xs font-medium text-[#2f6db8] hover:text-[#255991]"
                                         @click="openResolve(item)"
                                     >
                                         {{ t('Resolve') }}
@@ -371,14 +371,14 @@ const workflowSteps = [
                 </div>
             </div>
 
-            <div v-if="resolvingId" class="rounded-3xl border border-cyan-200 bg-cyan-50 p-5 shadow-sm">
-                <h3 class="text-sm font-semibold text-cyan-950">{{ t('Resolve item') }}</h3>
+            <div v-if="resolvingId" class="rounded-3xl border border-[#2f6db8]/20 bg-[#2f6db8]/5 p-5 shadow-sm">
+                <h3 class="text-sm font-semibold text-[#0f172a]">{{ t('Resolve item') }}</h3>
                 <form class="mt-3 space-y-3" @submit.prevent="submitResolve">
                     <div class="flex flex-wrap gap-2">
                         <button
                             type="button"
                             class="rounded-xl px-4 py-2 text-sm"
-                            :class="resolveForm.resolution === 'accept_variance' ? 'bg-cyan-700 text-white' : 'border border-cyan-200 bg-white text-cyan-950'"
+                            :class="resolveForm.resolution === 'accept_variance' ? 'bg-[#255991] text-white' : 'border border-[#2f6db8]/20 bg-white text-[#0f172a]'"
                             @click="resolveForm.resolution = 'accept_variance'"
                         >
                             {{ t('Accept difference') }}
@@ -386,7 +386,7 @@ const workflowSteps = [
                         <button
                             type="button"
                             class="rounded-xl px-4 py-2 text-sm"
-                            :class="resolveForm.resolution === 'correct_data' ? 'bg-cyan-700 text-white' : 'border border-cyan-200 bg-white text-cyan-950'"
+                            :class="resolveForm.resolution === 'correct_data' ? 'bg-[#255991] text-white' : 'border border-[#2f6db8]/20 bg-white text-[#0f172a]'"
                             @click="resolveForm.resolution = 'correct_data'"
                         >
                             {{ t('Fix invoice line') }}
@@ -397,25 +397,25 @@ const workflowSteps = [
                         v-model="resolveForm.amount"
                         type="number"
                         step="0.01"
-                        class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm"
+                        class="w-full rounded-xl border border-[#2f6db8]/20 bg-white px-3 py-2 text-sm"
                         :placeholder="t('Adjustment amount')"
                     >
                     <template v-if="resolveForm.resolution === 'correct_data'">
-                        <input v-model="resolveForm.booking_reference" class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm" :placeholder="t('Booking reference')">
-                        <input v-model="resolveForm.supplier_invoice_cost" type="number" step="0.01" class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm" :placeholder="t('Invoice amount')">
+                        <input v-model="resolveForm.booking_reference" class="w-full rounded-xl border border-[#2f6db8]/20 bg-white px-3 py-2 text-sm" :placeholder="t('Booking reference')">
+                        <input v-model="resolveForm.supplier_invoice_cost" type="number" step="0.01" class="w-full rounded-xl border border-[#2f6db8]/20 bg-white px-3 py-2 text-sm" :placeholder="t('Invoice amount')">
                     </template>
-                    <textarea v-model="resolveForm.resolution_note" rows="2" class="w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm" :placeholder="t('Explain how this variance was handled')" />
+                    <textarea v-model="resolveForm.resolution_note" rows="2" class="w-full rounded-xl border border-[#2f6db8]/20 bg-white px-3 py-2 text-sm" :placeholder="t('Explain how this variance was handled')" />
                     <details>
-                        <summary class="cursor-pointer text-xs font-medium text-cyan-900">{{ t('More resolution options') }}</summary>
-                        <select v-model="resolveForm.reason" class="mt-2 w-full rounded-xl border border-cyan-200 bg-white px-3 py-2 text-sm">
+                        <summary class="cursor-pointer text-xs font-medium text-[#255991]">{{ t('More resolution options') }}</summary>
+                        <select v-model="resolveForm.reason" class="mt-2 w-full rounded-xl border border-[#2f6db8]/20 bg-white px-3 py-2 text-sm">
                             <option v-for="reason in reasonOptions" :key="reason.value" :value="reason.value">
                                 {{ settlementItemStatusLabel(reason.value) }}
                             </option>
                         </select>
                     </details>
                     <div class="flex gap-2">
-                        <button type="submit" class="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-medium text-white">{{ t('Confirm resolve') }}</button>
-                        <button type="button" class="rounded-xl border border-cyan-200 px-4 py-2 text-sm" @click="resolvingId = null">{{ t('Cancel') }}</button>
+                        <button type="submit" class="rounded-xl bg-[#255991] px-4 py-2 text-sm font-medium text-white">{{ t('Confirm resolve') }}</button>
+                        <button type="button" class="rounded-xl border border-[#2f6db8]/20 px-4 py-2 text-sm" @click="resolvingId = null">{{ t('Cancel') }}</button>
                     </div>
                 </form>
             </div>
@@ -433,7 +433,7 @@ const workflowSteps = [
                         <ul class="mt-2 space-y-1 text-sm text-slate-600">
                             <li v-for="item in invoice_imports" :key="item.id">
                                 #{{ item.sequence }} · {{ item.row_count }} {{ t('rows') }}
-                                <span v-if="item.is_active" class="text-cyan-700">({{ t('Active') }})</span>
+                                <span v-if="item.is_active" class="text-[#2f6db8]">({{ t('Active') }})</span>
                             </li>
                             <li v-if="invoice_imports.length === 0">{{ t('No invoice imports yet.') }}</li>
                         </ul>
@@ -443,7 +443,7 @@ const workflowSteps = [
                         <h4 class="text-sm font-semibold">{{ t('Attachments') }}</h4>
                         <ul class="mt-2 space-y-1 text-sm">
                             <li v-for="file in attachments" :key="file.id">
-                                <a :href="route('admin.settlements.attachments.download', [settlement.id, file.id])" class="text-cyan-700 hover:text-cyan-800">
+                                <a :href="route('admin.settlements.attachments.download', [settlement.id, file.id])" class="text-[#2f6db8] hover:text-[#255991]">
                                     {{ file.original_name }}
                                 </a>
                             </li>

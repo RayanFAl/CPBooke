@@ -143,7 +143,7 @@ const saveSelectedTemplate = () => {
     });
 };
 
-const inputClass = 'mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-400';
+const fieldClass = 'mt-1.5 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#2f6db8] focus:ring-4 focus:ring-[#2f6db8]/15';
 
 watch(
     () => props.templates,
@@ -158,138 +158,144 @@ watch(search, ensureSelection);
 </script>
 
 <template>
-    <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h3 class="text-base font-semibold text-slate-950">{{ t('Texts') }}</h3>
+    <section class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.04)]">
+        <div class="flex flex-col gap-3 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <h3 class="text-lg font-semibold tracking-tight text-slate-950">{{ t('Templates') }}</h3>
             <AdminButton variant="secondary" size="sm" @click="syncTemplates">
                 {{ t('Sync') }}
             </AdminButton>
         </div>
 
-        <input
-            v-model="search"
-            type="search"
-            :placeholder="t('Search…')"
-            class="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-400"
-        >
+        <div class="p-5 sm:p-6">
+            <input
+                v-model="search"
+                type="search"
+                :placeholder="t('Search…')"
+                class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#2f6db8] focus:ring-4 focus:ring-[#2f6db8]/15"
+            >
 
-        <p v-if="filteredTemplates.length === 0" class="mt-6 text-center text-sm text-slate-500">
-            {{ templates.length === 0 ? t('No texts yet. Press Sync.') : t('No results.') }}
-        </p>
+            <p v-if="filteredTemplates.length === 0" class="mt-10 text-center text-sm text-slate-500">
+                {{ templates.length === 0 ? t('No texts yet. Press Sync.') : t('No results.') }}
+            </p>
 
-        <div v-else class="mt-4 grid gap-4 lg:grid-cols-[0.85fr_1.35fr]">
-            <div class="max-h-[65vh] space-y-1 overflow-y-auto">
-                <button
-                    v-for="template in filteredTemplates"
-                    :key="template.id"
-                    type="button"
-                    class="w-full rounded-lg px-3 py-2.5 text-left transition"
-                    :class="selectedTemplateId === template.id ? 'bg-slate-950 text-white' : 'hover:bg-slate-50'"
-                    @click="selectTemplate(template.id)"
-                >
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="truncate text-sm font-medium">{{ staffLabel(template) }}</span>
-                        <AdminBadge
-                            v-if="selectedTemplateId !== template.id"
-                            :variant="template.is_active ? 'success' : 'neutral'"
-                            :label="template.is_active ? 'On' : 'Off'"
-                        />
+            <div v-else class="mt-5 grid gap-5 lg:grid-cols-[0.9fr_1.3fr]">
+                <div class="max-h-[68vh] space-y-1.5 overflow-y-auto rounded-[1.35rem] bg-slate-50 p-2">
+                    <button
+                        v-for="template in filteredTemplates"
+                        :key="template.id"
+                        type="button"
+                        class="w-full rounded-2xl px-3.5 py-3 text-start transition"
+                        :class="selectedTemplateId === template.id
+                            ? 'bg-[#2f6db8] text-white shadow-lg shadow-[#2f6db8]/25'
+                            : 'bg-white text-slate-800 hover:bg-white/80'"
+                        @click="selectTemplate(template.id)"
+                    >
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="truncate text-sm font-semibold">{{ staffLabel(template) }}</span>
+                            <AdminBadge
+                                v-if="selectedTemplateId !== template.id"
+                                :variant="template.is_active ? 'success' : 'neutral'"
+                                :label="template.is_active ? t('On') : t('Off')"
+                            />
+                        </div>
+                    </button>
+                </div>
+
+                <form v-if="selectedTemplate && selectedDraft" class="space-y-5" @submit.prevent="saveSelectedTemplate">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p class="text-lg font-semibold text-slate-950">{{ staffLabel(selectedTemplate) }}</p>
+                            <p class="mt-1 font-mono text-xs text-slate-400">{{ selectedTemplate.code }}</p>
+                        </div>
+                        <label class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-700">
+                            <input v-model="selectedDraft.is_active" type="checkbox" class="rounded border-slate-300 text-[#2f6db8] focus:ring-[#2f6db8]">
+                            {{ t('Active') }}
+                        </label>
                     </div>
-                </button>
-            </div>
 
-            <form v-if="selectedTemplate && selectedDraft" class="space-y-4" @submit.prevent="saveSelectedTemplate">
-                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="inline-flex rounded-2xl bg-slate-100 p-1">
+                        <button
+                            type="button"
+                            class="rounded-xl px-4 py-2 text-sm font-semibold transition"
+                            :class="editLocale === 'en' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'"
+                            @click="editLocale = 'en'"
+                        >
+                            English
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-xl px-4 py-2 text-sm font-semibold transition"
+                            :class="editLocale === 'ar' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'"
+                            @click="editLocale = 'ar'"
+                        >
+                            العربية
+                        </button>
+                    </div>
+
+                    <template v-if="editLocale === 'en'">
+                        <label class="block">
+                            <span class="text-sm font-medium text-slate-700">{{ t('Title') }}</span>
+                            <input v-model="selectedDraft.subject" type="text" :class="fieldClass">
+                        </label>
+                        <label class="block">
+                            <span class="text-sm font-medium text-slate-700">{{ t('Message') }}</span>
+                            <textarea v-model="selectedDraft.body" rows="5" :class="fieldClass" required />
+                        </label>
+                    </template>
+
+                    <template v-else>
+                        <label class="block">
+                            <span class="text-sm font-medium text-slate-700">{{ t('Title') }}</span>
+                            <input v-model="selectedDraft.translations.ar.subject" type="text" dir="rtl" :class="fieldClass">
+                        </label>
+                        <label class="block">
+                            <span class="text-sm font-medium text-slate-700">{{ t('Message') }}</span>
+                            <textarea v-model="selectedDraft.translations.ar.body" rows="5" dir="rtl" :class="fieldClass" />
+                        </label>
+                    </template>
+
+                    <div v-if="(selectedTemplate.variables ?? []).length">
+                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{{ t('Insert') }}</p>
+                        <div class="mt-2 flex flex-wrap gap-1.5">
+                            <button
+                                v-for="variable in selectedTemplate.variables"
+                                :key="variable"
+                                type="button"
+                                class="rounded-full bg-slate-100 px-3 py-1.5 font-mono text-xs text-slate-700 transition hover:bg-[#2f6db8]/10 hover:text-[#255991]"
+                                @click="insertVariable(variable)"
+                            >
+                                {{ variableToken(variable) }}
+                            </button>
+                        </div>
+                    </div>
+
                     <div>
-                        <p class="font-semibold text-slate-950">{{ staffLabel(selectedTemplate) }}</p>
-                        <p class="mt-0.5 font-mono text-xs text-slate-400">{{ selectedTemplate.code }}</p>
+                        <p class="text-sm font-medium text-slate-700">{{ t('Send via') }}</p>
+                        <div class="mt-2 flex flex-wrap gap-1.5">
+                            <button
+                                v-for="channel in availableChannels"
+                                :key="channel"
+                                type="button"
+                                class="rounded-full px-3.5 py-1.5 text-xs font-semibold transition"
+                                :class="selectedDraft.channels.includes(channel)
+                                    ? 'bg-[#2f6db8] text-white'
+                                    : 'bg-slate-100 text-slate-600'"
+                                @click="toggleChannel(channel)"
+                            >
+                                {{ pretty(channel) }}
+                            </button>
+                        </div>
                     </div>
-                    <label class="inline-flex items-center gap-2 text-sm text-slate-700">
-                        <input v-model="selectedDraft.is_active" type="checkbox" class="rounded border-slate-300">
-                        {{ t('Active') }}
-                    </label>
-                </div>
 
-                <div class="flex gap-1 rounded-lg bg-slate-100 p-1">
-                    <button
-                        type="button"
-                        class="flex-1 rounded-md px-3 py-1.5 text-sm font-medium"
-                        :class="editLocale === 'en' ? 'bg-white shadow-sm' : ''"
-                        @click="editLocale = 'en'"
+                    <AdminButton
+                        type="submit"
+                        :processing="selectedDraft.saving"
+                        :disabled="(selectedDraft.channels?.length ?? 0) === 0"
                     >
-                        English
-                    </button>
-                    <button
-                        type="button"
-                        class="flex-1 rounded-md px-3 py-1.5 text-sm font-medium"
-                        :class="editLocale === 'ar' ? 'bg-white shadow-sm' : ''"
-                        @click="editLocale = 'ar'"
-                    >
-                        العربية
-                    </button>
-                </div>
-
-                <template v-if="editLocale === 'en'">
-                    <label class="block">
-                        <span class="text-sm text-slate-600">{{ t('Title') }}</span>
-                        <input v-model="selectedDraft.subject" type="text" :class="inputClass">
-                    </label>
-                    <label class="block">
-                        <span class="text-sm text-slate-600">{{ t('Message') }}</span>
-                        <textarea v-model="selectedDraft.body" rows="4" :class="inputClass" required />
-                    </label>
-                </template>
-
-                <template v-else>
-                    <label class="block">
-                        <span class="text-sm text-slate-600">{{ t('Title') }}</span>
-                        <input v-model="selectedDraft.translations.ar.subject" type="text" dir="rtl" :class="inputClass">
-                    </label>
-                    <label class="block">
-                        <span class="text-sm text-slate-600">{{ t('Message') }}</span>
-                        <textarea v-model="selectedDraft.translations.ar.body" rows="4" dir="rtl" :class="inputClass" />
-                    </label>
-                </template>
-
-                <div v-if="(selectedTemplate.variables ?? []).length">
-                    <p class="text-xs text-slate-500">{{ t('Insert') }}</p>
-                    <div class="mt-1.5 flex flex-wrap gap-1.5">
-                        <button
-                            v-for="variable in selectedTemplate.variables"
-                            :key="variable"
-                            type="button"
-                            class="rounded bg-slate-100 px-2 py-1 font-mono text-xs text-slate-700 hover:bg-slate-200"
-                            @click="insertVariable(variable)"
-                        >
-                            {{ variableToken(variable) }}
-                        </button>
-                    </div>
-                </div>
-
-                <div>
-                    <p class="text-sm text-slate-600">{{ t('Send via') }}</p>
-                    <div class="mt-1.5 flex flex-wrap gap-1.5">
-                        <button
-                            v-for="channel in availableChannels"
-                            :key="channel"
-                            type="button"
-                            class="rounded-lg px-3 py-1.5 text-xs font-medium"
-                            :class="selectedDraft.channels.includes(channel) ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600'"
-                            @click="toggleChannel(channel)"
-                        >
-                            {{ pretty(channel) }}
-                        </button>
-                    </div>
-                </div>
-
-                <AdminButton
-                    type="submit"
-                    :processing="selectedDraft.saving"
-                    :disabled="(selectedDraft.channels?.length ?? 0) === 0"
-                >
-                    {{ t('Save') }}
-                </AdminButton>
-            </form>
+                        {{ t('Save') }}
+                    </AdminButton>
+                </form>
+            </div>
         </div>
     </section>
 </template>

@@ -101,7 +101,7 @@ const moduleSelectionLabel = (permissions) => {
                     </div>
                     <button
                         type="button"
-                        class="text-xs font-medium text-cyan-700 transition hover:text-cyan-900 disabled:cursor-not-allowed disabled:text-slate-400"
+                        class="text-xs font-medium text-[#2f6db8] transition hover:text-[#255991] disabled:cursor-not-allowed disabled:text-slate-400"
                         :disabled="disabled"
                         @click="toggleModule(group.permissions)"
                     >
@@ -118,7 +118,7 @@ const moduleSelectionLabel = (permissions) => {
                     >
                         <input
                             type="checkbox"
-                            class="mt-1 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                            class="mt-1 rounded border-slate-300 text-[#2f6db8] focus:ring-[#2f6db8]"
                             :checked="isChecked(permission.name)"
                             :disabled="disabled"
                             @change="togglePermission(permission.name)"

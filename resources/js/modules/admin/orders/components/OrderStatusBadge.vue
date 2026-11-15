@@ -14,12 +14,12 @@ const paletteByStatus = {
     draft: 'bg-slate-200 text-slate-700',
     pending_payment: 'bg-amber-100 text-amber-800',
     paid: 'bg-emerald-100 text-emerald-800',
-    processing: 'bg-sky-100 text-sky-800',
+    processing: 'bg-[#2f6db8]/10 text-[#255991]',
     confirmed: 'bg-emerald-100 text-emerald-800',
-    completed: 'bg-cyan-100 text-cyan-800',
+    completed: 'bg-[#2f6db8]/10 text-[#255991]',
     failed: 'bg-rose-100 text-rose-800',
     cancelled: 'bg-slate-200 text-slate-700',
-    refunded: 'bg-violet-100 text-violet-800',
+    refunded: 'bg-[#2f6db8]/10 text-[#255991]',
 };
 
 const labelByStatus = {

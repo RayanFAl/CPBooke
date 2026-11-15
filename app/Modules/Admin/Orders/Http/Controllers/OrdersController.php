@@ -5,10 +5,16 @@ namespace App\Modules\Admin\Orders\Http\Controllers;
 use App\Models\Order;
 use App\Models\FinancialTransaction;
 use App\Models\OrderHistory;
+use App\Modules\Admin\Orders\Http\Requests\CancelOrderRequest;
+use App\Modules\Admin\Orders\Http\Requests\CompensationOrderRequest;
+use App\Modules\Admin\Orders\Http\Requests\RefundOrderRequest;
+use App\Modules\Admin\Orders\Http\Requests\ReverseRefundOrderRequest;
 use App\Modules\Admin\Orders\Http\Requests\UpdateOrderNotesRequest;
 use App\Modules\Admin\Orders\Http\Requests\UpdateOrderPaymentStatusRequest;
 use App\Modules\Admin\Orders\Http\Requests\UpdateOrderStatusRequest;
+use App\Modules\Admin\Orders\Services\OrderOperationsService;
 use App\Modules\Admin\Orders\Services\OrderTicketPayloadBuilder;
+use App\Modules\Api\Orders\Services\OrderActionService;
 use App\Modules\Api\Orders\Services\OrderService;
 use App\Modules\Audit\Services\EntityTimelineService;
 use Illuminate\Support\Facades\Gate;
@@ -25,6 +31,8 @@ class OrdersController
         private readonly OrderService $orderService,
         private readonly OrderTicketPayloadBuilder $orderTicketPayloadBuilder,
         private readonly EntityTimelineService $entityTimelineService,
+        private readonly OrderActionService $orderActionService,
+        private readonly OrderOperationsService $orderOperationsService,
     ) {
     }
 
@@ -94,6 +102,10 @@ class OrdersController
             'system_timeline' => $this->entityTimelineService->forOrder($order),
             'statuses' => $canChangeStatus ? $this->orderService->adminStatusOptions($order) : [],
             'payment_statuses' => $canChangeStatus ? $this->orderService->paymentStatusOptions() : [],
+            'order_actions' => [
+                'can_manage' => $this->orderActionService->canViewSupportActions($order, $actor),
+                'available' => $this->orderActionService->availableSupportActions($order, $actor),
+            ],
         ]);
     }
 
@@ -149,6 +161,124 @@ class OrdersController
         return redirect()
             ->route('admin.orders.show', $order)
             ->with('success', 'Order payment status updated successfully.');
+    }
+
+    /**
+     * Cancel the order from the admin order workspace.
+     */
+    public function cancel(CancelOrderRequest $request, Order $order): RedirectResponse
+    {
+        $result = $this->orderOperationsService->cancel(
+            $order,
+            $request->user(),
+            $request->string('reason')->value(),
+        );
+
+        return $this->redirectAfterOrderAction(
+            $order,
+            $result,
+            executedMessage: 'Order cancelled successfully.',
+            pendingMessage: 'Cancellation request submitted for approval.',
+        );
+    }
+
+    /**
+     * Apply a full refund from the admin order workspace.
+     */
+    public function fullRefund(RefundOrderRequest $request, Order $order): RedirectResponse
+    {
+        $result = $this->orderOperationsService->fullRefund(
+            $order,
+            $request->user(),
+            $request->string('reason')->value(),
+        );
+
+        return $this->redirectAfterOrderAction(
+            $order,
+            $result,
+            executedMessage: 'Full refund applied successfully.',
+            pendingMessage: 'Refund request submitted for approval.',
+        );
+    }
+
+    /**
+     * Apply a partial refund from the admin order workspace.
+     */
+    public function partialRefund(RefundOrderRequest $request, Order $order): RedirectResponse
+    {
+        $result = $this->orderOperationsService->partialRefund(
+            $order,
+            $request->user(),
+            (float) $request->input('amount'),
+            $request->string('reason')->value(),
+        );
+
+        return $this->redirectAfterOrderAction(
+            $order,
+            $result,
+            executedMessage: 'Partial refund applied successfully.',
+            pendingMessage: 'Refund request submitted for approval.',
+        );
+    }
+
+    /**
+     * Reverse a previously applied refund from the admin order workspace.
+     */
+    public function reverseRefund(ReverseRefundOrderRequest $request, Order $order): RedirectResponse
+    {
+        $this->orderOperationsService->reverseRefund(
+            $order,
+            $request->user(),
+            $request->string('reason')->value(),
+            $request->string('internal_note')->value(),
+        );
+
+        return redirect()
+            ->route('admin.orders.show', $order)
+            ->with('success', 'Refund reversed successfully.');
+    }
+
+    /**
+     * Apply compensation from the admin order workspace.
+     */
+    public function compensation(CompensationOrderRequest $request, Order $order): RedirectResponse
+    {
+        $this->orderOperationsService->compensation(
+            $order,
+            $request->user(),
+            (float) $request->input('amount'),
+            $request->string('reason')->value(),
+            $request->string('compensation_type')->value(),
+        );
+
+        return redirect()
+            ->route('admin.orders.show', $order)
+            ->with('success', 'Compensation applied successfully.');
+    }
+
+    /**
+     * @param  array{executed: bool, approval: \App\Models\Approval|null, result: array<string, mixed>|null, ticket: \App\Models\SupportTicket}  $result
+     */
+    private function redirectAfterOrderAction(
+        Order $order,
+        array $result,
+        string $executedMessage,
+        string $pendingMessage,
+    ): RedirectResponse {
+        $redirect = redirect()->route('admin.orders.show', $order);
+
+        if ($result['executed']) {
+            return $redirect->with('success', $executedMessage);
+        }
+
+        $approvalId = $result['approval']?->id;
+
+        return $redirect->with(
+            'info',
+            $approvalId
+                ? $pendingMessage.' (#'.$approvalId.')'
+                : $pendingMessage,
+        );
     }
 
     /**

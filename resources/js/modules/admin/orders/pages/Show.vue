@@ -29,6 +29,13 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    order_actions: {
+        type: Object,
+        default: () => ({
+            can_manage: false,
+            available: [],
+        }),
+    },
 });
 
 const page = usePage();
@@ -83,6 +90,97 @@ const paymentForm = useForm({
 const notesForm = useForm({
     internal_notes: props.order.internal_notes ?? '',
 });
+
+const activeOrderAction = ref(null);
+const orderActionForm = useForm({
+    reason: '',
+    amount: '',
+    compensation_type: '',
+    internal_note: '',
+});
+
+const availableOrderActions = computed(() => props.order_actions?.available ?? []);
+const canManageOrderActions = computed(() => Boolean(props.order_actions?.can_manage));
+const selectedOrderActionConfig = computed(() => (
+    availableOrderActions.value.find((action) => action.name === activeOrderAction.value) ?? null
+));
+const canCancelFromTicket = computed(() => availableOrderActions.value.some((action) => action.name === 'cancel'));
+
+const amountFieldLabel = computed(() => (
+    activeOrderAction.value === 'compensation' ? t('Compensation amount') : t('Refund amount')
+));
+
+const compensationTypeOptions = computed(() => selectedOrderActionConfig.value?.compensation_types ?? []);
+
+const orderActionRoute = computed(() => {
+    if (activeOrderAction.value === 'cancel') {
+        return route('admin.orders.cancel', props.order.id);
+    }
+
+    if (activeOrderAction.value === 'full_refund') {
+        return route('admin.orders.full-refund', props.order.id);
+    }
+
+    if (activeOrderAction.value === 'partial_refund') {
+        return route('admin.orders.partial-refund', props.order.id);
+    }
+
+    if (activeOrderAction.value === 'reverse_refund') {
+        return route('admin.orders.reverse-refund', props.order.id);
+    }
+
+    if (activeOrderAction.value === 'compensation') {
+        return route('admin.orders.compensation', props.order.id);
+    }
+
+    return null;
+});
+
+const openOrderActionModal = (actionName) => {
+    activeOrderAction.value = actionName;
+    orderActionForm.reset();
+    orderActionForm.clearErrors();
+    actionsMenuOpen.value = false;
+
+    if (actionName === 'compensation') {
+        orderActionForm.compensation_type = compensationTypeOptions.value[0] ?? '';
+    }
+};
+
+const closeOrderActionModal = () => {
+    activeOrderAction.value = null;
+    orderActionForm.reset();
+    orderActionForm.clearErrors();
+};
+
+const submitOrderAction = () => {
+    if (!orderActionRoute.value) {
+        return;
+    }
+
+    orderActionForm.post(orderActionRoute.value, {
+        preserveScroll: true,
+        onSuccess: () => {
+            closeOrderActionModal();
+        },
+    });
+};
+
+const actionVariantClass = (variant) => {
+    if (variant === 'danger') {
+        return 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100';
+    }
+
+    return 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50';
+};
+
+const formatActionLabel = (value) => {
+    if (!value) {
+        return t('Not available');
+    }
+
+    return t(String(value).replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()));
+};
 
 const showProviderDebug = computed(() => Boolean(props.order.error_message));
 
@@ -181,7 +279,7 @@ const timelineEvents = computed(() => {
             timestamp: props.order.created_at,
             actor: t('System'),
             icon: 'RQ',
-            tone: 'bg-cyan-50 text-cyan-700',
+            tone: 'bg-[#2f6db8]/5 text-[#2f6db8]',
         },
         {
             id: `provider-response-${props.order.id}`,
@@ -191,7 +289,7 @@ const timelineEvents = computed(() => {
             timestamp: props.order.updated_at,
             actor: props.order.provider_name || t('Provider'),
             icon: 'RS',
-            tone: 'bg-cyan-50 text-cyan-700',
+            tone: 'bg-[#2f6db8]/5 text-[#2f6db8]',
         },
     ];
 
@@ -239,7 +337,7 @@ const timelineEvents = computed(() => {
             timestamp: entry.created_at,
             actor: actorName,
             icon: isNotes ? 'NT' : 'AU',
-            tone: 'bg-violet-50 text-violet-700',
+            tone: 'bg-[#2f6db8]/5 text-[#2f6db8]',
         });
     });
 
@@ -418,11 +516,26 @@ const closeCustomerDrawer = () => {
     customerDrawerOpen.value = false;
 };
 
-const handleTicketAction = ({ action, ticket }) => {
-    // Handle ticket actions like cancel or reschedule.
-    // This would typically open a modal or make an API call.
-    console.log('Ticket action:', action, ticket);
-    alert(`${t(action === 'reschedule' ? 'Reschedule' : 'Cancel')} action triggered for ticket`);
+const handleTicketAction = ({ action }) => {
+    if (action === 'cancel') {
+        if (!canCancelFromTicket.value) {
+            return;
+        }
+
+        openOrderActionModal('cancel');
+        return;
+    }
+
+    if (action === 'reschedule' && canViewSupport.value) {
+        window.location.href = route('admin.support.create', {
+            user_id: props.order.customer?.id,
+            order_id: props.order.id,
+            category: 'booking_change',
+            priority: 'high',
+            subject: `Reschedule request for ${props.order.booking_reference || `#${props.order.id}`}`,
+            first_message: `Customer requested a reschedule for ${props.order.booking_reference || `order #${props.order.id}`}.`,
+        });
+    }
 };
 </script>
 
@@ -467,10 +580,22 @@ const handleTicketAction = ({ action, ticket }) => {
                     </nav>
 
                     <div class="relative z-30 flex flex-wrap items-center gap-2">
+                        <template v-if="canManageOrderActions && availableOrderActions.length">
+                            <button
+                                v-for="action in availableOrderActions"
+                                :key="action.name"
+                                type="button"
+                                class="inline-flex items-center rounded-lg border px-3 py-2 text-sm font-medium transition"
+                                :class="actionVariantClass(action.variant)"
+                                @click="openOrderActionModal(action.name)"
+                            >
+                                {{ t(action.label) }}
+                            </button>
+                        </template>
                         <Link
                             v-if="canViewSupport"
                             :href="supportCreateLink"
-                            class="inline-flex items-center rounded-lg bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                            class="inline-flex items-center rounded-lg bg-[#2f6db8] px-3 py-2 text-sm font-medium text-white transition hover:bg-[#255991]"
                         >
                             {{ t('New ticket') }}
                         </Link>
@@ -556,6 +681,8 @@ const handleTicketAction = ({ action, ticket }) => {
                     :ticket="order.ticket"
                     :currency="order.currency"
                     :booked-by-clickable="Boolean(order.customer?.id)"
+                    :can-cancel="canCancelFromTicket"
+                    :can-reschedule="canViewSupport"
                     @booked-by-click="openCustomerDrawer"
                     @action-click="handleTicketAction"
                 />
@@ -768,13 +895,108 @@ const handleTicketAction = ({ action, ticket }) => {
             </template>
         </AdminModal>
 
+        <AdminModal
+            :show="Boolean(selectedOrderActionConfig)"
+            :title="selectedOrderActionConfig?.label || 'Confirm action'"
+            max-width="xl"
+            @close="closeOrderActionModal"
+        >
+            <div v-if="selectedOrderActionConfig" class="space-y-5">
+                <p class="text-sm leading-6 text-slate-600">
+                    {{ t('Review the order details, add a reason, then confirm the action. Approvals may be required.') }}
+                </p>
+
+                <div class="rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-700">
+                    <p><span class="font-semibold text-slate-950">{{ t('Order') }}:</span> {{ order.booking_reference || `#${order.id}` }}</p>
+                    <p class="mt-2"><span class="font-semibold text-slate-950">{{ t('Order status') }}:</span> {{ formatActionLabel(order.status) }}</p>
+                    <p class="mt-2"><span class="font-semibold text-slate-950">{{ t('Payment status') }}:</span> {{ formatActionLabel(order.payment_status) }}</p>
+                    <p class="mt-2"><span class="font-semibold text-slate-950">{{ t('Total amount') }}:</span> {{ formatMoney(order.total_amount, order.currency) }}</p>
+                    <p v-if="selectedOrderActionConfig.available_amount" class="mt-2">
+                        <span class="font-semibold text-slate-950">{{ t('Available amount') }}:</span>
+                        {{ formatMoney(selectedOrderActionConfig.available_amount, order.currency) }}
+                    </p>
+                </div>
+
+                <form id="order-action-form" class="space-y-4" @submit.prevent="submitOrderAction">
+                    <div v-if="selectedOrderActionConfig.requires_amount">
+                        <label for="order_action_amount" class="text-sm font-medium text-slate-700">{{ amountFieldLabel }}</label>
+                        <input
+                            id="order_action_amount"
+                            v-model="orderActionForm.amount"
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            class="mt-2 block w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8] focus:ring-2 focus:ring-[#2f6db8]/20"
+                        >
+                        <p v-if="orderActionForm.errors.amount" class="mt-2 text-sm text-rose-600">{{ orderActionForm.errors.amount }}</p>
+                    </div>
+
+                    <div v-if="selectedOrderActionConfig.requires_compensation_type">
+                        <label for="order_action_compensation_type" class="text-sm font-medium text-slate-700">{{ t('Compensation type') }}</label>
+                        <select
+                            id="order_action_compensation_type"
+                            v-model="orderActionForm.compensation_type"
+                            class="mt-2 block w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8] focus:ring-2 focus:ring-[#2f6db8]/20"
+                        >
+                            <option v-for="type in compensationTypeOptions" :key="type" :value="type">
+                                {{ formatActionLabel(type) }}
+                            </option>
+                        </select>
+                        <p v-if="orderActionForm.errors.compensation_type" class="mt-2 text-sm text-rose-600">{{ orderActionForm.errors.compensation_type }}</p>
+                    </div>
+
+                    <div>
+                        <label for="order_action_reason" class="text-sm font-medium text-slate-700">{{ t('Reason') }}</label>
+                        <textarea
+                            id="order_action_reason"
+                            v-model="orderActionForm.reason"
+                            rows="4"
+                            class="mt-2 block w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm leading-6 text-slate-900 outline-none transition focus:border-[#2f6db8] focus:ring-2 focus:ring-[#2f6db8]/20"
+                            :placeholder="t('Add an internal reason that will be stored in the support timeline.')"
+                        />
+                        <p v-if="orderActionForm.errors.reason" class="mt-2 text-sm text-rose-600">{{ orderActionForm.errors.reason }}</p>
+                    </div>
+
+                    <div v-if="selectedOrderActionConfig.requires_internal_note">
+                        <label for="order_action_internal_note" class="text-sm font-medium text-slate-700">{{ t('Internal note') }}</label>
+                        <textarea
+                            id="order_action_internal_note"
+                            v-model="orderActionForm.internal_note"
+                            rows="3"
+                            class="mt-2 block w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm leading-6 text-slate-900 outline-none transition focus:border-[#2f6db8] focus:ring-2 focus:ring-[#2f6db8]/20"
+                            :placeholder="t('Add an internal note for the finance and support audit trail.')"
+                        />
+                        <p v-if="orderActionForm.errors.internal_note" class="mt-2 text-sm text-rose-600">{{ orderActionForm.errors.internal_note }}</p>
+                    </div>
+
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+                        {{ t('This action changes the linked order and writes an internal support audit entry.') }}
+                    </div>
+                </form>
+            </div>
+
+            <template #footer>
+                <AdminButton variant="secondary" size="sm" @click="closeOrderActionModal">
+                    {{ t('Cancel') }}
+                </AdminButton>
+                <AdminButton
+                    type="submit"
+                    form="order-action-form"
+                    size="sm"
+                    :processing="orderActionForm.processing"
+                >
+                    {{ t('Confirm action') }}
+                </AdminButton>
+            </template>
+        </AdminModal>
+
         <AdminDrawer
             :show="customerDrawerOpen"
             size="md"
             @close="closeCustomerDrawer"
         >
             <template #header>
-                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-700">{{ t('Customer Drawer') }}</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-[#2f6db8]">{{ t('Customer Drawer') }}</p>
                 <h2 id="admin-drawer-title" class="mt-2 text-2xl font-semibold text-slate-950">{{ order.customer.name }}</h2>
                 <p class="mt-2 text-sm text-slate-600">{{ order.customer.email }}</p>
             </template>
@@ -855,13 +1077,13 @@ const handleTicketAction = ({ action, ticket }) => {
                                     <Link
                                         v-if="canViewSupport"
                                         :href="supportCreateLink"
-                                        class="flex items-center justify-between rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 transition hover:bg-cyan-100"
+                                        class="flex items-center justify-between rounded-2xl border border-[#2f6db8]/20 bg-[#2f6db8]/5 px-4 py-3 transition hover:bg-[#2f6db8]/10"
                                     >
                                         <span>
-                                            <span class="block text-sm font-semibold text-cyan-800">{{ t('Create Support Ticket') }}</span>
-                                            <span class="mt-1 block text-xs text-cyan-700">{{ t('Start a new ticket from this order context.') }}</span>
+                                            <span class="block text-sm font-semibold text-[#255991]">{{ t('Create Support Ticket') }}</span>
+                                            <span class="mt-1 block text-xs text-[#2f6db8]">{{ t('Start a new ticket from this order context.') }}</span>
                                         </span>
-                                        <span class="text-sm font-medium text-cyan-800">{{ t('Open') }}</span>
+                                        <span class="text-sm font-medium text-[#255991]">{{ t('Open') }}</span>
                                     </Link>
 
                                     <Link

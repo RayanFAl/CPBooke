@@ -508,7 +508,7 @@ onBeforeUnmount(() => {
                 <div class="border-b border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(6,182,212,0.10),_transparent_38%),linear-gradient(180deg,_#ffffff,_#f8fafc)] px-6 py-6">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
-                            <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
+                            <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">
                                 {{ t(isCustomerProfile ? 'Customer Workspace' : 'Team Workspace') }}
                             </p>
                             <h2 class="mt-2 text-3xl font-semibold text-slate-950">{{ user.full_name }}</h2>
@@ -534,14 +534,14 @@ onBeforeUnmount(() => {
                             <Link
                                 v-if="canUpdateUsers && !isCustomerProfile"
                                 :href="route('admin.users.edit', user.id)"
-                                class="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-700 transition hover:bg-cyan-100"
+                                class="rounded-2xl border border-[#2f6db8]/20 bg-[#2f6db8]/5 px-4 py-3 text-sm font-medium text-[#2f6db8] transition hover:bg-[#2f6db8]/10"
                             >
                                 {{ t('Edit user') }}
                             </Link>
                             <Link
                                 v-if="canUpdateUsers && isCustomerProfile"
                                 :href="route('admin.customers.edit', user.id)"
-                                class="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-700 transition hover:bg-cyan-100"
+                                class="rounded-2xl border border-[#2f6db8]/20 bg-[#2f6db8]/5 px-4 py-3 text-sm font-medium text-[#2f6db8] transition hover:bg-[#2f6db8]/10"
                             >
                                 {{ t('Edit identity') }}
                             </Link>
@@ -633,7 +633,7 @@ onBeforeUnmount(() => {
                             <Link
                                 v-if="canUpdateUsers && isCustomerProfile"
                                 :href="route('admin.customers.edit', user.id)"
-                                class="text-sm font-medium text-cyan-700 hover:text-cyan-800"
+                                class="text-sm font-medium text-[#2f6db8] hover:text-[#255991]"
                             >
                                 {{ t('Edit identity') }}
                             </Link>
@@ -863,7 +863,7 @@ onBeforeUnmount(() => {
                         :key="order.id"
                         :href="canViewOrders ? route('admin.orders.show', order.id) : undefined"
                         class="block rounded-2xl border border-slate-200 p-4 transition"
-                        :class="canViewOrders ? 'hover:border-cyan-300 hover:bg-cyan-50/40' : ''"
+                        :class="canViewOrders ? 'hover:border-[#2f6db8]/30 hover:bg-[#2f6db8]/5' : ''"
                     >
                         <div class="flex flex-wrap items-start justify-between gap-4">
                             <div>
@@ -1248,7 +1248,7 @@ onBeforeUnmount(() => {
                                     </p>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <span v-if="passenger.is_default" class="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">{{ t('Default') }}</span>
+                                    <span v-if="passenger.is_default" class="rounded-full bg-[#2f6db8]/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#2f6db8]">{{ t('Default') }}</span>
                                     <span class="text-xs font-medium text-slate-500">
                                         {{ expandedPassengerId === passenger.id ? t('Hide') : t('View details') }}
                                     </span>
@@ -1495,7 +1495,7 @@ onBeforeUnmount(() => {
                     <div class="rounded-2xl bg-slate-50 p-4">
                         <div class="flex flex-wrap items-start justify-between gap-4">
                             <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700">{{ activeSupportTicket.ticket_number }}</p>
+                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#2f6db8]">{{ activeSupportTicket.ticket_number }}</p>
                                 <p class="mt-2 text-base font-semibold text-slate-950">{{ activeSupportTicket.subject }}</p>
                                 <p class="mt-2 text-sm text-slate-600">
                                     {{ t('Updated :date', { date: formatDateTime(activeSupportTicket.updated_at) }) }}
@@ -1503,7 +1503,7 @@ onBeforeUnmount(() => {
                             </div>
 
                             <div class="flex flex-wrap gap-2">
-                                <span class="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">
+                                <span class="rounded-full bg-[#2f6db8]/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#2f6db8]">
                                     {{ formatValueLabel(activeSupportTicket.status) }}
                                 </span>
                                 <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">
@@ -1565,7 +1565,7 @@ onBeforeUnmount(() => {
                         v-for="ticket in crm.support_tickets"
                         :key="ticket.id"
                         :href="route('admin.support.show', ticket.id)"
-                        class="block rounded-2xl border border-slate-200 p-4 transition hover:border-cyan-300 hover:bg-cyan-50/40"
+                        class="block rounded-2xl border border-slate-200 p-4 transition hover:border-[#2f6db8]/30 hover:bg-[#2f6db8]/5"
                     >
                         <div class="flex flex-wrap items-start justify-between gap-4">
                             <div>

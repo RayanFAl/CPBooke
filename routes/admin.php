@@ -10,6 +10,7 @@ Route::prefix('admin')
 
         require base_path('routes/admin/dashboard.php');
         require base_path('routes/admin/users.php');
+        require base_path('routes/admin/agent-booking.php');
         require base_path('routes/admin/orders.php');
         require base_path('routes/admin/finance.php');
         require base_path('routes/admin/provider-wallets.php');

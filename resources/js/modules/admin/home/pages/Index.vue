@@ -153,7 +153,7 @@ const prettyAction = (item) => {
                                 </td>
                                 <td class="admin-table-actions px-4 py-3">
                                     <div class="inline-flex flex-wrap items-center justify-end gap-3">
-                                        <Link :href="route('admin.home.banners.edit', banner.id)" class="text-cyan-700 hover:underline">
+                                        <Link :href="route('admin.home.banners.edit', banner.id)" class="text-[#2f6db8] hover:underline">
                                             {{ t('Edit') }}
                                         </Link>
                                         <button type="button" class="text-rose-600 hover:underline" @click="destroyBanner(banner)">
@@ -211,7 +211,7 @@ const prettyAction = (item) => {
                                 </td>
                                 <td class="admin-table-actions px-4 py-3">
                                     <div class="inline-flex flex-wrap items-center justify-end gap-3">
-                                        <Link :href="route('admin.home.offers.edit', offer.id)" class="text-cyan-700 hover:underline">
+                                        <Link :href="route('admin.home.offers.edit', offer.id)" class="text-[#2f6db8] hover:underline">
                                             {{ t('Edit') }}
                                         </Link>
                                         <button type="button" class="text-rose-600 hover:underline" @click="destroyOffer(offer)">

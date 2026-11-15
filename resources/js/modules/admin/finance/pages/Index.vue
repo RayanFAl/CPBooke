@@ -71,7 +71,7 @@ const kpiCards = computed(() => [
     { key: 'refunds', label: t('Refunds'), value: props.dashboard.kpis.refunds, tone: 'text-rose-700' },
     { key: 'payouts', label: t('Payouts'), value: props.dashboard.kpis.payouts, tone: 'text-slate-950' },
     { key: 'net_cash', label: t('Net cash'), value: props.dashboard.kpis.net_cash, tone: 'text-slate-950' },
-    { key: 'gross_profit', label: t('Gross profit'), value: props.dashboard.kpis.gross_profit, tone: 'text-cyan-700' },
+    { key: 'gross_profit', label: t('Gross profit'), value: props.dashboard.kpis.gross_profit, tone: 'text-[#2f6db8]' },
 ]);
 
 const reconciliationCards = computed(() => [
@@ -79,7 +79,7 @@ const reconciliationCards = computed(() => [
     { key: 'missing_ledger', label: t('Missing ledger'), value: props.dashboard.reconciliation.counts.transactions_missing_ledger, tone: 'text-amber-700' },
     { key: 'unbalanced_ledger', label: t('Unbalanced ledger'), value: props.dashboard.reconciliation.counts.transactions_unbalanced, tone: 'text-rose-700' },
     { key: 'order_mismatches', label: t('Order mismatches'), value: props.dashboard.reconciliation.counts.order_payment_mismatches, tone: 'text-slate-950' },
-    { key: 'total_anomalies', label: t('Total anomalies'), value: props.dashboard.reconciliation.counts.total, tone: 'text-cyan-700' },
+    { key: 'total_anomalies', label: t('Total anomalies'), value: props.dashboard.reconciliation.counts.total, tone: 'text-[#2f6db8]' },
 ]);
 
 const normalizeTab = (value) => {
@@ -178,7 +178,7 @@ onBeforeUnmount(() => {
                 <div class="border-b border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_35%),linear-gradient(180deg,_#ffffff,_#f8fafc)] px-6 py-6">
                     <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                         <div class="max-w-3xl">
-                            <p class="text-xs font-semibold uppercase tracking-[0.26em] text-cyan-700">{{ t('Finance Workspace') }}</p>
+                            <p class="text-xs font-semibold uppercase tracking-[0.26em] text-[#2f6db8]">{{ t('Finance Workspace') }}</p>
                             <h2 class="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{{ t('Financial control center') }}</h2>
                             <p class="mt-3 text-sm leading-6 text-slate-600">
                                 {{ t('Move between overview, analytics, intelligence, operational controls, and order drill-down through link-aware tabs instead of one long finance screen.') }}

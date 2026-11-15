@@ -98,7 +98,7 @@ const clearFile = () => {
         <div
             class="relative overflow-hidden rounded-2xl border-2 border-dashed transition"
             :class="isDragging
-                ? 'border-cyan-500 bg-cyan-50'
+                ? 'border-[#2f6db8] bg-[#2f6db8]/5'
                 : 'border-slate-300 bg-white hover:border-slate-400'"
             @dragenter.prevent="isDragging = true"
             @dragover.prevent="isDragging = true"

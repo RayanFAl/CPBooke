@@ -452,7 +452,7 @@ onMounted(loadStatus);
             <div v-show="step === 2" class="space-y-3">
                 <div class="flex items-center justify-between gap-2">
                     <p class="text-sm font-semibold text-slate-900">2) {{ t('Choose the hotel') }}</p>
-                    <button type="button" class="text-sm text-cyan-700 hover:underline" @click="goStep(1)">
+                    <button type="button" class="text-sm text-[#2f6db8] hover:underline" @click="goStep(1)">
                         {{ t('Back') }}
                     </button>
                 </div>
@@ -500,7 +500,7 @@ onMounted(loadStatus);
             <div v-show="step === 3" class="space-y-3">
                 <div class="flex items-center justify-between gap-2">
                     <p class="text-sm font-semibold text-slate-900">3) {{ t('Room offer (optional)') }}</p>
-                    <button type="button" class="text-sm text-cyan-700 hover:underline" @click="goStep(2)">
+                    <button type="button" class="text-sm text-[#2f6db8] hover:underline" @click="goStep(2)">
                         {{ t('Back') }}
                     </button>
                 </div>

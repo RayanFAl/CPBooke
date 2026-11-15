@@ -62,7 +62,7 @@ const openWallet = (wallet) => {
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">
                             {{ t('Step 2') }}
                         </p>
                         <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Provider ledger') }}</h2>
@@ -126,7 +126,7 @@ const openWallet = (wallet) => {
                             <tr
                                 v-for="wallet in wallets.data"
                                 :key="wallet.id"
-                                class="cursor-pointer hover:bg-cyan-50/50"
+                                class="cursor-pointer hover:bg-[#2f6db8]/5"
                                 role="link"
                                 tabindex="0"
                                 :aria-label="`${t('Open')} ${wallet.provider_name}`"

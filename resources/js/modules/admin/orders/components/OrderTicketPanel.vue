@@ -22,6 +22,14 @@ const props = defineProps({
         type: Boolean,
         default: true,
     },
+    canCancel: {
+        type: Boolean,
+        default: true,
+    },
+    canReschedule: {
+        type: Boolean,
+        default: true,
+    },
 });
 
 const emit = defineEmits(['booked-by-click', 'action-click']);
@@ -146,20 +154,29 @@ const airlineInitial = computed(() => {
     return airlineName.value ? airlineName.value.charAt(0).toUpperCase() : '✈';
 });
 
-const ticketActions = computed(() => [
-    {
-        id: 'cancel',
-        label: t('Cancel'),
-        title: t('Cancel booking'),
-        tone: 'border-rose-200 text-rose-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 focus-visible:ring-rose-500/30',
-    },
-    {
-        id: 'reschedule',
-        label: t('Reschedule'),
-        title: t('Reschedule booking'),
-        tone: 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:ring-slate-500/30',
-    },
-]);
+const ticketActions = computed(() => {
+    const actions = [];
+
+    if (props.canCancel) {
+        actions.push({
+            id: 'cancel',
+            label: t('Cancel'),
+            title: t('Cancel booking'),
+            tone: 'border-rose-200 text-rose-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 focus-visible:ring-rose-500/30',
+        });
+    }
+
+    if (props.canReschedule) {
+        actions.push({
+            id: 'reschedule',
+            label: t('Reschedule'),
+            title: t('Reschedule booking'),
+            tone: 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:ring-slate-500/30',
+        });
+    }
+
+    return actions;
+});
 
 const handleAction = (actionId) => {
     emit('action-click', { action: actionId, ticket: props.ticket });

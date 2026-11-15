@@ -46,7 +46,7 @@ const statusLabel = (status) => {
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Integrations') }}</p>
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">{{ t('Integrations') }}</p>
                         <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Partners') }}</h2>
                         <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                             {{ t('Manage partner API keys and outbound webhooks for order and refund events.') }}
@@ -94,7 +94,7 @@ const statusLabel = (status) => {
                         <tr
                             v-for="partner in partners.data"
                             :key="partner.id"
-                            class="cursor-pointer hover:bg-cyan-50/50"
+                            class="cursor-pointer hover:bg-[#2f6db8]/5"
                             role="link"
                             tabindex="0"
                             @click="openPartner(partner)"

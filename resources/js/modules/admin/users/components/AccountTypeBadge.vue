@@ -11,7 +11,7 @@ const props = defineProps({
 const { t } = useAdminLocale();
 
 const paletteByType = {
-    admin: 'bg-cyan-100 text-cyan-800',
+    admin: 'bg-[#2f6db8]/10 text-[#255991]',
     customer: 'bg-emerald-100 text-emerald-800',
 };
 

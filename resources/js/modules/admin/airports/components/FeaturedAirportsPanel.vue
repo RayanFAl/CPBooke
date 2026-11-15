@@ -199,7 +199,7 @@ const togglePanel = () => {
                 <input
                     v-model="searchQuery"
                     type="text"
-                    class="w-full rounded-2xl border border-slate-200 px-4 py-3 pe-10 text-sm outline-none transition focus:border-cyan-600"
+                    class="w-full rounded-2xl border border-slate-200 px-4 py-3 pe-10 text-sm outline-none transition focus:border-[#2f6db8]"
                     :placeholder="t('Search airport to add...')"
                     :disabled="!canAddMore || form.processing"
                 >
@@ -218,7 +218,7 @@ const togglePanel = () => {
                 <li v-for="airport in searchResults" :key="airport.airport_key">
                     <button
                         type="button"
-                        class="flex w-full items-center gap-3 rounded-2xl border border-slate-200 px-3 py-2.5 text-start transition hover:border-cyan-200 hover:bg-cyan-50/40"
+                        class="flex w-full items-center gap-3 rounded-2xl border border-slate-200 px-3 py-2.5 text-start transition hover:border-[#2f6db8]/20 hover:bg-[#2f6db8]/5"
                         @click="addAirport(airport)"
                     >
                         <span class="rounded-lg bg-slate-950 px-2 py-1 text-xs font-semibold text-white">{{ displayCode(airport) }}</span>
@@ -226,7 +226,7 @@ const togglePanel = () => {
                             <span class="block truncate text-sm font-medium text-slate-900">{{ airport.name_en }}</span>
                             <span class="block truncate text-xs text-slate-500">{{ displaySubtitle(airport) }}</span>
                         </span>
-                        <span class="text-xs font-medium text-cyan-700">{{ t('Add') }}</span>
+                        <span class="text-xs font-medium text-[#2f6db8]">{{ t('Add') }}</span>
                     </button>
                 </li>
             </ul>
@@ -237,7 +237,7 @@ const togglePanel = () => {
                     :key="airport.airport_key"
                     class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/50 px-3 py-2.5"
                 >
-                    <span class="inline-flex size-7 shrink-0 items-center justify-center rounded-lg bg-cyan-700 text-xs font-semibold text-white">
+                    <span class="inline-flex size-7 shrink-0 items-center justify-center rounded-lg bg-[#255991] text-xs font-semibold text-white">
                         {{ index + 1 }}
                     </span>
                     <span class="rounded-lg bg-white px-2 py-1 text-xs font-semibold text-slate-900 ring-1 ring-slate-200">
@@ -286,7 +286,7 @@ const togglePanel = () => {
             <div class="mt-4 flex justify-end">
                 <button
                     type="submit"
-                    class="rounded-2xl bg-cyan-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-cyan-600 disabled:opacity-50"
+                    class="rounded-2xl bg-[#255991] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#2f6db8] disabled:opacity-50"
                     :disabled="form.processing || !hasUnsavedChanges"
                 >
                     {{ form.processing ? t('Saving...') : t('Save') }}

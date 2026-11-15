@@ -142,13 +142,13 @@ const prettyAction = (type) => {
                         <div class="flex flex-wrap gap-2 text-xs text-slate-500">
                             <span
                                 class="rounded-lg px-2 py-1"
-                                :class="type.show_in_options ? 'bg-cyan-50 text-cyan-800' : 'bg-slate-50 text-slate-400'"
+                                :class="type.show_in_options ? 'bg-[#2f6db8]/5 text-[#255991]' : 'bg-slate-50 text-slate-400'"
                             >
                                 {{ t('Options') }}
                             </span>
                             <span
                                 class="rounded-lg px-2 py-1"
-                                :class="type.show_in_market ? 'bg-cyan-50 text-cyan-800' : 'bg-slate-50 text-slate-400'"
+                                :class="type.show_in_market ? 'bg-[#2f6db8]/5 text-[#255991]' : 'bg-slate-50 text-slate-400'"
                             >
                                 {{ t('Market') }}
                             </span>
@@ -157,7 +157,7 @@ const prettyAction = (type) => {
                         <div class="flex gap-3 pt-1">
                             <Link
                                 :href="route('admin.catalog.edit', type.id)"
-                                class="text-sm font-medium text-cyan-700 hover:underline"
+                                class="text-sm font-medium text-[#2f6db8] hover:underline"
                             >
                                 {{ t('Edit') }}
                             </Link>

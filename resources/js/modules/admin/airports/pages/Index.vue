@@ -268,7 +268,7 @@ onUnmounted(() => {
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">
                             {{ t('Operations Data') }}
                         </p>
                         <h2 class="mt-2 text-2xl font-semibold text-slate-950">{{ t('Airports directory') }}</h2>
@@ -283,7 +283,7 @@ onUnmounted(() => {
                         </div>
                         <Link
                             :href="route('admin.airports.create')"
-                            class="inline-flex items-center justify-center rounded-2xl bg-cyan-700 px-4 py-3 text-sm font-medium text-white transition hover:bg-cyan-600"
+                            class="inline-flex items-center justify-center rounded-2xl bg-[#255991] px-4 py-3 text-sm font-medium text-white transition hover:bg-[#2f6db8]"
                         >
                             {{ t('Create airport') }}
                         </Link>
@@ -297,7 +297,7 @@ onUnmounted(() => {
                             <input
                                 v-model="filterForm.search"
                                 type="search"
-                                class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
+                                class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]"
                                 :placeholder="t('Name, code, city, or country')"
                             >
                         </label>
@@ -306,7 +306,7 @@ onUnmounted(() => {
                             <span>{{ t('Country') }}</span>
                             <select
                                 v-model="filterForm.country"
-                                class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
+                                class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]"
                             >
                                 <option value="">{{ t('All countries') }}</option>
                                 <option v-for="country in country_options" :key="country.value" :value="country.value">
@@ -319,7 +319,7 @@ onUnmounted(() => {
                             <span>{{ t('Type') }}</span>
                             <select
                                 v-model="filterForm.type"
-                                class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
+                                class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]"
                             >
                                 <option value="">{{ t('All types') }}</option>
                                 <option v-for="type in type_options" :key="type" :value="type">
@@ -334,7 +334,7 @@ onUnmounted(() => {
                             <span>{{ t('Per page') }}</span>
                             <select
                                 v-model.number="filterForm.per_page"
-                                class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
+                                class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]"
                             >
                                 <option v-for="size in per_page_options" :key="size" :value="size">
                                     {{ size }}
@@ -370,11 +370,11 @@ onUnmounted(() => {
 
             <div
                 v-if="usesFullSchema"
-                class="rounded-3xl border border-cyan-200 bg-cyan-50/40 p-6 shadow-sm"
+                class="rounded-3xl border border-[#2f6db8]/20 bg-[#2f6db8]/5/40 p-6 shadow-sm"
             >
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">
                             {{ t('Bulk import') }}
                         </p>
                         <h3 class="mt-2 text-xl font-semibold text-slate-950">{{ t('Import airports from Excel') }}</h3>
@@ -417,7 +417,7 @@ onUnmounted(() => {
                             <input
                                 v-model="importForm.fresh"
                                 type="checkbox"
-                                class="rounded border-slate-300 text-cyan-700 focus:ring-cyan-600"
+                                class="rounded border-slate-300 text-[#2f6db8] focus:ring-[#2f6db8]"
                                 :disabled="importIsRunning || importForm.processing"
                             >
                             <span>{{ t('Replace existing airports before import') }}</span>
@@ -426,7 +426,7 @@ onUnmounted(() => {
 
                     <button
                         type="submit"
-                        class="inline-flex items-center justify-center rounded-2xl bg-cyan-700 px-5 py-3 text-sm font-medium text-white transition hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-60"
+                        class="inline-flex items-center justify-center rounded-2xl bg-[#255991] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#2f6db8] disabled:cursor-not-allowed disabled:opacity-60"
                         :disabled="importIsRunning || importForm.processing || !importForm.file"
                     >
                         {{ importForm.processing ? t('Uploading...') : t('Start import') }}
@@ -460,7 +460,7 @@ onUnmounted(() => {
                             <tr
                                 v-for="airport in airports.data"
                                 :key="airport.id"
-                                class="group cursor-pointer bg-white align-top transition duration-200 hover:bg-cyan-50/50"
+                                class="group cursor-pointer bg-white align-top transition duration-200 hover:bg-[#2f6db8]/5"
                                 role="link"
                                 :aria-label="`${t('Open airport record')} ${usesFullSchema ? airport.name_en : airport.name}`"
                                 tabindex="0"

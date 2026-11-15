@@ -88,7 +88,7 @@ const sizeClass = {
                                     <slot name="header">
                                         <p
                                             v-if="subtitle"
-                                            class="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-700"
+                                            class="text-xs font-semibold uppercase tracking-[0.22em] text-[#2f6db8]"
                                         >
                                             {{ t(subtitle) }}
                                         </p>

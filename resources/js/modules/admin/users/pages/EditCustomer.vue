@@ -37,7 +37,7 @@ const submit = () => {
     >
         <section class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
+                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">
                     {{ t('Customer identity') }}
                 </p>
                 <h2 class="mt-2 text-2xl font-semibold text-slate-950">{{ user.full_name }}</h2>

@@ -84,7 +84,7 @@ onBeforeUnmount(() => {
     >
         <button
             type="button"
-            class="inline-flex h-6 w-6 items-center justify-center rounded-full border border-cyan-200 bg-cyan-50 text-xs font-bold text-cyan-800 transition hover:bg-cyan-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            class="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#2f6db8]/20 bg-[#2f6db8]/5 text-xs font-bold text-[#255991] transition hover:bg-[#2f6db8]/10 focus:outline-none focus:ring-2 focus:ring-[#2f6db8]"
             :aria-label="label"
             :aria-expanded="open"
             :title="label"

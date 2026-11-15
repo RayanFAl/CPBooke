@@ -39,7 +39,7 @@ const formatMoney = (amount, currency) => {
 
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <Link :href="route('admin.suppliers.index')" class="text-sm font-medium text-cyan-700">{{ backArrow }} {{ t('Back to providers') }}</Link>
+                <Link :href="route('admin.suppliers.index')" class="text-sm font-medium text-[#2f6db8]">{{ backArrow }} {{ t('Back to providers') }}</Link>
                 <div class="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                         <h2 class="text-2xl font-semibold text-slate-950">{{ supplier.name }}</h2>
@@ -64,33 +64,33 @@ const formatMoney = (amount, currency) => {
                 </div>
                 <p v-if="flashSuccess" class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{{ flashSuccess }}</p>
                 <p v-if="flashError" class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{{ flashError }}</p>
-                <p v-if="flashInfo" class="mt-4 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-800">{{ flashInfo }}</p>
+                <p v-if="flashInfo" class="mt-4 rounded-xl border border-[#2f6db8]/20 bg-[#2f6db8]/5 px-3 py-2 text-sm text-[#255991]">{{ flashInfo }}</p>
             </div>
 
             <div class="grid gap-4 md:grid-cols-2">
                 <Link
                     v-if="can_view_wallets"
                     :href="supplier.wallets?.length === 1 ? route('admin.provider-wallets.show', supplier.wallets[0].id) : route('admin.provider-wallets.create', { provider_id: supplier.id })"
-                    class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-cyan-300 hover:bg-cyan-50/30"
+                    class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-[#2f6db8]/30 hover:bg-[#2f6db8]/5"
                 >
-                    <p class="text-xs font-semibold uppercase tracking-wide text-cyan-700">{{ t('Step 2') }}</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-[#2f6db8]">{{ t('Step 2') }}</p>
                     <h3 class="mt-2 text-lg font-semibold text-slate-950">{{ t('Provider ledger') }}</h3>
                     <p class="mt-2 text-sm text-slate-600">{{ t('Prepaid balance in Booke: deposits and booking debits.') }}</p>
                     <p v-if="supplier.wallets?.length" class="mt-3 text-sm font-medium text-slate-950">
                         {{ supplier.wallets.length }} {{ supplier.wallets.length === 1 ? t('wallet') : t('wallets') }}
                     </p>
-                    <p v-else class="mt-3 text-sm font-medium text-cyan-800">{{ t('Create ledger wallet') }} →</p>
+                    <p v-else class="mt-3 text-sm font-medium text-[#255991]">{{ t('Create ledger wallet') }} →</p>
                 </Link>
 
                 <Link
                     v-if="can_view_settlements"
                     :href="settlementsUrl"
-                    class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-cyan-300 hover:bg-cyan-50/30"
+                    class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-[#2f6db8]/30 hover:bg-[#2f6db8]/5"
                 >
-                    <p class="text-xs font-semibold uppercase tracking-wide text-cyan-700">{{ t('Step 3') }}</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-[#2f6db8]">{{ t('Step 3') }}</p>
                     <h3 class="mt-2 text-lg font-semibold text-slate-950">{{ t('Settlements') }}</h3>
                     <p class="mt-2 text-sm text-slate-600">{{ t('Match supplier invoices with Booke costs for each period.') }}</p>
-                    <p class="mt-3 text-sm font-medium text-cyan-800">{{ t('Open settlements') }} →</p>
+                    <p class="mt-3 text-sm font-medium text-[#255991]">{{ t('Open settlements') }} →</p>
                 </Link>
             </div>
 
@@ -126,7 +126,7 @@ const formatMoney = (amount, currency) => {
                         <Link
                             v-if="can_view_wallets"
                             :href="route('admin.provider-wallets.show', wallet.id)"
-                            class="font-medium text-cyan-700"
+                            class="font-medium text-[#2f6db8]"
                         >
                             {{ t('Open') }}
                         </Link>

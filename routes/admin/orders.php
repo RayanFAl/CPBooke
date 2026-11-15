@@ -23,4 +23,24 @@ Route::controller(OrdersController::class)->group(function (): void {
 	Route::put('/orders/{order}/notes', 'updateNotes')
 		->middleware('permission:orders.update-notes')
 		->name('orders.update-notes');
+
+	Route::post('/orders/{order}/cancel', 'cancel')
+		->middleware('permission:support.cancel-order')
+		->name('orders.cancel');
+
+	Route::post('/orders/{order}/full-refund', 'fullRefund')
+		->middleware('permission:support.full-refund')
+		->name('orders.full-refund');
+
+	Route::post('/orders/{order}/partial-refund', 'partialRefund')
+		->middleware('permission:support.partial-refund')
+		->name('orders.partial-refund');
+
+	Route::post('/orders/{order}/reverse-refund', 'reverseRefund')
+		->middleware('permission:finance.reverse-refund')
+		->name('orders.reverse-refund');
+
+	Route::post('/orders/{order}/compensation', 'compensation')
+		->middleware('permission:support.partial-refund')
+		->name('orders.compensation');
 });

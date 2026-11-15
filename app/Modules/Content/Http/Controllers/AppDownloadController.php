@@ -32,6 +32,8 @@ class AppDownloadController extends Controller
             'version' => $release['version'] ?? (string) config('mobile_app.version'),
             'downloadAvailable' => $release !== null,
             'downloadUrl' => route('app.download.file'),
+            'apkFilename' => $release['apk_filename'] ?? null,
+            'fileSize' => isset($release['file_size']) ? (int) $release['file_size'] : null,
             'playStoreUrl' => config('mobile_app.play_store_url'),
             'appStoreUrl' => config('mobile_app.app_store_url'),
             'releaseNotes' => $release !== null

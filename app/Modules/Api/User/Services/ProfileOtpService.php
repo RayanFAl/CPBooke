@@ -257,6 +257,10 @@ class ProfileOtpService
                 'message' => $message,
             ]);
 
+        $payload = $response->json();
+        $providerResult = is_array($payload) ? (string) ($payload['result'] ?? '') : '';
+        $providerOk = is_array($payload) ? ($payload['status'] ?? null) : null;
+
         if ($response->status() === 402) {
             Log::warning('SMS gateway insufficient balance', [
                 'endpoint' => $endpoint,
@@ -265,6 +269,20 @@ class ProfileOtpService
 
             throw ValidationException::withMessages([
                 'phone' => ['SMS provider balance is insufficient. Please top up the ADV account.'],
+            ]);
+        }
+
+        if ($providerResult === 'ERROR_NO_FEATURES' || $providerOk === false) {
+            Log::warning('SMS gateway package/features unavailable', [
+                'endpoint' => $endpoint,
+                'result' => $providerResult !== '' ? $providerResult : 'status_false',
+                'body' => substr($response->body(), 0, 300),
+            ]);
+
+            throw ValidationException::withMessages([
+                'phone' => [
+                    'خدمة الرسائل غير مفعّلة حالياً لأن باقة الإشعارات منتهية أو غير مفعّلة. يرجى تفعيل الباقة في ADV.ly ثم المحاولة مرة أخرى.',
+                ],
             ]);
         }
 

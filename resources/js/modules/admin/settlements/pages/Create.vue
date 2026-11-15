@@ -31,7 +31,7 @@ const submit = () => {
 
         <section class="mx-auto max-w-2xl space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <Link :href="route('admin.settlements.index')" class="text-sm font-medium text-cyan-700 hover:text-cyan-800">
+                <Link :href="route('admin.settlements.index')" class="text-sm font-medium text-[#2f6db8] hover:text-[#255991]">
                     {{ backArrow }} {{ t('Settlements') }}
                 </Link>
                 <h2 class="mt-4 text-2xl font-semibold text-slate-950">{{ t('Create settlement period') }}</h2>

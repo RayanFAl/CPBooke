@@ -86,7 +86,7 @@ const submit = () => {
         <section class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
+                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">
                         {{ t('Ticket Intake') }}
                     </p>
                     <h2 class="mt-2 text-2xl font-semibold text-slate-950">{{ t('New support case') }}</h2>
@@ -101,7 +101,7 @@ const submit = () => {
                         <select
                             id="user_id"
                             v-model="form.user_id"
-                            class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2f6db8] focus:ring-[#2f6db8]"
                             required
                         >
                             <option value="" disabled>{{ t('Select a customer') }}</option>
@@ -117,7 +117,7 @@ const submit = () => {
                         <select
                             id="order_id"
                             v-model="form.order_id"
-                            class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2f6db8] focus:ring-[#2f6db8]"
                         >
                             <option value="">{{ t('No linked order') }}</option>
                             <option v-for="order in filteredOrders" :key="order.id" :value="order.id">
@@ -133,7 +133,7 @@ const submit = () => {
                             <select
                                 id="category"
                                 v-model="form.category"
-                                class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2f6db8] focus:ring-[#2f6db8]"
                                 required
                             >
                                 <option v-for="category in categories" :key="category.name" :value="category.name">
@@ -148,7 +148,7 @@ const submit = () => {
                             <select
                                 id="priority"
                                 v-model="form.priority"
-                                class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2f6db8] focus:ring-[#2f6db8]"
                                 required
                             >
                                 <option v-for="priority in priorities" :key="priority.name" :value="priority.name">
@@ -163,7 +163,7 @@ const submit = () => {
                             <select
                                 id="assigned_agent_id"
                                 v-model="form.assigned_agent_id"
-                                class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2f6db8] focus:ring-[#2f6db8]"
                             >
                                 <option value="">{{ t('Unassigned') }}</option>
                                 <option v-for="agent in agents" :key="agent.id" :value="agent.id">
@@ -180,7 +180,7 @@ const submit = () => {
                             id="subject"
                             v-model="form.subject"
                             type="text"
-                            class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2f6db8] focus:ring-[#2f6db8]"
                             required
                         >
                         <InputError class="mt-2" :message="form.errors.subject" />
@@ -192,7 +192,7 @@ const submit = () => {
                             id="first_message"
                             v-model="form.first_message"
                             rows="7"
-                            class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            class="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2f6db8] focus:ring-[#2f6db8]"
                             required
                         />
                         <InputError class="mt-2" :message="form.errors.first_message" />

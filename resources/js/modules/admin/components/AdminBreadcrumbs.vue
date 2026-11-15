@@ -42,7 +42,7 @@ const labelFor = (item) => {
                 <Link
                     v-if="item.href && !item.current"
                     :href="item.href"
-                    class="truncate font-medium text-cyan-700 transition hover:text-cyan-800"
+                    class="truncate font-medium text-[#2f6db8] transition hover:text-[#255991]"
                 >
                     {{ labelFor(item) }}
                 </Link>

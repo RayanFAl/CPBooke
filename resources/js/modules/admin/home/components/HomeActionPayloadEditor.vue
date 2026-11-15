@@ -221,7 +221,7 @@ defineExpose({
                 <label class="block text-sm font-medium">{{ sectionLabel }}</label>
                 <button
                     type="button"
-                    class="text-xs font-medium text-cyan-700 hover:underline"
+                    class="text-xs font-medium text-[#2f6db8] hover:underline"
                     @click="applyExampleValues"
                 >
                     {{ t('Insert example') }}

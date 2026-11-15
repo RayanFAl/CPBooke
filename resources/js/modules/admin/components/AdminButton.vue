@@ -25,11 +25,11 @@ const props = defineProps({
 });
 
 const variantClasses = {
-    primary: 'bg-slate-950 text-white hover:bg-slate-800 focus:ring-cyan-600',
-    secondary: 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:ring-cyan-600',
+    primary: 'bg-[#2f6db8] text-white hover:bg-[#255991] focus:ring-[#2f6db8]/40',
+    secondary: 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:ring-[#2f6db8]/30',
     danger: 'bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-500',
     success: 'bg-emerald-700 text-white hover:bg-emerald-800 focus:ring-emerald-600',
-    ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:ring-cyan-600',
+    ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:ring-[#2f6db8]/30',
 };
 
 const sizeClasses = {

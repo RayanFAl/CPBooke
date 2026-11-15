@@ -93,7 +93,7 @@ const describedBy = computed(() => {
             :step="step"
             :aria-invalid="error ? 'true' : undefined"
             :aria-describedby="describedBy"
-            class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-cyan-600 focus:ring-2 focus:ring-cyan-600/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+            class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#2f6db8] focus:ring-2 focus:ring-[#2f6db8]/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
             :class="error ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/20' : ''"
         />
         <p

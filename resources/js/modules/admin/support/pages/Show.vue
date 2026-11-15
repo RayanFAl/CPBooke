@@ -267,7 +267,7 @@ const initialsFor = (entry) => {
 
 const avatarTone = (senderType) => (senderType === 'user'
     ? 'bg-slate-950 text-white'
-    : 'bg-cyan-100 text-cyan-800');
+    : 'bg-[#2f6db8]/10 text-[#255991]');
 
 const groupAlignment = (senderType) => (senderType === 'user' ? 'items-end' : 'items-start');
 
@@ -1210,7 +1210,7 @@ const closeCustomerDrawer = () => {
                         </div>
 
                         <div class="border-t border-slate-200 bg-white px-4 py-4 sm:px-5">
-                            <div v-if="typingParticipant" class="mb-3 rounded-lg bg-cyan-50 px-3 py-2 text-sm text-cyan-700">
+                            <div v-if="typingParticipant" class="mb-3 rounded-lg bg-[#2f6db8]/5 px-3 py-2 text-sm text-[#2f6db8]">
                                 {{ t(':name is typing…', { name: typingParticipant }) }}
                             </div>
 
@@ -1258,7 +1258,7 @@ const closeCustomerDrawer = () => {
                                         @change="onReplyAttachmentChange"
                                     >
 
-                                    <div class="min-w-0 flex-1 rounded-[1.5rem] border border-slate-200 bg-slate-50/70 px-4 py-3 transition focus-within:border-cyan-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-cyan-100">
+                                    <div class="min-w-0 flex-1 rounded-[1.5rem] border border-slate-200 bg-slate-50/70 px-4 py-3 transition focus-within:border-[#2f6db8] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#2f6db8]/20">
                                         <textarea
                                             id="reply_message"
                                             ref="composerTextarea"
@@ -1288,7 +1288,7 @@ const closeCustomerDrawer = () => {
 
                                 <div class="mt-3 flex items-center justify-between gap-3 px-1">
                                     <p class="text-xs text-slate-500">{{ replyForm.attachment ? replyFileLabel : t('Images, PDFs, and office files are supported.') }}</p>
-                                    <p v-if="replyForm.processing" class="animate-pulse text-xs font-medium text-cyan-700">{{ t('Sending…') }}</p>
+                                    <p v-if="replyForm.processing" class="animate-pulse text-xs font-medium text-[#2f6db8]">{{ t('Sending…') }}</p>
                                 </div>
 
                                 <p v-if="replyForm.errors.message" class="mt-2 px-1 text-sm text-rose-600">{{ replyForm.errors.message }}</p>
@@ -1372,7 +1372,7 @@ const closeCustomerDrawer = () => {
                                     <button
                                         type="button"
                                         class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
-                                        :class="notificationFilter === 'all' ? 'bg-cyan-950 text-white' : 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100'"
+                                        :class="notificationFilter === 'all' ? 'bg-[#0f172a] text-white' : 'bg-[#2f6db8]/5 text-[#2f6db8] hover:bg-[#2f6db8]/10'"
                                         @click="notificationFilter = 'all'"
                                     >
                                         {{ t('All notifications') }}
@@ -1380,7 +1380,7 @@ const closeCustomerDrawer = () => {
                                     <button
                                         type="button"
                                         class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
-                                        :class="notificationFilter === 'ticket' ? 'bg-cyan-950 text-white' : 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100'"
+                                        :class="notificationFilter === 'ticket' ? 'bg-[#0f172a] text-white' : 'bg-[#2f6db8]/5 text-[#2f6db8] hover:bg-[#2f6db8]/10'"
                                         @click="notificationFilter = 'ticket'"
                                     >
                                         {{ t('This ticket') }}
@@ -1389,7 +1389,7 @@ const closeCustomerDrawer = () => {
                                         v-if="ticket.order"
                                         type="button"
                                         class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
-                                        :class="notificationFilter === 'order' ? 'bg-cyan-950 text-white' : 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100'"
+                                        :class="notificationFilter === 'order' ? 'bg-[#0f172a] text-white' : 'bg-[#2f6db8]/5 text-[#2f6db8] hover:bg-[#2f6db8]/10'"
                                         @click="notificationFilter = 'order'"
                                     >
                                         {{ t('This order') }}
@@ -1409,7 +1409,7 @@ const closeCustomerDrawer = () => {
                                         <div class="relative flex w-10 shrink-0 justify-center">
                                             <span
                                                 class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-[10px] font-semibold uppercase"
-                                                :class="item.kind === 'notification' ? 'bg-cyan-100 text-cyan-800' : 'bg-slate-100 text-slate-700'"
+                                                :class="item.kind === 'notification' ? 'bg-[#2f6db8]/10 text-[#255991]' : 'bg-slate-100 text-slate-700'"
                                             >
                                                 {{ item.kind === 'notification' ? 'NT' : t(formatLabel(item.entry.source)).slice(0, 2) }}
                                             </span>
@@ -1444,10 +1444,10 @@ const closeCustomerDrawer = () => {
                                                             {{ formatLabel(item.log.status) }}
                                                         </span>
                                                         <span class="text-xs font-medium text-slate-700">{{ formatLabel(item.log.channel) }}</span>
-                                                        <span v-if="item.log.is_ticket_related" class="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700">
+                                                        <span v-if="item.log.is_ticket_related" class="rounded-full bg-[#2f6db8]/5 px-2 py-0.5 text-[11px] font-medium text-[#2f6db8]">
                                                             {{ t('Ticket') }}
                                                         </span>
-                                                        <span v-if="item.log.is_order_related" class="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+                                                        <span v-if="item.log.is_order_related" class="rounded-full bg-[#2f6db8]/5 px-2 py-0.5 text-[11px] font-medium text-[#2f6db8]">
                                                             {{ t('Order') }}
                                                         </span>
                                                     </div>
@@ -1732,7 +1732,7 @@ const closeCustomerDrawer = () => {
                     <div class="border-b border-slate-200 bg-slate-50 px-6 py-5">
                         <div class="flex items-start justify-between gap-4">
                             <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-700">{{ t('Customer Drawer') }}</p>
+                                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-[#2f6db8]">{{ t('Customer Drawer') }}</p>
                                 <h3 class="mt-2 text-2xl font-semibold text-slate-950">{{ ticket.user.name || t('Unknown user') }}</h3>
                                 <p class="mt-2 text-sm text-slate-600">{{ ticket.user.email || t('No email') }}</p>
                             </div>
@@ -1878,13 +1878,13 @@ const closeCustomerDrawer = () => {
                                     <Link
                                         v-if="canViewSupport"
                                         :href="supportCreateLink"
-                                        class="flex items-center justify-between rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3 transition hover:bg-cyan-100"
+                                        class="flex items-center justify-between rounded-lg border border-[#2f6db8]/20 bg-[#2f6db8]/5 px-4 py-3 transition hover:bg-[#2f6db8]/10"
                                     >
                                         <span>
-                                            <span class="block text-sm font-semibold text-cyan-800">{{ t('Create Support Ticket') }}</span>
-                                            <span class="mt-1 block text-xs text-cyan-700">{{ t('Start a new ticket for this customer.') }}</span>
+                                            <span class="block text-sm font-semibold text-[#255991]">{{ t('Create Support Ticket') }}</span>
+                                            <span class="mt-1 block text-xs text-[#2f6db8]">{{ t('Start a new ticket for this customer.') }}</span>
                                         </span>
-                                        <span class="text-sm font-medium text-cyan-800">{{ t('Open') }}</span>
+                                        <span class="text-sm font-medium text-[#255991]">{{ t('Open') }}</span>
                                     </Link>
 
                                     <Link
@@ -1923,7 +1923,7 @@ const closeCustomerDrawer = () => {
                     <div class="w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl">
                         <div class="flex items-start justify-between gap-4">
                             <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700">{{ t('Action Preview') }}</p>
+                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#2f6db8]">{{ t('Action Preview') }}</p>
                                 <h3 class="mt-2 text-2xl font-semibold text-slate-950">{{ t(selectedOrderActionConfig.label) }}</h3>
                                 <p class="mt-3 text-sm leading-6 text-slate-600">
                                     {{ t('You are about to run a manual order action from the support workspace. Review the order, add an internal reason, and continue only if the outcome is correct.') }}
@@ -1959,7 +1959,7 @@ const closeCustomerDrawer = () => {
                                     type="number"
                                     min="0.01"
                                     step="0.01"
-                                    class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
+                                    class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]"
                                 >
                                 <p v-if="orderActionForm.errors.amount" class="mt-2 text-sm text-rose-600">{{ orderActionForm.errors.amount }}</p>
                             </div>
@@ -1969,7 +1969,7 @@ const closeCustomerDrawer = () => {
                                 <select
                                     id="order_action_compensation_type"
                                     v-model="orderActionForm.compensation_type"
-                                    class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600"
+                                    class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]"
                                 >
                                     <option v-for="type in compensationTypeOptions" :key="type" :value="type">
                                         {{ formatLabel(type) }}
@@ -1984,7 +1984,7 @@ const closeCustomerDrawer = () => {
                                     id="order_action_reason"
                                     v-model="orderActionForm.reason"
                                     rows="4"
-                                    class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-cyan-600"
+                                    class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-[#2f6db8]"
                                     :placeholder="t('Add an internal reason that will be stored in the support timeline.')"
                                 />
                                 <p v-if="orderActionForm.errors.reason" class="mt-2 text-sm text-rose-600">{{ orderActionForm.errors.reason }}</p>
@@ -1996,7 +1996,7 @@ const closeCustomerDrawer = () => {
                                     id="order_action_internal_note"
                                     v-model="orderActionForm.internal_note"
                                     rows="3"
-                                    class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-cyan-600"
+                                    class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-[#2f6db8]"
                                     :placeholder="t('Add an internal note for the finance and support audit trail.')"
                                 />
                                 <p v-if="orderActionForm.errors.internal_note" class="mt-2 text-sm text-rose-600">{{ orderActionForm.errors.internal_note }}</p>

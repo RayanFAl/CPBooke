@@ -29,18 +29,18 @@ const iconPath = computed(() => {
 </script>
 
 <template>
-    <div class="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
-        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-400 ring-1 ring-slate-200">
-            <svg class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-6 py-10 text-center">
+        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-white text-[#2f6db8] ring-1 ring-slate-200">
+            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path :d="iconPath" />
             </svg>
         </div>
 
-        <h3 class="mt-5 text-lg font-semibold text-slate-950">
+        <h3 class="mt-4 text-base font-semibold text-slate-950">
             {{ t(title) }}
         </h3>
 
-        <p v-if="description" class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
+        <p v-if="description" class="mx-auto mt-1.5 max-w-md text-sm leading-6 text-slate-500">
             {{ t(description) }}
         </p>
 

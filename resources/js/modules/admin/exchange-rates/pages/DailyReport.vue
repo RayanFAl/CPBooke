@@ -50,7 +50,7 @@ const applyDate = () => {
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div class="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Reports') }}</p>
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">{{ t('Reports') }}</p>
                         <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Daily FX buy + sales report') }}</h2>
                         <p class="mt-3 max-w-3xl text-base leading-7 text-slate-700">
                             {{ t('Report day') }}: <span class="font-semibold text-slate-950">{{ report.report_date }}</span>
@@ -85,7 +85,7 @@ const applyDate = () => {
                     </label>
                     <button
                         type="submit"
-                        class="rounded-2xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800"
+                        class="rounded-2xl bg-[#255991] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1e4a75]"
                     >
                         {{ t('Apply') }}
                     </button>

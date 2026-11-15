@@ -83,7 +83,7 @@ const resetFilters = () => {
             <div class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">
                             {{ t('Support') }}
                         </p>
                         <h2 class="mt-2 text-2xl font-semibold text-slate-950">{{ t('Support reports') }}</h2>
@@ -102,7 +102,7 @@ const resetFilters = () => {
                         <a
                             v-if="dashboard.available"
                             :href="exports.csv"
-                            class="inline-flex items-center justify-center rounded-2xl bg-cyan-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-cyan-700"
+                            class="inline-flex items-center justify-center rounded-2xl bg-[#2f6db8] px-4 py-3 text-sm font-medium text-white transition hover:bg-[#255991]"
                         >
                             {{ t('Export CSV') }}
                         </a>
@@ -112,15 +112,15 @@ const resetFilters = () => {
                 <form class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5" @submit.prevent="applyFilters">
                     <label class="block">
                         <span class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Date from') }}</span>
-                        <input v-model="filtersForm.date_from" type="date" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600">
+                        <input v-model="filtersForm.date_from" type="date" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]">
                     </label>
                     <label class="block">
                         <span class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Date to') }}</span>
-                        <input v-model="filtersForm.date_to" type="date" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600">
+                        <input v-model="filtersForm.date_to" type="date" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]">
                     </label>
                     <label class="block">
                         <span class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Resolution Type') }}</span>
-                        <select v-model="filtersForm.resolution_type" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600">
+                        <select v-model="filtersForm.resolution_type" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]">
                             <option value="">{{ t('All resolution types') }}</option>
                             <option v-for="option in dashboard.filter_options.resolution_types" :key="option.name" :value="option.name">
                                 {{ t(option.label) }}
@@ -129,7 +129,7 @@ const resetFilters = () => {
                     </label>
                     <label class="block">
                         <span class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Status After') }}</span>
-                        <select v-model="filtersForm.status_after" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600">
+                        <select v-model="filtersForm.status_after" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]">
                             <option value="">{{ t('All outcomes') }}</option>
                             <option v-for="option in dashboard.filter_options.status_after" :key="option.name" :value="option.name">
                                 {{ t(option.label) }}
@@ -138,7 +138,7 @@ const resetFilters = () => {
                     </label>
                     <label class="block">
                         <span class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('Agent') }}</span>
-                        <select v-model="filtersForm.agent_id" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-600">
+                        <select v-model="filtersForm.agent_id" class="mt-2 block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#2f6db8]">
                             <option value="">{{ t('All agents') }}</option>
                             <option v-for="agent in dashboard.filter_options.agents" :key="agent.id" :value="agent.id">
                                 {{ agent.name }}

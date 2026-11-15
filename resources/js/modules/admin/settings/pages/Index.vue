@@ -134,7 +134,7 @@ const modeBadgeClass = (mode) => {
     >
         <section class="space-y-6">
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">{{ t('Configuration') }}</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#2f6db8]">{{ t('Configuration') }}</p>
                 <h2 class="mt-3 text-2xl font-semibold text-slate-950">{{ t('Settings') }}</h2>
                 <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
                     {{ t('Operational settings live here: company profile, mailboxes, SMTP, SMS/WhatsApp gateways, and feature flags.') }}
@@ -346,7 +346,7 @@ const modeBadgeClass = (mode) => {
                         </label>
                         <p class="md:col-span-2 text-xs text-slate-500">
                             {{ t('Upload Firebase service account JSON under Admin → Notifications.') }}
-                            <a :href="notifications_url" class="font-medium text-cyan-700 underline">{{ t('Open notifications setup') }}</a>
+                            <a :href="notifications_url" class="font-medium text-[#2f6db8] underline">{{ t('Open notifications setup') }}</a>
                         </p>
                     </div>
 

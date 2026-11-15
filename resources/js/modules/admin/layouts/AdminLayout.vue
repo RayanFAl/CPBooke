@@ -99,6 +99,10 @@ watch(
         if (value.error) {
             toast.error(t(value.error));
         }
+
+        if (value.info) {
+            toast.info(t(value.info));
+        }
     },
     { immediate: true },
 );
@@ -146,8 +150,8 @@ onMounted(() => {
             </div>
 
             <div class="flex min-w-0 flex-1 flex-col">
-                <header class="border-b border-slate-200 bg-white/90 backdrop-blur">
-                    <div class="flex items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-8 sm:py-4">
+                <header class="border-b border-slate-200 bg-white/95 backdrop-blur">
+                    <div class="flex items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-8">
                         <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                             <button
                                 type="button"
@@ -181,16 +185,16 @@ onMounted(() => {
                             </button>
 
                             <div class="min-w-0">
-                                <p class="hidden text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700 sm:block">
+                                <p class="admin-eyebrow hidden sm:block">
                                     {{ t('Admin Module') }}
                                 </p>
                                 <div class="flex min-w-0 items-center gap-2">
-                                    <h1 class="truncate text-lg font-semibold text-slate-950 sm:text-xl">
+                                    <h1 class="truncate text-lg font-semibold tracking-tight text-slate-950 sm:text-xl">
                                         {{ translatedTitle || t('Control Panel') }}
                                     </h1>
                                     <AdminInfoTip v-if="helpText" :text="helpText" />
                                 </div>
-                                <p v-if="props.description" class="mt-1 hidden truncate text-sm text-slate-600 md:block">
+                                <p v-if="props.description" class="mt-0.5 hidden truncate text-sm text-slate-500 md:block">
                                     {{ translatedDescription }}
                                 </p>
                             </div>
@@ -221,7 +225,7 @@ onMounted(() => {
                                 :title="displayName"
                             >
                                 <span
-                                    class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-950 text-xs font-semibold uppercase tracking-wide text-white"
+                                    class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2f6db8] text-xs font-semibold uppercase tracking-wide text-white"
                                     aria-hidden="true"
                                 >
                                     {{ userInitials }}

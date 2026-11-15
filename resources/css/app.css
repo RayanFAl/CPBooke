@@ -6,6 +6,17 @@
 
 :root {
 	--font-ar: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+	--brand-blue: #2f6db8;
+	--brand-blue-dark: #255991;
+	--brand-gold: #f0b429;
+	--brand-navy: #0f172a;
+}
+
+.admin-shell {
+	--admin-accent: var(--brand-blue);
+	--admin-accent-dark: var(--brand-blue-dark);
+	--admin-accent-soft: color-mix(in srgb, var(--brand-blue) 12%, white);
+	--admin-gold: var(--brand-gold);
 }
 
 html[lang='ar'] body,
@@ -120,7 +131,7 @@ html[dir='rtl'] .admin-shell table.admin-data-table td {
 
 .admin-sidebar-scroll {
 	scrollbar-width: thin;
-	scrollbar-color: #1e293b #020617;
+	scrollbar-color: #334155 #0b1220;
 }
 
 .admin-sidebar-scroll::-webkit-scrollbar {
@@ -128,14 +139,38 @@ html[dir='rtl'] .admin-shell table.admin-data-table td {
 }
 
 .admin-sidebar-scroll::-webkit-scrollbar-track {
-	background: #020617;
+	background: #0b1220;
 }
 
 .admin-sidebar-scroll::-webkit-scrollbar-thumb {
-	background: #1e293b;
+	background: #334155;
 	border-radius: 999px;
 }
 
 .admin-sidebar-scroll::-webkit-scrollbar-thumb:hover {
-	background: #334155;
+	background: #475569;
+}
+
+.admin-panel {
+	border-radius: 1.25rem;
+	border: 1px solid #e2e8f0;
+	background: #ffffff;
+	box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+.admin-panel-header {
+	border-bottom: 1px solid #e2e8f0;
+	padding: 1.25rem 1.5rem;
+}
+
+.admin-eyebrow {
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	color: var(--brand-blue);
+}
+
+.admin-row-hover:hover {
+	background: color-mix(in srgb, var(--brand-blue) 6%, white);
 }

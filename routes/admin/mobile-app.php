@@ -6,5 +6,6 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('permission:settings.manage')->prefix('mobile-app')->as('mobile-app.')->group(function (): void {
     Route::get('/', [MobileAppController::class, 'index'])->name('index');
     Route::post('/apk', [MobileAppController::class, 'uploadApk'])->name('apk.upload');
+    Route::delete('/apk', [MobileAppController::class, 'destroyApk'])->name('apk.destroy');
     Route::put('/release', [MobileAppController::class, 'updateRelease'])->name('release.update');
 });

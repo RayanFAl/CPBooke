@@ -68,6 +68,7 @@ class MobileAppAdminTest extends TestCase
                 ->has('manifest')
                 ->has('apk_files')
                 ->has('upload_limits')
+                ->has('apk_delete_url')
             );
     }
 
@@ -420,6 +421,41 @@ class MobileAppAdminTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.update_available', true)
             ->assertJsonPath('data.force_update', true);
+    }
+
+    public function test_super_admin_can_delete_apk_and_promote_next_release(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $actor = $this->superAdmin();
+        $older = 'booke-1.1.0+110.apk';
+        $newer = 'booke-1.2.0+120.apk';
+
+        File::put($this->releasesDirectory.DIRECTORY_SEPARATOR.$older, 'older-apk');
+        File::put($this->releasesDirectory.DIRECTORY_SEPARATOR.$newer, 'newer-apk');
+        File::put($this->releasesDirectory.DIRECTORY_SEPARATOR.'release.json', json_encode([
+            'version' => '1.2.0',
+            'version_code' => 120,
+            'apk' => $newer,
+            'force_update' => false,
+            'notes' => ['ar' => 'قديم', 'en' => 'old'],
+        ], JSON_THROW_ON_ERROR));
+
+        $this->actingAs($actor)
+            ->delete(route('admin.mobile-app.apk.destroy'), [
+                'filename' => $newer,
+            ])
+            ->assertRedirect(route('admin.mobile-app.index'))
+            ->assertSessionHas('success');
+
+        $this->assertFileDoesNotExist($this->releasesDirectory.DIRECTORY_SEPARATOR.$newer);
+        $this->assertFileExists($this->releasesDirectory.DIRECTORY_SEPARATOR.$older);
+
+        $manifest = json_decode((string) File::get($this->releasesDirectory.DIRECTORY_SEPARATOR.'release.json'), true);
+        $this->assertSame($older, $manifest['apk']);
+        $this->assertSame('1.1.0', $manifest['version']);
+        $this->assertSame(110, $manifest['version_code']);
+        $this->assertSame('قديم', $manifest['notes']['ar']);
     }
 
     private function superAdmin(): User

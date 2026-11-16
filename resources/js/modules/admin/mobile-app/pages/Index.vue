@@ -3,7 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout.vue';
 import AdminButton from '../../components/AdminButton.vue';
 import AdminInput from '../../components/AdminInput.vue';
 import { useAdminLocale } from '../../composables/useAdminLocale';
-import { useForm, usePage } from '@inertiajs/vue3';
+import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -14,6 +14,7 @@ const props = defineProps({
     download_file_url: { type: String, required: true },
     update_check_url: { type: String, required: true },
     upload_url: { type: String, required: true },
+    apk_delete_url: { type: String, required: true },
     release_update_url: { type: String, required: true },
     expected_filename: { type: String, required: true },
     upload_limits: { type: Object, required: true },
@@ -22,6 +23,7 @@ const props = defineProps({
 const { t, forwardArrow } = useAdminLocale();
 const page = usePage();
 const apkInput = ref(null);
+const uploadProgress = ref(null);
 
 const flashSuccess = computed(() => page.props.flash?.success ?? '');
 
@@ -30,6 +32,20 @@ const uploadForm = useForm({
     version: props.manifest.version ?? '1.0.0',
     version_code: props.manifest.version_code ?? 1,
     notify_users: true,
+});
+
+const showUploadProgress = computed(() => uploadForm.processing || uploadProgress.value !== null);
+const uploadProgressPercent = computed(() => Math.min(100, Math.max(0, Number(uploadProgress.value ?? 0))));
+const uploadProgressLabel = computed(() => {
+    if (!uploadForm.processing && uploadProgress.value === null) {
+        return '';
+    }
+
+    if (uploadProgressPercent.value >= 100 && uploadForm.processing) {
+        return t('Processing upload…');
+    }
+
+    return `${t('Uploading…')} ${uploadProgressPercent.value}%`;
 });
 
 const releaseForm = useForm({
@@ -76,12 +92,15 @@ const formatBytes = (bytes) => {
 
 const onApkSelected = (event) => {
     uploadForm.apk = event.target.files?.[0] ?? null;
+    uploadProgress.value = null;
 };
 
 const submitUpload = () => {
     if (selectedApkTooLarge.value) {
         return;
     }
+
+    uploadProgress.value = 0;
 
     uploadForm
         .transform((data) => ({
@@ -91,12 +110,26 @@ const submitUpload = () => {
         .post(props.upload_url, {
             forceFormData: true,
             preserveScroll: true,
+            showProgress: false,
+            onProgress: (progress) => {
+                uploadProgress.value = typeof progress?.percentage === 'number'
+                    ? progress.percentage
+                    : 0;
+            },
             onSuccess: () => {
+                uploadProgress.value = 100;
                 uploadForm.reset('apk');
                 uploadForm.notify_users = true;
                 if (apkInput.value) {
                     apkInput.value.value = '';
                 }
+            },
+            onFinish: () => {
+                window.setTimeout(() => {
+                    if (!uploadForm.processing) {
+                        uploadProgress.value = null;
+                    }
+                }, 600);
             },
         });
 };
@@ -109,6 +142,29 @@ const useApkInSettings = (file) => {
     if (file.version_code) {
         releaseForm.version_code = file.version_code;
     }
+};
+
+const deletingFilename = ref(null);
+
+const deleteApk = (file) => {
+    const isActive = props.manifest?.apk === file.filename;
+    const message = isActive
+        ? t('Delete this APK? It is the active release. The next highest version will become active if available.')
+        : t('Delete this APK permanently?');
+
+    if (!window.confirm(message)) {
+        return;
+    }
+
+    deletingFilename.value = file.filename;
+
+    router.delete(props.apk_delete_url, {
+        data: { filename: file.filename },
+        preserveScroll: true,
+        onFinish: () => {
+            deletingFilename.value = null;
+        },
+    });
 };
 
 const submitReleaseSettings = () => {
@@ -252,8 +308,32 @@ const submitReleaseSettings = () => {
                             </span>
                         </label>
 
+                        <div
+                            v-if="showUploadProgress"
+                            class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                            role="progressbar"
+                            :aria-valuenow="uploadProgressPercent"
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                            :aria-label="uploadProgressLabel"
+                        >
+                            <div class="mb-2 flex items-center justify-between gap-3 text-sm">
+                                <span class="font-medium text-slate-800">{{ uploadProgressLabel }}</span>
+                                <span class="tabular-nums font-semibold text-[#2f6db8]">{{ uploadProgressPercent }}%</span>
+                            </div>
+                            <div class="h-2.5 overflow-hidden rounded-full bg-slate-200">
+                                <div
+                                    class="h-full rounded-full bg-[#2f6db8] transition-[width] duration-200 ease-out"
+                                    :style="{ width: `${uploadProgressPercent}%` }"
+                                />
+                            </div>
+                            <p v-if="uploadForm.apk?.size" class="mt-2 text-xs text-slate-500">
+                                {{ formatBytes(uploadForm.apk.size) }}
+                            </p>
+                        </div>
+
                         <AdminButton type="submit" :disabled="uploadForm.processing || selectedApkTooLarge">
-                            {{ uploadForm.processing ? t('Uploading…') : t('Upload APK') }}
+                            {{ uploadForm.processing ? `${t('Uploading…')} ${uploadProgressPercent}%` : t('Upload APK') }}
                         </AdminButton>
                     </form>
                 </section>
@@ -263,6 +343,9 @@ const submitReleaseSettings = () => {
                 <h3 class="text-lg font-semibold text-slate-950">{{ t('Release settings') }}</h3>
                 <p class="mt-2 text-sm text-slate-600">
                     {{ t('Edit release.json metadata used by the update dialog and public download page.') }}
+                </p>
+                <p class="mt-2 text-sm text-slate-600">
+                    {{ t('You can update Arabic/English release notes anytime after upload, then save.') }}
                 </p>
                 <p class="mt-2 text-sm text-slate-600">
                     {{ t('Turn on force update to block older app builds until users download the latest APK.') }}
@@ -373,13 +456,48 @@ const submitReleaseSettings = () => {
                                 <td class="px-3 py-3">{{ file.version_code ?? '—' }}</td>
                                 <td class="px-3 py-3">{{ formatBytes(file.size) }}</td>
                                 <td class="px-3 py-3 text-end">
-                                    <button
-                                        type="button"
-                                        class="text-[#2f6db8] hover:underline"
-                                        @click="useApkInSettings(file)"
-                                    >
-                                        {{ t('Use in release settings') }}
-                                    </button>
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <button
+                                            type="button"
+                                            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-[#2f6db8] transition hover:bg-[#2f6db8]/10"
+                                            :title="t('Use in release settings')"
+                                            :aria-label="t('Use in release settings')"
+                                            @click="useApkInSettings(file)"
+                                        >
+                                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5" aria-hidden="true">
+                                                <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
+                                            </svg>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+                                            :title="t('Delete')"
+                                            :aria-label="t('Delete')"
+                                            :disabled="deletingFilename === file.filename"
+                                            @click="deleteApk(file)"
+                                        >
+                                            <svg
+                                                v-if="deletingFilename === file.filename"
+                                                class="h-5 w-5 animate-spin"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                aria-hidden="true"
+                                            >
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                                            </svg>
+                                            <svg
+                                                v-else
+                                                viewBox="0 0 20 20"
+                                                fill="currentColor"
+                                                class="h-5 w-5"
+                                                aria-hidden="true"
+                                            >
+                                                <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75V4h-.75A2.25 2.25 0 003 6.25v.5c0 .414.336.75.75.75h12.5a.75.75 0 00.75-.75v-.5A2.25 2.25 0 0014.75 4H14v-.25A2.75 2.75 0 0011.25 1h-2.5zM6.5 4v-.25c0-.69.56-1.25 1.25-1.25h2.5c.69 0 1.25.56 1.25 1.25V4h-5z" clip-rule="evenodd" />
+                                                <path d="M5.5 7.5A.75.75 0 016.25 6.75h7.5a.75.75 0 01.75.75v7A2.75 2.75 0 0111.75 17.25h-3.5A2.75 2.75 0 015.5 14.5v-7z" />
+                                            </svg>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>

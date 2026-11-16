@@ -309,6 +309,68 @@ class MobileAppAdminService
     }
 
     /**
+     * Delete a stored APK. If it was the active release, point the manifest at the next highest remaining build.
+     *
+     * @return array{deleted: string, active_apk: string|null}
+     */
+    public function deleteApk(string $filename): array
+    {
+        $filename = basename(str_replace('\\', '/', $filename));
+
+        if ($filename === '' || preg_match('/^[\w.\-+]+\.apk$/i', $filename) !== 1) {
+            throw ValidationException::withMessages([
+                'filename' => 'Invalid APK filename.',
+            ]);
+        }
+
+        $path = $this->releasesDirectory().DIRECTORY_SEPARATOR.$filename;
+
+        if (! File::isFile($path)) {
+            throw ValidationException::withMessages([
+                'filename' => 'The APK file was not found.',
+            ]);
+        }
+
+        $manifest = $this->readManifestForForm();
+        $wasActive = $manifest['apk'] === $filename;
+
+        File::delete($path);
+
+        $activeApk = $manifest['apk'] !== '' ? $manifest['apk'] : null;
+
+        if ($wasActive) {
+            $remaining = $this->listApkFiles();
+
+            if ($remaining === []) {
+                if (File::isFile($this->manifestPath())) {
+                    File::delete($this->manifestPath());
+                }
+                $activeApk = null;
+            } else {
+                $next = $remaining[0];
+                $this->writeManifest([
+                    'version' => $next['version'] ?? $manifest['version'],
+                    'version_code' => (int) ($next['version_code'] ?? $manifest['version_code']),
+                    'apk' => $next['filename'],
+                    'force_update' => $manifest['force_update'],
+                    'min_version_code' => $manifest['min_version_code'],
+                    'notes_ar' => $manifest['notes_ar'],
+                    'notes_en' => $manifest['notes_en'],
+                    'clear_min_version_code' => $manifest['min_version_code'] === null,
+                ]);
+                $activeApk = $next['filename'];
+            }
+        }
+
+        $this->releaseService->flushCache();
+
+        return [
+            'deleted' => $filename,
+            'active_apk' => $activeApk,
+        ];
+    }
+
+    /**
      * @return array{
      *     total_customers: int,
      *     with_push_devices: int,

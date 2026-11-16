@@ -28,6 +28,7 @@ class MobileAppController
             'download_file_url' => route('app.download.file'),
             'update_check_url' => route('api.v1.app.update'),
             'upload_url' => route('admin.mobile-app.apk.upload', absolute: false),
+            'apk_delete_url' => route('admin.mobile-app.apk.destroy', absolute: false),
             'release_update_url' => route('admin.mobile-app.release.update', absolute: false),
             'expected_filename' => $this->adminService->buildApkFilename(
                 $manifest['version'],
@@ -70,6 +71,26 @@ class MobileAppController
         $message = 'Release settings saved.';
         if ($notifyUsers) {
             $message .= ' '.$this->formatNotifySummary($notifySummary);
+        }
+
+        return redirect()
+            ->route('admin.mobile-app.index')
+            ->with('success', $message);
+    }
+
+    public function destroyApk(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'filename' => ['required', 'string', 'max:255', 'regex:/^[\w.\-+]+\.apk$/i'],
+        ]);
+
+        $result = $this->adminService->deleteApk($validated['filename']);
+
+        $message = "Deleted {$result['deleted']}.";
+        if ($result['active_apk'] !== null && $result['active_apk'] !== $result['deleted']) {
+            $message .= " Active release is now {$result['active_apk']}.";
+        } elseif ($result['active_apk'] === null) {
+            $message .= ' No active APK remains.';
         }
 
         return redirect()

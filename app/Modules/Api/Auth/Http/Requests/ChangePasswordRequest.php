@@ -22,9 +22,12 @@ class ChangePasswordRequest extends ApiFormRequest
      */
     public function rules(): array
     {
+        $otpLength = max(4, (int) config('profile.otp_length', 6));
+
         return [
             'current_password' => ['required', 'string'],
             'password' => ['required', 'confirmed', Password::defaults()],
+            'otp' => ['required', 'string', 'regex:/^\d{'.$otpLength.'}$/'],
         ];
     }
 }

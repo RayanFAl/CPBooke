@@ -2,6 +2,7 @@
 
 namespace App\Modules\Api\User\Services;
 
+use App\Mail\PasswordResetOtpMail;
 use App\Models\User;
 use App\Modules\Settings\Services\SystemSettingsService;
 use App\Notifications\ProfileOtpNotification;
@@ -10,6 +11,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -22,6 +24,8 @@ class ProfileOtpService
     public const PURPOSE_EMAIL_CHANGE = 'email_change';
 
     public const PURPOSE_PHONE_CHANGE = 'phone_change';
+
+    public const PURPOSE_PASSWORD_CHANGE = 'password_change';
 
     public function __construct(
         private readonly SystemSettingsService $systemSettingsService,
@@ -53,12 +57,22 @@ class ProfileOtpService
 
         try {
             if ($channel === 'email') {
-                $mailableUser = $user;
-                if ($purpose === self::PURPOSE_EMAIL_CHANGE) {
-                    // Send to the new email address.
-                    $mailableUser = (clone $user)->forceFill(['email' => $resolvedTarget]);
+                if ($purpose === self::PURPOSE_PASSWORD_CHANGE) {
+                    Mail::to($resolvedTarget)->send(new PasswordResetOtpMail(
+                        otp: $otp,
+                        expiresInMinutes: $expireMinutes,
+                        recipientName: (string) ($user->name ?? ''),
+                        mailLocale: is_string($user->preferred_locale ?? null) ? $user->preferred_locale : null,
+                        variant: PasswordResetOtpMail::VARIANT_CHANGE,
+                    ));
+                } else {
+                    $mailableUser = $user;
+                    if ($purpose === self::PURPOSE_EMAIL_CHANGE) {
+                        // Send to the new email address.
+                        $mailableUser = (clone $user)->forceFill(['email' => $resolvedTarget]);
+                    }
+                    $mailableUser->notify(new ProfileOtpNotification($otp, $purpose, $expireMinutes));
                 }
-                $mailableUser->notify(new ProfileOtpNotification($otp, $purpose, $expireMinutes));
             } else {
                 $this->sendSms($resolvedTarget, $otp, $expireMinutes);
             }
@@ -226,6 +240,15 @@ class ProfileOtpService
                 }
 
                 return ['sms', $phone];
+            })(),
+            self::PURPOSE_PASSWORD_CHANGE => (function () use ($user): array {
+                if (! filled($user->email)) {
+                    throw ValidationException::withMessages([
+                        'email' => ['A verified email is required before changing your password.'],
+                    ]);
+                }
+
+                return ['email', (string) $user->email];
             })(),
             default => throw ValidationException::withMessages([
                 'purpose' => ['Unsupported verification purpose.'],

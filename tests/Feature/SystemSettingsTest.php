@@ -151,6 +151,31 @@ class SystemSettingsTest extends TestCase
             ->assertSessionHas('success');
     }
 
+    public function test_super_admin_test_mail_rejects_invalid_recipient(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $actor = User::factory()->create([
+            'account_type' => User::ACCOUNT_TYPE_ADMIN,
+            'is_admin' => true,
+            'email' => 'admin@booke.test',
+        ]);
+        $actor->syncRolesByName([RbacRegistry::ROLE_SUPER_ADMIN]);
+
+        SystemSetting::query()->create([
+            ...SystemSetting::defaultAttributes(),
+            'mail_mailer' => 'log',
+        ]);
+
+        app(SystemSettingsService::class)->forgetCache();
+
+        $this->actingAs($actor)
+            ->from(route('admin.settings.index'))
+            ->post(route('admin.settings.test-mail'), ['recipient' => 'not-an-email'])
+            ->assertRedirect(route('admin.settings.index'))
+            ->assertSessionHasErrors('recipient');
+    }
+
     public function test_super_admin_can_update_sms_and_whatsapp_gateway_credentials(): void
     {
         $this->seed(RolesAndPermissionsSeeder::class);

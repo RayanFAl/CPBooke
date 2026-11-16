@@ -83,8 +83,14 @@ class SettingsController
 
     public function testMail(Request $request): RedirectResponse
     {
+        $rawRecipient = $request->input('recipient');
+        $normalizedRecipient = is_string($rawRecipient) ? trim($rawRecipient) : '';
+        $request->merge([
+            'recipient' => $normalizedRecipient === '' ? null : $normalizedRecipient,
+        ]);
+
         $request->validate([
-            'recipient' => ['nullable', 'email', 'max:255'],
+            'recipient' => ['nullable', 'email:rfc', 'max:255'],
         ]);
 
         if (! $this->systemSettingsService->isMailDeliveryConfigured()) {
@@ -93,12 +99,13 @@ class SettingsController
                 ->with('error', 'Configure SMTP or choose the log mailer before sending a test email.');
         }
 
-        $recipient = trim((string) ($request->input('recipient') ?: $request->user()?->email ?: ''));
+        $recipient = (string) ($request->input('recipient') ?: $request->user()?->email ?: '');
+        $recipient = trim($recipient);
 
-        if ($recipient === '') {
+        if ($recipient === '' || ! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
             return redirect()
                 ->route('admin.settings.index')
-                ->with('error', 'Provide a recipient email or sign in with an account that has one.');
+                ->with('error', 'Enter a valid recipient email (your admin account email is not usable for SMTP testing).');
         }
 
         try {

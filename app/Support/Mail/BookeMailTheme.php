@@ -7,31 +7,31 @@ use App\Modules\Settings\Services\SystemSettingsService;
 use Throwable;
 
 /**
- * Booke email theme — mirrors Flutter AppColors for consistent branding.
+ * Booke email theme — aligned with admin brand (#2f6db8 / #f0b429).
  */
 final class BookeMailTheme
 {
-    public const PRIMARY = '#3469B2';
+    public const PRIMARY = '#2f6db8';
 
-    public const SECONDARY = '#4A90E2';
+    public const SECONDARY = '#255991';
 
-    public const ACCENT = '#FFC107';
+    public const ACCENT = '#f0b429';
 
-    public const BACKGROUND = '#F8FAFD';
+    public const BACKGROUND = '#eef3f9';
 
     public const SURFACE = '#FFFFFF';
 
-    public const CARD_BACKGROUND = '#FCFDFE';
+    public const CARD_BACKGROUND = '#FFFFFF';
 
-    public const TEXT_PRIMARY = '#2C3E50';
+    public const TEXT_PRIMARY = '#0f172a';
 
-    public const TEXT_SECONDARY = '#7F8C8D';
+    public const TEXT_SECONDARY = '#64748b';
 
-    public const BORDER = '#E8EDF3';
+    public const BORDER = '#e2e8f0';
 
-    public const SUCCESS = '#27AE60';
+    public const SUCCESS = '#16a34a';
 
-    public const ERROR = '#E74C3C';
+    public const ERROR = '#e11d48';
 
     private function __construct() {}
 
@@ -87,7 +87,8 @@ final class BookeMailTheme
             'dir' => $rtl ? 'rtl' : 'ltr',
             'align' => $rtl ? 'right' : 'left',
             'brandName' => $brandName,
-            'logoUrl' => rtrim((string) config('app.url'), '/').'/images/app_logo.png',
+            'logoPath' => self::logoPath(),
+            'logoUrl' => rtrim((string) config('app.url'), '/').'/images/email_logo.png',
             'supportEmail' => $supportEmail,
             'supportPhone' => $supportPhone,
             'colors' => self::colors(),
@@ -97,6 +98,48 @@ final class BookeMailTheme
             'footerAutomated' => $rtl
                 ? 'هذه رسالة آلية من'
                 : 'This is an automated message from',
+            'footerRights' => $rtl
+                ? 'جميع الحقوق محفوظة'
+                : 'All rights reserved',
         ];
+    }
+
+    public static function logoPath(): ?string
+    {
+        $emailLogo = public_path('images/email_logo.png');
+        if (is_file($emailLogo)) {
+            return $emailLogo;
+        }
+
+        $fallback = public_path('images/app_logo.png');
+
+        return is_file($fallback) ? $fallback : null;
+    }
+
+    /**
+     * Build email-safe body HTML with correct RTL/LTR line direction.
+     */
+    public static function formatBodyHtml(string $body, ?string $locale = null): string
+    {
+        $rtl = self::isRtl($locale);
+        $dir = $rtl ? 'rtl' : 'ltr';
+        $align = $rtl ? 'right' : 'left';
+        $lines = preg_split("/\r\n|\n|\r/", $body) ?: [];
+        $parts = [];
+
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+
+            if ($trimmed === '') {
+                $parts[] = '<div style="height:12px;line-height:12px;font-size:0;">&nbsp;</div>';
+                continue;
+            }
+
+            $parts[] = '<p dir="'.$dir.'" style="margin:0 0 12px;direction:'.$dir.';text-align:'.$align.';unicode-bidi:plaintext;font-size:15px;line-height:1.85;color:'.self::TEXT_PRIMARY.';">'
+                .e($trimmed)
+                .'</p>';
+        }
+
+        return implode('', $parts);
     }
 }

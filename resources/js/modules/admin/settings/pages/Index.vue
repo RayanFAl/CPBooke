@@ -109,9 +109,16 @@ const submit = () => {
 };
 
 const sendTestMail = () => {
-    testMailForm.post(props.test_mail_url, {
-        preserveScroll: true,
-    });
+    testMailForm
+        .transform((data) => ({
+            recipient: typeof data.recipient === 'string' ? data.recipient.trim() || null : null,
+        }))
+        .post(props.test_mail_url, {
+            preserveScroll: true,
+            onFinish: () => {
+                testMailForm.recipient = testMailForm.recipient ?? '';
+            },
+        });
 };
 
 const modeBadgeClass = (mode) => {
@@ -287,8 +294,10 @@ const modeBadgeClass = (mode) => {
                                 <input
                                     v-model="testMailForm.recipient"
                                     type="email"
+                                    name="test_mail_recipient"
+                                    autocomplete="off"
                                     class="w-full rounded-2xl border-slate-200 bg-white"
-                                    :placeholder="t('Defaults to your admin email')"
+                                    :placeholder="t('e.g. you@example.com')"
                                 />
                             </label>
                             <button

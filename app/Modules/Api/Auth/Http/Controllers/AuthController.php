@@ -126,12 +126,21 @@ class AuthController extends Controller
         );
     }
 
+    public function sendChangePasswordOtp(Request $request): JsonResponse
+    {
+        return ApiResponse::success(
+            $this->authService->sendChangePasswordOtp($request->user()),
+            'Password change code sent successfully.',
+        );
+    }
+
     public function changePassword(ChangePasswordRequest $request): JsonResponse
     {
         $this->authService->changePassword(
             $request->user(),
             $request->validated('current_password'),
             $request->validated('password'),
+            $request->validated('otp'),
         );
 
         return ApiResponse::success([], 'Password changed successfully.');

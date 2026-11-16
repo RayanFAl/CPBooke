@@ -26,7 +26,7 @@ class TemplateNotificationMail extends Mailable
             ->view('emails.notification', array_merge(BookeMailTheme::viewData($this->mailLocale), [
                 'subject' => $subject,
                 'headline' => $subject,
-                'bodyHtml' => nl2br(e($this->bodyText)),
+                'bodyHtml' => BookeMailTheme::formatBodyHtml($this->bodyText, $this->mailLocale),
             ]));
 
         $support = trim((string) config('mail.addresses.support', ''));

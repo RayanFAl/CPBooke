@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Modules\Api\User\Services\ProfileOtpService;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -25,8 +26,8 @@ class ProfileOtpNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $subject = match ($this->purpose) {
-            'email_change' => __('Confirm your new email'),
-            'email_verify' => __('Verify your email'),
+            ProfileOtpService::PURPOSE_EMAIL_CHANGE => __('Confirm your new email'),
+            ProfileOtpService::PURPOSE_EMAIL_VERIFY => __('Verify your email'),
             default => __('Verification code'),
         };
 

@@ -7,6 +7,7 @@ use App\Modules\Api\DTO\LoginDTO;
 use App\Modules\Api\DTO\RegisterDTO;
 use App\Models\User;
 use App\Models\UserLoyaltyProfile;
+use App\Modules\Api\User\Services\ProfileOtpService;
 use App\Modules\Loyalty\Services\LoyaltyService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Hash;
@@ -18,6 +19,7 @@ class AuthService
         private readonly ApiTokenService $tokenService,
         private readonly TwoFactorService $twoFactorService,
         private readonly LoyaltyService $loyaltyService,
+        private readonly ProfileOtpService $profileOtpService,
     ) {
     }
 
@@ -213,13 +215,25 @@ class AuthService
     }
 
     /**
-     * Update the authenticated customer's password.
+     * Send an email OTP that must be confirmed before changing the password.
+     *
+     * @return array{expires_in_seconds: int, resend_after_seconds: int, channel: string, target: string}
+     */
+    public function sendChangePasswordOtp(User $user): array
+    {
+        $this->ensureCustomerAccount($user);
+
+        return $this->profileOtpService->send($user, ProfileOtpService::PURPOSE_PASSWORD_CHANGE);
+    }
+
+    /**
+     * Update the authenticated customer's password after OTP verification.
      *
      * The current Sanctum token remains valid (no forced logout).
      *
      * @throws ValidationException
      */
-    public function changePassword(User $user, string $currentPassword, string $newPassword): void
+    public function changePassword(User $user, string $currentPassword, string $newPassword, string $otp): void
     {
         $this->ensureCustomerAccount($user);
 
@@ -228,6 +242,13 @@ class AuthService
                 'current_password' => ['The provided password does not match your current password.'],
             ]);
         }
+
+        $this->profileOtpService->consume(
+            $user,
+            ProfileOtpService::PURPOSE_PASSWORD_CHANGE,
+            $otp,
+            (string) $user->email,
+        );
 
         $user->forceFill([
             'password' => $newPassword,

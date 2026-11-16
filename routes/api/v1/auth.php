@@ -40,6 +40,9 @@ Route::prefix('auth')
             Route::get('/me', 'me')->name('me');
             Route::get('/sessions', 'sessions')->name('sessions');
             Route::delete('/sessions/{session}', 'destroySession')->name('sessions.destroy');
+            Route::post('/change-password/otp/send', 'sendChangePasswordOtp')
+                ->middleware('throttle:5,1')
+                ->name('change-password.otp.send');
             Route::put('/change-password', 'changePassword')->name('change-password');
 
             Route::get('/2fa/status', 'twoFactorStatus')->name('2fa.status');
